@@ -1,12 +1,12 @@
-﻿#include <cassert>
-
-#include "Scene.hpp"
+﻿#include "Scene.hpp"
 
 using namespace std;
-int main(int argc, char **argv){
+int main(int argc, char **argv) {
 
-    Scene scene;
-    // scene.mainloop();
+  Scene scene;
+  Sphere s(4.0f, 18, 36);
+  scene.add(&s);
 
-    return 0;
+  scene.mainloop();
+  return 0;
 }

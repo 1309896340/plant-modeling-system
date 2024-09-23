@@ -14,7 +14,7 @@ using namespace std;
 class Shader {
   // 封装 shader program
 private:
-  GLuint program{0};
+  GLuint program_id{0};
 
   void readFile(string &dst, const string &filename) {
     stringstream ss;
@@ -89,19 +89,19 @@ public:
          << endl;
 #endif
 
-    this->program = glCreateProgram();
-    glAttachShader(this->program, vshader);
-    glAttachShader(this->program, fshader);
-    glLinkProgram(this->program);
+    this->program_id = glCreateProgram();
+    glAttachShader(this->program_id, vshader);
+    glAttachShader(this->program_id, fshader);
+    glLinkProgram(this->program_id);
 
     GLint success;
-    glGetProgramiv(this->program, GL_LINK_STATUS, &success);
+    glGetProgramiv(this->program_id, GL_LINK_STATUS, &success);
     if (!success) {
       cout << "failed to link shader program!" << endl;
 #ifndef NDEBUG
       char log[200];
       int log_num;
-      glGetProgramInfoLog(this->program, 200, &log_num, log);
+      glGetProgramInfoLog(this->program_id, 200, &log_num, log);
       cout << log << endl;
 #endif
     }
@@ -113,8 +113,10 @@ public:
   }
 
   Shader(const Shader &sd) = delete;
-  ~Shader() {
-    glDeleteProgram(this->program);
-  }
+  ~Shader() { glDeleteProgram(this->program_id); }
+
+  void use() { glUseProgram(this->program_id); }
+
+  GLuint program() const { return this->program_id; }
 };
 } // namespace
