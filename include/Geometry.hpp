@@ -5,8 +5,11 @@
 #include <functional>
 #include <vector>
 
+#include <glm/glm.hpp>
+#include <glm/gtx/transform.hpp>
+
 #define PI 3.14159265358f
-#define ANGLE(a) ((a)*PI/180.0f)
+#define RADIANS(a) ((a) * PI / 180.0f)
 
 // #include <Eigen/Dense>
 // #include <glm/glm.hpp>
@@ -126,9 +129,9 @@ public:
 
 class CylinderEx : public Geometry {
 private:
-  float R;
-  float r;
-  float H;
+  float r1;
+  float r2;
+  float h;
   float phi;
   float rho;
 
@@ -138,17 +141,32 @@ private:
 
 public:
   CylinderEx() : CylinderEx(1.0f, 1.0f, 3.0f, 0.0f, 0.0f) {}
-  CylinderEx(float R, float r, float H, float phi, float rho, uint32_t RNum=8, uint32_t HNum=10, uint32_t PNum=18)
-      : R(R), r(r), H(H), phi(phi), rho(rho), RNum(RNum),HNum(HNum),PNum(PNum) {
-    Mesh bottom(RNum,PNum), side(HNum,PNum), top(RNum,PNum);
+  CylinderEx(float r1, float r2, float h, float phi, float rho,
+             uint32_t RNum = 8, uint32_t HNum = 10, uint32_t PNum = 18)
+      : r1(r1), r2(r2), h(h), phi(phi), rho(rho), RNum(RNum), HNum(HNum),
+        PNum(PNum) {
+    update();
+  }
+
+  void setR1(float r1) { this->r1 = r1; }
+  void setR2(float r2) { this->r2 = r2; }
+  void setH(float h) { this->h = h; }
+  void setPhi(float phi){this->phi = phi;}
+  void setRho(float rho){this->rho = rho;}
+  void setRNum(uint32_t rNum){this->RNum = rNum;}
+  void setHNum(uint32_t hNum){this->HNum = hNum;}
+  void setPNum(uint32_t pNum){this->PNum = pNum;}
+
+  void update() {
+    Mesh bottom(RNum, PNum), side(HNum, PNum), top(RNum, PNum);
     bottom.updateVertex([this](float u, float v) {
       Vertex vt;
       vt.nx = 0.0f;
       vt.ny = 0.0f;
       vt.nz = -1.0f;
 
-      vt.x = this->R * u * cos(2 * PI * v);
-      vt.y = this->R * u * sin(2 * PI * v);
+      vt.x = r1 * u * cos(2 * PI * v);
+      vt.y = r1 * u * sin(2 * PI * v);
       vt.z = 0.0f;
 
       vt.r = 0.0f;
@@ -163,34 +181,50 @@ public:
       vt.ny = 0.0f;
       vt.nz = 1.0f;
 
-      vt.x = this->r * u * cos(-2 * PI * v);
-      vt.y = this->r * u * sin(-2 * PI * v);
-      vt.z = this->H;
-
-      vt.r = 0.0f;
-      vt.g = 0.0f;
-      vt.b = 1.0f;
-
-      return vt;
-    });
-    side.updateVertex([this](float u, float v) {
-      Vertex vt;
-      // 法向量未测试是否正确
-      float tmp = sqrt(this->H * this->H + pow(this->R - this->r,2.0f));
-      vt.nx = sin(2 * PI * v) * this->H / tmp ;
-      vt.ny = cos(2 * PI * v) * this->H / tmp ;
-      vt.nz = (this->R - this->r)/ tmp;
-
-      float interp_r = u * (this->r - this->R) + this->R;
-      vt.x = interp_r * cos(2 * PI * v);
-      vt.y = interp_r * sin(2 * PI * v);
-      vt.z = this->H * u;
+      vt.x = r2 * u * cos(-2 * PI * v);
+      vt.y = r2 * u * sin(-2 * PI * v);
+      vt.z = h;
 
       vt.r = 0.0f;
       vt.g = 0.0f;
       vt.b = 1.0f;
 
       // 向方位角phi、天顶角rho的弯曲变换
+      glm::vec4 pos(vt.x, vt.y, vt.z, 1.0f);
+      glm::mat4 rot_mat(1.0f);
+      rot_mat = glm::rotate(rho, glm::vec3(-cos(phi), sin(phi), 0));
+      pos = rot_mat * pos;
+      vt.x = pos.x;
+      vt.y = pos.y;
+      vt.z = pos.z;
+
+      return vt;
+    });
+    side.updateVertex([this](float u, float v) {
+      Vertex vt;
+      // 法向量未测试是否正确
+      float tmp = sqrt(h * h + pow(r1 - r2, 2.0f));
+      vt.nx = sin(2 * PI * v) * h / tmp;
+      vt.ny = cos(2 * PI * v) * h / tmp;
+      vt.nz = (r1 - r2) / tmp;
+
+      float interp_r = u * (r2 - r1) + r1;
+      vt.x = interp_r * cos(2 * PI * v);
+      vt.y = interp_r * sin(2 * PI * v);
+      vt.z = h * u;
+
+      vt.r = 0.0f;
+      vt.g = 0.0f;
+      vt.b = 1.0f;
+
+      // 向方位角phi、天顶角rho的弯曲变换
+      glm::vec4 pos(vt.x, vt.y, vt.z, 1.0f);
+      glm::mat4 rot_mat(1.0f);
+      rot_mat = glm::rotate(u * rho, glm::vec3(-cos(phi), sin(phi), 0));
+      pos = rot_mat * pos;
+      vt.x = pos.x;
+      vt.y = pos.y;
+      vt.z = pos.z;
 
       return vt;
     });
@@ -198,10 +232,10 @@ public:
     // 将bottom, side, top组装起来
     uint32_t offset = 0;
     // 第1个mesh不需要偏移
-    this->vertices.insert(this->vertices.end(), bottom.vertices.begin(),
-                          bottom.vertices.end());
-    this->surfaces.insert(this->surfaces.end(), bottom.surfaces.begin(),
-                          bottom.surfaces.end());
+    vertices.insert(vertices.end(), bottom.vertices.begin(),
+                    bottom.vertices.end());
+    surfaces.insert(surfaces.end(), bottom.surfaces.begin(),
+                    bottom.surfaces.end());
     // 第2个mesh需要对surface中的元素值进行偏移
     offset += bottom.vertices.size();
     for (auto &sur : side.surfaces) {
@@ -209,10 +243,8 @@ public:
       sur.tidx[1] += offset;
       sur.tidx[2] += offset;
     }
-    this->vertices.insert(this->vertices.end(), side.vertices.begin(),
-                          side.vertices.end());
-    this->surfaces.insert(this->surfaces.end(), side.surfaces.begin(),
-                          side.surfaces.end());
+    vertices.insert(vertices.end(), side.vertices.begin(), side.vertices.end());
+    surfaces.insert(surfaces.end(), side.surfaces.begin(), side.surfaces.end());
     // 第3个mesh需要对surface中的元素值进行偏移
     offset += side.vertices.size();
     for (auto &sur : top.surfaces) {
@@ -220,10 +252,8 @@ public:
       sur.tidx[1] += offset;
       sur.tidx[2] += offset;
     }
-    this->vertices.insert(this->vertices.end(), top.vertices.begin(),
-                          top.vertices.end());
-    this->surfaces.insert(this->surfaces.end(), top.surfaces.begin(),
-                          top.surfaces.end());
+    vertices.insert(vertices.end(), top.vertices.begin(), top.vertices.end());
+    surfaces.insert(surfaces.end(), top.surfaces.begin(), top.surfaces.end());
   }
 };
 

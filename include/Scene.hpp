@@ -2,7 +2,6 @@
 
 // #define NDEBUG
 
-#include "Scene.hpp"
 #include "glm/ext/quaternion_common.hpp"
 #include "glm/ext/quaternion_transform.hpp"
 #include "glm/ext/quaternion_trigonometric.hpp"
@@ -103,10 +102,31 @@ public:
   GLuint ebo{0};
   GLuint texture{0};
 
-  GeometryObj() = delete;
+  GeometryObj() = default;
   GeometryObj(Geometry *geo, Transform trans)
       : geometry(geo), transform(trans) {
     initBuffer();
+  }
+
+  GeometryObj(GeometryObj && geo) noexcept{ // 实现移动语义 
+    this->transform = geo.transform;
+    this->vao = geo.vao;
+    this->vbo = geo.vbo;
+    this->ebo = geo.ebo;
+    this->texture = geo.texture;
+    this->geometry = geo.geometry;
+    geo.geometry = nullptr;
+  }
+
+  GeometryObj &operator=(GeometryObj && geo) noexcept{
+    this->transform = geo.transform;
+    this->vao = geo.vao;
+    this->vbo = geo.vbo;
+    this->ebo = geo.ebo;
+    this->texture = geo.texture;
+    this->geometry = geo.geometry;
+    geo.geometry = nullptr;
+    return *this;
   }
 };
 
@@ -117,14 +137,14 @@ void framebufferResizeCallback(GLFWwindow *window, int width, int height) {
 class Scene {
 private:
   GLFWwindow *window{nullptr};
+
+public:
   const int width = 1200;
   const int height = 900;
 
   map<string, Shader *> shaders;
-  vector<GeometryObj> objs;
+  map<string, GeometryObj> objs;
 
-
-public:
   Camera camera{vec3(0.0f, 0.0f, 10.0f), vec3{0.0f, 0.0f, 0.0f},
                 static_cast<float>(width) / static_cast<float>(height)};
   Scene() {
@@ -139,8 +159,8 @@ public:
     glfwMakeContextCurrent(this->window);
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
       throw runtime_error("failed to init glad!");
-    glEnable(GL_DEPTH);       // 开启深度测试
-    glEnable(GL_CULL_FACE);   // 开启面剔除
+    glEnable(GL_DEPTH);     // 开启深度测试
+    glEnable(GL_CULL_FACE); // 开启面剔除
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     glfwSetFramebufferSizeCallback(this->window, framebufferResizeCallback);
@@ -176,9 +196,9 @@ public:
 #endif
   }
 
-  void add(Geometry *geo, Transform trans=Transform()) {
+  void add(const string &name, Geometry *geo, Transform trans = Transform()) {
     GeometryObj obj(geo, trans);
-    this->objs.emplace_back(obj);
+    this->objs[name] = std::move(obj);
   }
 
   void render() {
@@ -187,9 +207,9 @@ public:
         glGetUniformLocation(this->shaders["default"]->program(), "PVM");
     assert(pvm_loc != -1);
 
-    for (int i = 0; i < this->objs.size(); i++) {
+    for (auto &pair_obj : this->objs) {
       // 计算pvm矩阵
-      GeometryObj *cur_obj = &objs[i];
+      GeometryObj *cur_obj = &pair_obj.second;
       mat4 pvm = this->camera.getProject() * this->camera.getView() *
                  cur_obj->transform.getModel();
 
