@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 // #define NDEBUG
 
@@ -196,6 +196,7 @@ public:
     io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
     io->Fonts->AddFontFromFileTTF("C:/Windows/Fonts/arial.ttf", 24.0f);
+    io->Fonts->AddFontFromFileTTF("C:/Windows/Fonts/Microsoft YaHei UI/msyh.ttc", 24.0f,nullptr,io->Fonts->GetGlyphRangesChineseSimplifiedCommon());
 
     ImGui::StyleColorsDark();
     // ImGui::StyleColorsLight();
@@ -240,6 +241,17 @@ public:
   void add(const string &name, Geometry *geo, Transform trans = Transform()) {
     GeometryObj obj(geo, trans);
     this->objs[name] = std::move(obj);
+  }
+
+  void imgui_menu(){
+    
+      // ImGui::ShowDemoWindow();
+      ImGui::Begin("开始");
+
+      ImGui::Text("这是一段文字 %d ", 3);
+
+      ImGui::End();
+
   }
 
   void render() {
@@ -295,7 +307,8 @@ public:
 
       render();
 
-      ImGui::ShowDemoWindow();
+      imgui_menu();
+
       ImGui::Render();
       ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
