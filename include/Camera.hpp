@@ -26,6 +26,10 @@ public:
     this->toward = glm::normalize(target - position);
   }
 
+  void setPosition(vec3 new_position){
+    this->position = new_position;
+  }
+
   void move_relative(vec3 offset) {
     // 局部坐标系上的平移
     vec3 _right = glm::cross(this->toward, this->upDir);

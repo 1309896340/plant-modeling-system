@@ -2,6 +2,10 @@
 
 // #define NDEBUG
 
+#include "Scene.hpp"
+#include "glm/ext/quaternion_common.hpp"
+#include "glm/ext/quaternion_transform.hpp"
+#include "glm/ext/quaternion_trigonometric.hpp"
 #include <cassert>
 #include <filesystem>
 #include <iostream>
@@ -10,13 +14,13 @@
 #include <sstream>
 #include <stdexcept>
 
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 #include "GLFW/glfw3.h"
-#include "Scene.hpp"
-#include "glm/ext/matrix_transform.hpp"
 #include "proj.h"
 
 #include "Camera.hpp"
@@ -35,16 +39,25 @@ using glm::vec4;
 class Transform {
 private:
   vec3 position;
-  quat attitude;
+  quat attitude{glm::angleAxis(-PI / 2, glm::vec3(1.0f, 0.0f, 0.0f))};
 
 public:
-  Transform()
-      : position{vec3(0.0f, 0.0f, 0.0f)}, attitude(1.0f, 0.0f, 0.0f, 0.0f) {}
+  // 构造函数中默认做了一个绕x轴-90°旋转，将OpenGL坐标系(y朝上，z朝屏幕外)转换为z朝上，y朝屏幕内
+  Transform(vec3 position, vec3 attitude_vec, float attitude_angle)
+      : position(position) {
+    this->attitude = glm::rotate(this->attitude, attitude_angle, attitude_vec);
+  }
+  Transform(vec3 position, quat attitude) : position(position) {
+    this->attitude = attitude * this->attitude * glm::conjugate(attitude);
+  }
+
+  Transform() : position{0.0f, 0.0f, 0.0f} {}
 
   mat4 getModel() const {
     mat4 mvp(1.0f);
     mat4 rot_mat = glm::mat4_cast(this->attitude);
     mvp = glm::translate(mvp, this->position);
+    mvp = mvp * rot_mat;
     return mvp;
   }
 };
@@ -110,10 +123,10 @@ private:
   map<string, Shader *> shaders;
   vector<GeometryObj> objs;
 
-  Camera camera{vec3(0.0f, 0.0f, 10.0f), vec3{0.0f, 0.0f, 0.0f},
-                static_cast<float>(width) / static_cast<float>(height)};
 
 public:
+  Camera camera{vec3(0.0f, 0.0f, 10.0f), vec3{0.0f, 0.0f, 0.0f},
+                static_cast<float>(width) / static_cast<float>(height)};
   Scene() {
     if (glfwInit() == GLFW_FALSE)
       throw runtime_error("failed to init glfw!");
@@ -126,7 +139,8 @@ public:
     glfwMakeContextCurrent(this->window);
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
       throw runtime_error("failed to init glad!");
-    glEnable(GL_DEPTH); // 开启深度测试
+    glEnable(GL_DEPTH);       // 开启深度测试
+    glEnable(GL_CULL_FACE);   // 开启面剔除
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     glfwSetFramebufferSizeCallback(this->window, framebufferResizeCallback);
@@ -162,8 +176,8 @@ public:
 #endif
   }
 
-  void add(Geometry *geo) {
-    GeometryObj obj(geo, Transform());
+  void add(Geometry *geo, Transform trans=Transform()) {
+    GeometryObj obj(geo, trans);
     this->objs.emplace_back(obj);
   }
 
