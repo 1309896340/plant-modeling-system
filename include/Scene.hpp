@@ -195,10 +195,13 @@ public:
     io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
+    io->Fonts->AddFontFromFileTTF("C:/Windows/Fonts/arial.ttf", 24.0f);
+
     ImGui::StyleColorsDark();
+    // ImGui::StyleColorsLight();
 
     ImGuiStyle &style = ImGui::GetStyle();
-    if(io->ConfigFlags & ImGuiConfigFlags_ViewportsEnable){
+    if (io->ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
       style.WindowRounding = 0.0f;
       style.Colors[ImGuiCol_WindowBg].w = 1.0f;
     }
@@ -295,8 +298,8 @@ public:
       ImGui::ShowDemoWindow();
       ImGui::Render();
       ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-      
-      if(io->ConfigFlags & ImGuiConfigFlags_ViewportsEnable){
+
+      if (io->ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
         ImGui::UpdatePlatformWindows();
         ImGui::RenderPlatformWindowsDefault();
         glfwMakeContextCurrent(this->window);
