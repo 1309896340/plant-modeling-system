@@ -2,15 +2,15 @@
 
 // #define NDEBUG
 
-#include "glm/ext/quaternion_common.hpp"
-#include "glm/ext/quaternion_transform.hpp"
-#include "glm/ext/quaternion_trigonometric.hpp"
+// #include "glm/ext/quaternion_common.hpp"
+// #include "glm/ext/quaternion_transform.hpp"
+// #include "glm/ext/quaternion_trigonometric.hpp"
+
+#include "GLFW/glfw3.h"
 #include <cassert>
-// #include <filesystem>
+#include <cstdint>
 #include <iostream>
 #include <map>
-// #include <set>
-// #include <sstream>
 #include <stdexcept>
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -19,7 +19,10 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/string_cast.hpp>
 
-#include "GLFW/glfw3.h"
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
+
 #include "proj.h"
 
 #include "Camera.hpp"
@@ -134,9 +137,16 @@ void framebufferResizeCallback(GLFWwindow *window, int width, int height) {
   glViewport(0, 0, width, height);
 }
 
+void errorCallback(int code, const char *msg) {
+  cerr << "errors occured! error code: " << code << endl;
+  cout << msg << endl;
+}
+
 class Scene {
 private:
   GLFWwindow *window{nullptr};
+
+  ImGuiIO *io{nullptr};
 
 public:
   const int width = 1200;
@@ -161,9 +171,12 @@ public:
       throw runtime_error("failed to init glad!");
     glEnable(GL_DEPTH);     // 开启深度测试
     glEnable(GL_CULL_FACE); // 开启面剔除
-    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+
+    initImgui();
 
     glfwSetFramebufferSizeCallback(this->window, framebufferResizeCallback);
+    glfwSetErrorCallback(errorCallback);
 
     loadAllShader();
   }
@@ -171,6 +184,27 @@ public:
   ~Scene() {
     for (const pair<string, Shader *> &sd : this->shaders)
       delete sd.second;
+  }
+  void initImgui() {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+
+    this->io = &ImGui::GetIO();
+    io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io->ConfigFlags |= ImGuiConfigFlags_NavEnableSetMousePos;
+    io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+
+    ImGui::StyleColorsDark();
+
+    ImGuiStyle &style = ImGui::GetStyle();
+    if(io->ConfigFlags & ImGuiConfigFlags_ViewportsEnable){
+      style.WindowRounding = 0.0f;
+      style.Colors[ImGuiCol_WindowBg].w = 1.0f;
+    }
+
+    ImGui_ImplGlfw_InitForOpenGL(this->window, true);
+    ImGui_ImplOpenGL3_Init();
   }
   void loadAllShader() {
     // // 读取shaders目录下的所有文件
@@ -206,7 +240,10 @@ public:
   }
 
   void render() {
+    static uint32_t count = 0;
+    count++;
 
+    float t = static_cast<float>(count % 360) / 360;
     for (auto &pair_obj : this->objs) {
       // 计算pvm矩阵
       GeometryObj *cur_obj = &pair_obj.second;
@@ -230,8 +267,10 @@ public:
           this->shaders["normal"]->program(), "projection");
       GLuint model_view_loc = glGetUniformLocation(
           this->shaders["normal"]->program(), "view_model");
-      glUniformMatrix4fv(projection_loc, 1, GL_FALSE, glm::value_ptr(projection));
-      glUniformMatrix4fv(model_view_loc, 1, GL_FALSE, glm::value_ptr(view_model));
+      glUniformMatrix4fv(projection_loc, 1, GL_FALSE,
+                         glm::value_ptr(projection));
+      glUniformMatrix4fv(model_view_loc, 1, GL_FALSE,
+                         glm::value_ptr(view_model));
       glBindVertexArray(cur_obj->vao);
       glDrawArrays(GL_POINTS, 0, cur_obj->geometry->vertices.size());
     }
@@ -240,6 +279,11 @@ public:
   void mainloop() {
     glfwShowWindow(this->window);
     while (!glfwWindowShouldClose(this->window)) {
+      glfwPollEvents();
+      ImGui_ImplOpenGL3_NewFrame();
+      ImGui_ImplGlfw_NewFrame();
+      ImGui::NewFrame();
+
       glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -248,9 +292,22 @@ public:
 
       render();
 
-      glfwPollEvents();
+      ImGui::ShowDemoWindow();
+      ImGui::Render();
+      ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+      
+      if(io->ConfigFlags & ImGuiConfigFlags_ViewportsEnable){
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+        glfwMakeContextCurrent(this->window);
+      }
+
       glfwSwapBuffers(window);
     }
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+
     glfwDestroyWindow(window);
     glfwTerminate();
   }
