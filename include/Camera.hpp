@@ -1,7 +1,10 @@
 #pragma once
 
+// #include <iostream>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+// #include <glm/gtx/string_cast.hpp>
 
 namespace {
 using glm::mat4;
@@ -26,9 +29,7 @@ public:
     this->toward = glm::normalize(target - position);
   }
 
-  void setPosition(vec3 new_position){
-    this->position = new_position;
-  }
+  void setPosition(vec3 new_position) { this->position = new_position; }
 
   void move_relative(vec3 offset) {
     // 局部坐标系上的平移
@@ -45,6 +46,7 @@ public:
 
   void lookAt(vec3 target) {
     this->toward = glm::normalize(target - this->position);
+    // std::cout << "view vec: " << glm::to_string(this->toward) << std::endl;
   }
 
   mat4 getProject() const {
@@ -52,7 +54,8 @@ public:
   }
 
   mat4 getView() const {
-    return glm::lookAt(this->position, this->toward, this->upDir);
+    return glm::lookAt(this->position, this->position + this->toward,
+                       this->upDir);
   }
 };
 } // namespace

@@ -6,11 +6,11 @@
 #include "glm/ext/quaternion_transform.hpp"
 #include "glm/ext/quaternion_trigonometric.hpp"
 #include <cassert>
-#include <filesystem>
+// #include <filesystem>
 #include <iostream>
 #include <map>
-#include <set>
-#include <sstream>
+// #include <set>
+// #include <sstream>
 #include <stdexcept>
 
 #define GLM_ENABLE_EXPERIMENTAL
@@ -28,7 +28,7 @@
 
 namespace {
 using namespace std;
-namespace fs = std::filesystem;
+// namespace fs = std::filesystem;
 
 using glm::mat4;
 using glm::quat;
@@ -108,7 +108,7 @@ public:
     initBuffer();
   }
 
-  GeometryObj(GeometryObj && geo) noexcept{ // 实现移动语义 
+  GeometryObj(GeometryObj &&geo) noexcept { // 实现移动语义
     this->transform = geo.transform;
     this->vao = geo.vao;
     this->vbo = geo.vbo;
@@ -118,7 +118,7 @@ public:
     geo.geometry = nullptr;
   }
 
-  GeometryObj &operator=(GeometryObj && geo) noexcept{
+  GeometryObj &operator=(GeometryObj &&geo) noexcept {
     this->transform = geo.transform;
     this->vao = geo.vao;
     this->vbo = geo.vbo;
@@ -161,7 +161,7 @@ public:
       throw runtime_error("failed to init glad!");
     glEnable(GL_DEPTH);     // 开启深度测试
     glEnable(GL_CULL_FACE); // 开启面剔除
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     glfwSetFramebufferSizeCallback(this->window, framebufferResizeCallback);
 
@@ -173,24 +173,28 @@ public:
       delete sd.second;
   }
   void loadAllShader() {
-    // 读取shaders目录下的所有文件
-    set<string> shader_names;
-    fs::path shader_dir = "shaders";
-    for (auto &file : fs::directory_iterator(shader_dir)) {
-      fs::path pp = file.path();
-      if (!fs::is_regular_file(pp))
-        throw runtime_error("\"/shaders\" cannot contain directory");
-      fs::path fname = pp.filename();
-      string ext = fname.extension().string();
-      if (ext != ".vert" && ext != ".frag") {
-        stringstream err_msg;
-        err_msg << "invalid shader source extension: " << fname;
-        throw err_msg.str();
-      }
-      shader_names.insert(fname.stem().string());
-    }
-    for (const string &sdns : shader_names)
-      shaders[sdns] = new Shader(sdns + ".vert", sdns + ".frag");
+    // // 读取shaders目录下的所有文件
+    // set<string> shader_names;
+    // fs::path shader_dir = "shaders";
+    // for (auto &file : fs::directory_iterator(shader_dir)) {
+    //   fs::path pp = file.path();
+    //   if (!fs::is_regular_file(pp))
+    //     throw runtime_error("\"/shaders\" cannot contain directory");
+    //   fs::path fname = pp.filename();
+    //   string ext = fname.extension().string();
+    //   if (ext != ".vert" && ext != ".frag" && ext != ".geo") {
+    //     stringstream err_msg;
+    //     err_msg << "invalid glsl extension: " << fname;
+    //     throw err_msg.str();
+    //   }
+    //   shader_names.insert(fname.stem().string());
+    // }
+    // for (const string &sdns : shader_names)
+    //   shaders[sdns] = new Shader(sdns + ".vert", sdns + ".frag");
+
+    shaders["default"] = new Shader("default.vert", "default.frag");
+    shaders["normal"] = new Shader("normal.vert", "normal.geo", "normal.frag");
+
 #ifndef NDEBUG
     cout << "all shaders compile finished!" << endl;
 #endif
@@ -202,21 +206,34 @@ public:
   }
 
   void render() {
-    this->shaders["default"]->use();
-    GLuint pvm_loc =
-        glGetUniformLocation(this->shaders["default"]->program(), "PVM");
-    assert(pvm_loc != -1);
 
     for (auto &pair_obj : this->objs) {
       // 计算pvm矩阵
       GeometryObj *cur_obj = &pair_obj.second;
-      mat4 pvm = this->camera.getProject() * this->camera.getView() *
-                 cur_obj->transform.getModel();
+      mat4 view_model = this->camera.getView() * cur_obj->transform.getModel();
+      mat4 projection = this->camera.getProject();
+      mat4 pvm = projection * view_model;
 
+      // 渲染本体
+      this->shaders["default"]->use();
+      GLuint pvm_loc =
+          glGetUniformLocation(this->shaders["default"]->program(), "PVM");
+      assert(pvm_loc != -1);
       glUniformMatrix4fv(pvm_loc, 1, GL_FALSE, glm::value_ptr(pvm));
       glBindVertexArray(cur_obj->vao);
       glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3,
                      GL_UNSIGNED_INT, (void *)0);
+
+      // 渲染法向量
+      this->shaders["normal"]->use();
+      GLuint projection_loc = glGetUniformLocation(
+          this->shaders["normal"]->program(), "projection");
+      GLuint model_view_loc = glGetUniformLocation(
+          this->shaders["normal"]->program(), "view_model");
+      glUniformMatrix4fv(projection_loc, 1, GL_FALSE, glm::value_ptr(projection));
+      glUniformMatrix4fv(model_view_loc, 1, GL_FALSE, glm::value_ptr(view_model));
+      glBindVertexArray(cur_obj->vao);
+      glDrawArrays(GL_POINTS, 0, cur_obj->geometry->vertices.size());
     }
   }
 
@@ -227,7 +244,7 @@ public:
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
       this->camera.move_relative(vec3(0.05f, 0.0f, 0.0f));
-      this->camera.lookAt(vec3(0.0f, 0.0f, 0.0f));
+      this->camera.lookAt(vec3(0.0f, 4.0f, 0.0f));
 
       render();
 

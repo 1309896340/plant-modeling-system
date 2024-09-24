@@ -5,6 +5,7 @@
 #include <functional>
 #include <vector>
 
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
@@ -158,6 +159,8 @@ public:
   void setPNum(uint32_t pNum){this->PNum = pNum;}
 
   void update() {
+    this->vertices.clear();
+    this->surfaces.clear();
     Mesh bottom(RNum, PNum), side(HNum, PNum), top(RNum, PNum);
     bottom.updateVertex([this](float u, float v) {
       Vertex vt;
@@ -190,13 +193,20 @@ public:
       vt.b = 1.0f;
 
       // 向方位角phi、天顶角rho的弯曲变换
-      glm::vec4 pos(vt.x, vt.y, vt.z, 1.0f);
       glm::mat4 rot_mat(1.0f);
       rot_mat = glm::rotate(rho, glm::vec3(-cos(phi), sin(phi), 0));
+      // 位置
+      glm::vec4 pos(vt.x, vt.y, vt.z, 1.0f);
       pos = rot_mat * pos;
       vt.x = pos.x;
       vt.y = pos.y;
       vt.z = pos.z;
+      // 法向量
+      glm::vec4 norm_v(vt.nx,vt.ny,vt.nz, 0.0f);
+      norm_v = rot_mat * norm_v;
+      vt.nx = norm_v.x;
+      vt.ny = norm_v.y;
+      vt.nz = norm_v.z;
 
       return vt;
     });
@@ -204,8 +214,8 @@ public:
       Vertex vt;
       // 法向量未测试是否正确
       float tmp = sqrt(h * h + pow(r1 - r2, 2.0f));
-      vt.nx = sin(2 * PI * v) * h / tmp;
-      vt.ny = cos(2 * PI * v) * h / tmp;
+      vt.nx = cos(2 * PI * v) * h / tmp;
+      vt.ny = sin(2 * PI * v) * h / tmp;
       vt.nz = (r1 - r2) / tmp;
 
       float interp_r = u * (r2 - r1) + r1;
@@ -218,13 +228,20 @@ public:
       vt.b = 1.0f;
 
       // 向方位角phi、天顶角rho的弯曲变换
-      glm::vec4 pos(vt.x, vt.y, vt.z, 1.0f);
       glm::mat4 rot_mat(1.0f);
       rot_mat = glm::rotate(u * rho, glm::vec3(-cos(phi), sin(phi), 0));
-      pos = rot_mat * pos;
-      vt.x = pos.x;
-      vt.y = pos.y;
-      vt.z = pos.z;
+      // 位置
+      glm::vec4 pos_v(vt.x, vt.y, vt.z, 1.0f);
+      pos_v = rot_mat * pos_v;
+      vt.x = pos_v.x;
+      vt.y = pos_v.y;
+      vt.z = pos_v.z;
+      // 法向量
+      glm::vec4 norm_v(vt.nx,vt.ny,vt.nz, 0.0f);
+      norm_v = rot_mat * norm_v;
+      vt.nx = norm_v.x;
+      vt.ny = norm_v.y;
+      vt.nz = norm_v.z;
 
       return vt;
     });

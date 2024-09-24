@@ -9,4 +9,5 @@ uniform mat4 PVM;
 void main(){
     gl_Position = PVM * vec4(aPos, 1.0f);
     color = clamp(aPos, 0.2f, 1.0f);
+    // color = aNorm;
 }

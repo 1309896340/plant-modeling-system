@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cassert>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -11,8 +12,9 @@
 
 namespace {
 using namespace std;
+namespace fs = std::filesystem;
 class Shader {
-  // 封装 shader program
+  // 加载当前目录下的"shaders/"子目录的glsl文件，封装为Shader Program
 private:
   GLuint program_id{0};
 
@@ -43,7 +45,7 @@ private:
   }
 
   GLuint createShader(GLuint shader_type, const string &source) {
-    // GLuint shader = glCreateShader(shader_type);
+    // 根据source编译源文件
     GLuint shader = glCreateShader(shader_type);
     assert(shader != 0);
     const char *ss = source.c_str();
@@ -54,7 +56,7 @@ private:
     GLint success;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if (!success) {
-      cout << "failed to compile shader" << endl;
+      cout << "failed to compile " << shaderType2str(shader_type) << endl;
 #ifndef NDEBUG
       char log[200] = {0};
       int log_num = 0;
@@ -66,28 +68,63 @@ private:
     return shader;
   }
 
+  GLuint createShader(const string &shader_source_filename) {
+    // 读取glsl文件源码创建shader，着色器类型由文件名后缀来标识
+    fs::path fname = shader_source_filename;
+    string ext = fname.filename().extension().string();
+    string source;
+    readFile(source, shader_source_filename);
+    GLuint shader{0};
+    if (ext == ".vert") {
+      shader = createShader(GL_VERTEX_SHADER, source);
+    } else if (ext == ".frag") {
+      shader = createShader(GL_FRAGMENT_SHADER, source);
+    } else if (ext == ".geo") {
+      shader = createShader(GL_GEOMETRY_SHADER, source);
+    } else {
+      throw runtime_error("unknown glsl extension!");
+    }
+    assert(shader != 0);
+    return shader;
+  }
+
 public:
-  Shader(const string &vertex_filename, const string &fragment_filename) {
-    string vertex_source, fragment_source;
+  Shader(const string &vertex_filename, const string &geometry_filename,
+         const string &fragment_filename) {
     string prefix = "shaders\\";
-    readFile(vertex_source, prefix + vertex_filename);
-    readFile(fragment_source, prefix + fragment_filename);
-    GLuint vshader = createShader(GL_VERTEX_SHADER, vertex_source);
+    GLuint vshader = createShader(prefix + vertex_filename);
+    GLuint gshader = createShader(prefix + geometry_filename);
+    GLuint fshader = createShader(prefix + fragment_filename);
 
-    if (vshader == 0)
-      throw runtime_error("failed to compile Vertex Shader!");
-#ifndef NDEBUG
-    cout << "succeed to compile Vertex Shader \"" << vertex_filename << "\""
-         << endl;
-#endif
+    this->program_id = glCreateProgram();
+    glAttachShader(this->program_id, vshader);
+    glAttachShader(this->program_id, gshader);
+    glAttachShader(this->program_id, fshader);
+    glLinkProgram(this->program_id);
 
-    GLuint fshader = createShader(GL_FRAGMENT_SHADER, fragment_source);
-    if (fshader == 0)
-      throw runtime_error("failed to compile Fragment Shader!");
+    GLint success;
+    glGetProgramiv(this->program_id, GL_LINK_STATUS, &success);
+    if (!success) {
+      cout << "failed to link shader program!" << endl;
 #ifndef NDEBUG
-    cout << "succeed to compile Fragment Shader \"" << fragment_filename << "\""
-         << endl;
+      char log[200];
+      int log_num;
+      glGetProgramInfoLog(this->program_id, 200, &log_num, log);
+      cout << log << endl;
 #endif
+    }
+#ifndef NDEBUG
+    cout << "secceed to link program!" << endl;
+#endif
+    glDeleteShader(vshader);
+    glDeleteShader(gshader);
+    glDeleteShader(fshader);
+  }
+
+  Shader(const string &vertex_filename, const string &fragment_filename) {
+    string prefix = "shaders\\";
+    GLuint vshader = createShader(prefix + vertex_filename);
+    GLuint fshader = createShader(prefix + fragment_filename);
 
     this->program_id = glCreateProgram();
     glAttachShader(this->program_id, vshader);
