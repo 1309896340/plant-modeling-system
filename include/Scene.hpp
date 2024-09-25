@@ -311,9 +311,6 @@ public:
           new_pos.z = dist * sin(theta_c) * sin(phi_c);
           this->camera.setPosition(new_pos + anchor);
           this->camera.lookAt({0.0f, 4.0f, 0.0f});
-          // this->camera.rotate(
-          //     {-MOUSE_VIEW_ROTATE_SENSITIVITY *0.01* io->MouseDelta.x,
-          //      MOUSE_VIEW_ROTATE_SENSITIVITY*0.01 * io->MouseDelta.y, 0.0f});
         } else {
           // 以相机为中心旋转
           this->camera.rotate(

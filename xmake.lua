@@ -16,3 +16,10 @@ target("demo")
             os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
+
+target("test")
+    set_kind("binary")
+    add_includedirs("include")
+    add_files("src/test.cpp")
+    add_packages("glm")
+

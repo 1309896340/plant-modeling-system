@@ -6,8 +6,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include <iostream>
-
 namespace {
 using glm::mat4;
 using glm::vec3;
@@ -51,9 +49,9 @@ private:
   }
 
 public:
-  float theta_s{0.0f}; // 用于外部即时更新，角度制
+  // 用于外部访问修改某些属性的影子属性
+  float theta_s{0.0f}; // 角度制
   float phi_s{0.0f};
-  // float position_s[3]{0.0f, 0.0f, 0.0f};
   vec3 position_s{0.0f, 0.0f, 0.0f};
 
   Camera() { updateAttitude(); };
