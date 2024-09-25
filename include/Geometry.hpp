@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 #include <cmath>
 #include <cstdint>
@@ -153,11 +153,11 @@ public:
   void setR1(float r1) { this->r1 = r1; }
   void setR2(float r2) { this->r2 = r2; }
   void setH(float h) { this->h = h; }
-  void setPhi(float phi){this->phi = phi;}
-  void setRho(float rho){this->rho = rho;}
-  void setRNum(uint32_t rNum){this->RNum = rNum;}
-  void setHNum(uint32_t hNum){this->HNum = hNum;}
-  void setPNum(uint32_t pNum){this->PNum = pNum;}
+  void setPhi(float phi) { this->phi = phi; }
+  void setRho(float rho) { this->rho = rho; }
+  void setRNum(uint32_t rNum) { this->RNum = rNum; }
+  void setHNum(uint32_t hNum) { this->HNum = hNum; }
+  void setPNum(uint32_t pNum) { this->PNum = pNum; }
 
   void update() {
     this->vertices.clear();
@@ -195,7 +195,7 @@ public:
 
       // 向方位角phi、天顶角rho的弯曲变换
       glm::mat4 rot_mat(1.0f);
-      rot_mat = glm::rotate(rho, glm::vec3(-cos(phi), sin(phi), 0));
+      rot_mat = glm::rotate(rho, glm::vec3(sin(phi), cos(phi), 0));
       // 位置
       glm::vec4 pos(vt.x, vt.y, vt.z, 1.0f);
       pos = rot_mat * pos;
@@ -203,7 +203,7 @@ public:
       vt.y = pos.y;
       vt.z = pos.z;
       // 法向量
-      glm::vec4 norm_v(vt.nx,vt.ny,vt.nz, 0.0f);
+      glm::vec4 norm_v(vt.nx, vt.ny, vt.nz, 0.0f);
       norm_v = rot_mat * norm_v;
       vt.nx = norm_v.x;
       vt.ny = norm_v.y;
@@ -230,7 +230,7 @@ public:
 
       // 向方位角phi、天顶角rho的弯曲变换
       glm::mat4 rot_mat(1.0f);
-      rot_mat = glm::rotate(u * rho, glm::vec3(-cos(phi), sin(phi), 0));
+      rot_mat = glm::rotate(u * rho, glm::vec3(sin(phi), cos(phi), 0));
       // 位置
       glm::vec4 pos_v(vt.x, vt.y, vt.z, 1.0f);
       pos_v = rot_mat * pos_v;
@@ -238,7 +238,7 @@ public:
       vt.y = pos_v.y;
       vt.z = pos_v.z;
       // 法向量
-      glm::vec4 norm_v(vt.nx,vt.ny,vt.nz, 0.0f);
+      glm::vec4 norm_v(vt.nx, vt.ny, vt.nz, 0.0f);
       norm_v = rot_mat * norm_v;
       vt.nx = norm_v.x;
       vt.ny = norm_v.y;

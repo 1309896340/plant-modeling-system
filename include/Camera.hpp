@@ -1,8 +1,9 @@
-#pragma once
+﻿#pragma once
 
 #include "constants.h"
 
 #include "glm/geometric.hpp"
+#include "glm/trigonometric.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -17,7 +18,7 @@ private:
   vec3 toward{glm::vec3(0.0f, 0.0f, -1.0f)}; // 单位向量
   vec3 upDir{glm::vec3(0.0f, 1.0f, 0.0f)};   // 单位向量
 
-  float fov{45.0f};
+  float fov{glm::radians(35.0f)};
   float near{100.0f};
   float far{0.1f};
   float aspect{1.0f};
@@ -97,8 +98,14 @@ public:
     updatePositionToShadow();
   }
 
+  // void rotate_relative(vec3 offset) {
+  //   // 以相机局部坐标系的up为竖直旋转轴
+  //   this->phi_s += offset.x;
+  //   this->theta_s -= offset.y;
+  //   this->updateToward();
+  // }
+
   void rotate(vec3 offset) {
-    // 三个分量分别为，绕-y轴(yaw)、绕+x轴(pitch)，绕-y轴(roll)
     this->phi_s += offset.x;
     this->theta_s -= offset.y;
     this->updateToward();

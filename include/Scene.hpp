@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 // #define NDEBUG
 
@@ -283,7 +283,7 @@ public:
   map<string, Shader *> shaders;
   map<string, GeometryObj> objs;
 
-  Camera camera{vec3(0.0f, 0.0f, 10.0f), vec3{0.0f, 0.0f, 0.0f},
+  Camera camera{vec3(0.0f, 0.0f, 16.0f), vec3{0.0f, 0.0f, 0.0f},
                 static_cast<float>(width) / static_cast<float>(height)};
   Scene() {
     if (glfwInit() == GLFW_FALSE)
@@ -297,9 +297,9 @@ public:
     glfwMakeContextCurrent(this->window);
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
       throw runtime_error("failed to init glad!");
-    glEnable(GL_DEPTH_TEST);     // 开启深度测试
-    // glEnable(GL_CULL_FACE);     // 开启面剔除
-    // glFrontFace(GL_CW);
+    glEnable(GL_DEPTH_TEST);      // 开启深度测试
+    glEnable(GL_CULL_FACE);       // 开启面剔除
+    glFrontFace(GL_CW);
 #ifdef ENBALE_POLYGON_VISUALIZATION
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 #endif
@@ -396,14 +396,14 @@ public:
 
     ImGui::Begin("相机");
 
-    bool is_theta_changed = ImGui::SliderFloat("天顶角", &this->camera.theta_s,
+    bool is_theta_changed = ImGui::SliderFloat(u8"天顶角", &this->camera.theta_s,
                                                0.0f, 180.0f, "%.1f");
-    bool is_phi_changed = ImGui::SliderFloat("方向角", &this->camera.phi_s,
+    bool is_phi_changed = ImGui::SliderFloat(u8"方向角", &this->camera.phi_s,
                                              -180.0f, 180.0f, "%.1f");
     if (is_theta_changed || is_phi_changed)
       this->camera.updateToward();
 
-    if (ImGui::InputFloat3("位置", glm::value_ptr(this->camera.position_s),
+    if (ImGui::InputFloat3(u8"位置", glm::value_ptr(this->camera.position_s),
                            "%.2f", 0)) {
       this->camera.updatePositionFromShadow();
     }
