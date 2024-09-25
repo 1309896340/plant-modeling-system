@@ -7,6 +7,7 @@
 // #include "glm/ext/quaternion_trigonometric.hpp"
 
 #include "GLFW/glfw3.h"
+#include "Scene.hpp"
 #include "glm/geometric.hpp"
 #include <cassert>
 #include <cstdint>
@@ -176,9 +177,12 @@ public:
     glfwMakeContextCurrent(this->window);
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
       throw runtime_error("failed to init glad!");
-    glEnable(GL_DEPTH);     // 开启深度测试
-    glEnable(GL_CULL_FACE); // 开启面剔除
+    glEnable(GL_DEPTH_TEST);     // 开启深度测试
+    glEnable(GL_CULL_FACE);     // 开启面剔除
+    glFrontFace(GL_CW);
+#ifdef ENBALE_POLYGON_VISUALIZATION
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+#endif
 
     loadIcon();
 
@@ -260,6 +264,10 @@ public:
   }
 
   void add(const string &name, Geometry *geo, Transform trans = Transform()) {
+    if (this->objs.find(name) != this->objs.end()) {
+      cout << "scene cannot add object with an existed name!" << endl;
+      return;
+    }
     GeometryObj obj(geo, trans);
     this->objs[name] = std::move(obj);
   }
@@ -313,9 +321,9 @@ public:
           this->camera.lookAt({0.0f, 4.0f, 0.0f});
         } else {
           // 以相机为中心旋转
-          this->camera.rotate(
-              {MOUSE_VIEW_ROTATE_SENSITIVITY  * io->MouseDelta.x,
-               MOUSE_VIEW_ROTATE_SENSITIVITY* io->MouseDelta.y, 0.0});
+          this->camera.rotate({MOUSE_VIEW_ROTATE_SENSITIVITY * io->MouseDelta.x,
+                               MOUSE_VIEW_ROTATE_SENSITIVITY * io->MouseDelta.y,
+                               0.0});
         }
       }
       if (ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f)) {
@@ -371,6 +379,7 @@ public:
       glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3,
                      GL_UNSIGNED_INT, (void *)0);
 
+#ifdef ENABLE_NORMAL_VISUALIZATION
       // 渲染法向量
       this->shaders["normal"]->use();
       GLuint projection_loc = glGetUniformLocation(
@@ -383,6 +392,7 @@ public:
                          glm::value_ptr(view_model));
       glBindVertexArray(cur_obj->vao);
       glDrawArrays(GL_POINTS, 0, cur_obj->geometry->vertices.size());
+#endif
     }
   }
 
