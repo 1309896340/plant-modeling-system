@@ -84,8 +84,8 @@ public:
 
   void move_relative(vec3 offset) {
     // 局部坐标系上的平移
-    vec3 _right = glm::cross(this->toward, this->upDir);
-    vec3 _up = glm::cross(_right, this->toward);
+    vec3 _right = glm::normalize(glm::cross(this->toward, this->upDir));
+    vec3 _up = glm::normalize(glm::cross(_right, this->toward));
     this->position +=
         offset.x * _right + offset.y * _up - offset.z * this->toward;
     updatePositionToShadow();
