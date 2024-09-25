@@ -9,7 +9,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtx/transform.hpp>
 
-#define PI 3.14159265358f
+#include "constants.h"
+
 #define RADIANS(a) ((a) * PI / 180.0f)
 
 // #include <Eigen/Dense>
@@ -194,7 +195,7 @@ public:
 
       // 向方位角phi、天顶角rho的弯曲变换
       glm::mat4 rot_mat(1.0f);
-      rot_mat = glm::rotate(rho, glm::vec3(-cos(phi), sin(phi), 0));
+      rot_mat = glm::rotate(rot_mat,rho, glm::vec3(-cos(phi), sin(phi), 0));
       // 位置
       glm::vec4 pos(vt.x, vt.y, vt.z, 1.0f);
       pos = rot_mat * pos;

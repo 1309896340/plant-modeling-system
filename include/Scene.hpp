@@ -23,6 +23,9 @@
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <stb_image.h>
+
 #include "proj.h"
 
 #include "Camera.hpp"
@@ -173,6 +176,8 @@ public:
     glEnable(GL_CULL_FACE); // 开启面剔除
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
+    loadIcon();
+
     initImgui();
 
     glfwSetFramebufferSizeCallback(this->window, framebufferResizeCallback);
@@ -185,6 +190,14 @@ public:
     for (const pair<string, Shader *> &sd : this->shaders)
       delete sd.second;
   }
+
+  void loadIcon() {
+    GLFWimage image;
+    image.pixels =
+        stbi_load("favicon.png", &image.width, &image.height, nullptr, 4);
+    glfwSetWindowIcon(this->window, 1, &image);
+    stbi_image_free(image.pixels);
+  }
   void initImgui() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -195,8 +208,12 @@ public:
     io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
-    io->Fonts->AddFontFromFileTTF("C:/Windows/Fonts/arial.ttf", 24.0f);
-    io->Fonts->AddFontFromFileTTF("C:/Windows/Fonts/Microsoft YaHei UI/msyh.ttc", 24.0f,nullptr,io->Fonts->GetGlyphRangesChineseSimplifiedCommon());
+    // io->Fonts->AddFontFromFileTTF("C:/Windows/Fonts/arial.ttf", 24.0f);
+    // io->Fonts->AddFontFromFileTTF("C:/Windows/Fonts/Microsoft YaHei
+    // UI/msyh.ttc", 24.0f,nullptr,io->Fonts->GetGlyphRangesChineseSimplifiedCommon());
+    io->Fonts->AddFontFromFileTTF(
+        "C:/Windows/Fonts/simhei.ttf", 24.0f, nullptr,
+        io->Fonts->GetGlyphRangesChineseSimplifiedCommon());
 
     ImGui::StyleColorsDark();
     // ImGui::StyleColorsLight();
@@ -243,22 +260,39 @@ public:
     this->objs[name] = std::move(obj);
   }
 
-  void imgui_menu(){
+  void imgui_menu() {
+
+    ImGui::ShowDemoWindow();
+
+    ImGui::Begin("开始");
+
+    bool is_theta_changed = ImGui::SliderFloat("theta", &this->camera.theta_s,
+                                               0.0f, 180.0f, "%.1f");
+    bool is_phi_changed =
+        ImGui::SliderFloat("phi", &this->camera.phi_s, 0.0f, 360.0f, "%.1f");
+    if (is_theta_changed || is_phi_changed)
+      this->camera.updateToward();
     
-      // ImGui::ShowDemoWindow();
-      ImGui::Begin("开始");
+    
+    // if(ImGui::IsKeyDown(ImGuiKey_A)){
+    //   ImGui::Text("key : %s", ImGui::GetKeyName(ImGuiKey_A));
+    // }
 
-      ImGui::Text("这是一段文字 %d ", 3);
 
-      ImGui::End();
-
+    ImGui::End();
   }
+
+  // void imgui_interaction(){
+
+  // }
 
   void render() {
     static uint32_t count = 0;
     count++;
-
     float t = static_cast<float>(count % 360) / 360;
+
+    this->camera.rotate({1.0f, 0.0f, 0.0f});
+
     for (auto &pair_obj : this->objs) {
       // 计算pvm矩阵
       GeometryObj *cur_obj = &pair_obj.second;
@@ -302,11 +336,12 @@ public:
       glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-      this->camera.move_relative(vec3(0.05f, 0.0f, 0.0f));
-      this->camera.lookAt(vec3(0.0f, 4.0f, 0.0f));
+      // this->camera.move_relative(vec3(0.05f, 0.0f, 0.0f));
+      // this->camera.lookAt(vec3(0.0f, 4.0f, 0.0f));
 
       render();
 
+      // imgui_interaction();
       imgui_menu();
 
       ImGui::Render();
