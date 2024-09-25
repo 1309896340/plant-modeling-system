@@ -7,6 +7,7 @@
 // #include "glm/ext/quaternion_trigonometric.hpp"
 
 #include "GLFW/glfw3.h"
+#include "glm/geometric.hpp"
 #include <cassert>
 #include <cstdint>
 #include <iostream>
@@ -31,6 +32,9 @@
 #include "Camera.hpp"
 #include "Geometry.hpp"
 #include "Shader.hpp"
+
+#define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
+#define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.02f
 
 namespace {
 using namespace std;
@@ -264,20 +268,82 @@ public:
 
     ImGui::ShowDemoWindow();
 
-    ImGui::Begin("开始");
+    ImGui::Begin("相机");
 
-    bool is_theta_changed = ImGui::SliderFloat("theta", &this->camera.theta_s,
+    bool is_theta_changed = ImGui::SliderFloat("天顶角", &this->camera.theta_s,
                                                0.0f, 180.0f, "%.1f");
-    bool is_phi_changed =
-        ImGui::SliderFloat("phi", &this->camera.phi_s, 0.0f, 360.0f, "%.1f");
+    bool is_phi_changed = ImGui::SliderFloat("方向角", &this->camera.phi_s,
+                                             -180.0f, 180.0f, "%.1f");
     if (is_theta_changed || is_phi_changed)
       this->camera.updateToward();
-    
-    
-    // if(ImGui::IsKeyDown(ImGuiKey_A)){
-    //   ImGui::Text("key : %s", ImGui::GetKeyName(ImGuiKey_A));
-    // }
 
+    if (ImGui::InputFloat3("位置", glm::value_ptr(this->camera.position_s),
+                           "%.2f", 0)) {
+      this->camera.updatePositionFromShadow();
+    }
+
+    // 鼠标交互动作
+    static vec3 anchor = {0.0f, 4.0f, 0.0f};
+    // 记录下“相机环绕”时的相机极坐标
+    static float theta_c = 0.0f;
+    static float phi_c = 0.0f;
+    static float dist = 0.0f;
+    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+      if (ImGui::IsKeyDown(ImGuiKey_ModShift)) {
+        vec3 dist_v = this->camera.position_s - anchor;
+        dist = glm::length(dist_v);
+        theta_c =
+            acos(glm::dot(glm::normalize(dist_v), vec3(0.0f, 1.0f, 0.0f)));
+        phi_c = atan2(dist_v.z, dist_v.x);
+      }
+    }
+
+    if (!io->WantCaptureMouse) {
+      if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
+        if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
+          // 以世界坐标锚点为中心做旋转
+          phi_c += MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x;
+          theta_c -= MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y;
+
+          vec3 new_pos;
+          new_pos.x = dist * sin(theta_c) * cos(phi_c);
+          new_pos.y = dist * cos(theta_c);
+          new_pos.z = dist * sin(theta_c) * sin(phi_c);
+          this->camera.setPosition(new_pos + anchor);
+          this->camera.lookAt({0.0f, 4.0f, 0.0f});
+          // this->camera.rotate(
+          //     {-MOUSE_VIEW_ROTATE_SENSITIVITY *0.01* io->MouseDelta.x,
+          //      MOUSE_VIEW_ROTATE_SENSITIVITY*0.01 * io->MouseDelta.y, 0.0f});
+        } else {
+          // 以相机为中心旋转
+          this->camera.rotate(
+              {MOUSE_VIEW_ROTATE_SENSITIVITY  * io->MouseDelta.x,
+               MOUSE_VIEW_ROTATE_SENSITIVITY* io->MouseDelta.y, 0.0});
+        }
+      }
+      if (ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f)) {
+        this->camera.move_relative(
+            {-MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.x,
+             MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.y, 0.0f});
+      }
+    }
+
+    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+      // cout << "弹起鼠标左键  " << mouse_left_click_cnt++ << endl;
+    }
+
+    if (ImGui::IsKeyDown(ImGuiKey_W)) {
+      this->camera.move_relative({0.0f, 0.0f, -0.1f});
+    }
+    if (ImGui::IsKeyDown(ImGuiKey_S)) {
+      this->camera.move_relative({0.0f, 0.0f, 0.1f});
+    }
+    if (ImGui::IsKeyDown(ImGuiKey_A)) {
+      this->camera.move_relative({-0.1f, 0.0f, 0.0f});
+    }
+    if (ImGui::IsKeyDown(ImGuiKey_D)) {
+      this->camera.move_relative({0.1f, 0.0f, 0.0f});
+    }
 
     ImGui::End();
   }
@@ -290,8 +356,6 @@ public:
     static uint32_t count = 0;
     count++;
     float t = static_cast<float>(count % 360) / 360;
-
-    this->camera.rotate({1.0f, 0.0f, 0.0f});
 
     for (auto &pair_obj : this->objs) {
       // 计算pvm矩阵

@@ -44,15 +44,29 @@ private:
     this->phi_s = this->phi * 180.0f / PI;
   }
 
+  void updatePositionToShadow() {
+    this->position_s.x = this->position.x;
+    this->position_s.y = this->position.y;
+    this->position_s.z = this->position.z;
+  }
+
 public:
   float theta_s{0.0f}; // 用于外部即时更新，角度制
   float phi_s{0.0f};
+  // float position_s[3]{0.0f, 0.0f, 0.0f};
+  vec3 position_s{0.0f, 0.0f, 0.0f};
 
   Camera() { updateAttitude(); };
   Camera(vec3 position, vec3 target, float aspect)
       : position(position), aspect(aspect) {
     this->toward = glm::normalize(target - position);
     updateAttitude();
+  }
+
+  void updatePositionFromShadow() {
+    this->position.x = this->position_s[0];
+    this->position.y = this->position_s[1];
+    this->position.z = this->position_s[2];
   }
 
   void updateToward() {
@@ -62,10 +76,13 @@ public:
     float fz =
         sin(this->theta_s * PI / 180.0f) * sin(-this->phi_s * PI / 180.0f);
     this->toward = glm::normalize(vec3(fx, fy, fz));
-    printf("front: (%.2f, %.2f, %.2f)\n", toward.x, toward.y, toward.z);
+    // printf("front: (%.2f, %.2f, %.2f)\n", toward.x, toward.y, toward.z);
   }
 
-  void setPosition(vec3 new_position) { this->position = new_position; }
+  void setPosition(vec3 new_position) {
+    this->position = new_position;
+    updatePositionToShadow();
+  }
 
   void move_relative(vec3 offset) {
     // 局部坐标系上的平移
@@ -73,15 +90,20 @@ public:
     vec3 _up = glm::cross(_right, this->toward);
     this->position +=
         offset.x * _right + offset.y * _up - offset.z * this->toward;
+    updatePositionToShadow();
   }
 
   void move_absolute(vec3 offset) {
     // 全局坐标系上的平移
     this->position += offset;
+    updatePositionToShadow();
   }
 
   void rotate(vec3 offset) {
     // 三个分量分别为，绕-y轴(yaw)、绕+x轴(pitch)，绕-y轴(roll)
+    this->phi_s += offset.x;
+    this->theta_s -= offset.y;
+    this->updateToward();
   }
 
   void lookAt(vec3 target) {
