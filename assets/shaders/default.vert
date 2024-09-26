@@ -6,13 +6,12 @@ layout(location=3) in vec2 aTexCoord;
 out vec3 color;
 out vec2 TexCoord;
 
-// uniform mat4 PVM;
-
-layout(std140, binding=0) uniform PVM{
+layout(std140, binding=0) uniform PV{
     mat4 projection;
     mat4 view;
-    mat4 model;
 };
+
+uniform mat4 model;
 
 void main(){
     gl_Position = projection * view * model * vec4(aPos, 1.0f);

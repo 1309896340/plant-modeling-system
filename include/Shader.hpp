@@ -7,17 +7,25 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <map>
 
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include "proj.h"
 
 namespace {
 using namespace std;
 namespace fs = std::filesystem;
+
+
 class Shader {
   // 加载当前目录下的"shaders/"子目录的glsl文件，封装为Shader Program
 private:
   GLuint program_id{0};
 
+  // 缓存uniform变量名与location
+  map<string, GLuint> locations;
+  
   const string prefix = "assets\\shaders\\";
 
   void readFile(string &dst, const string &filename) {
@@ -151,6 +159,59 @@ public:
 
   Shader(const Shader &sd) = delete;
   ~Shader() { glDeleteProgram(this->program_id); }
+
+
+  bool has_uniform(const string& name)const{
+    return this->locations.find(name) != this->locations.end();
+  }
+
+  void register_location(const string& name){
+    GLuint loc = glGetUniformLocation(this->program_id, name.c_str());
+    if(loc==-1)
+      throw runtime_error("unknown uniform name: \"" + name + "\"");
+    this->locations[name] = loc;
+  }
+
+  void set(const string &name, bool val){
+    if(!this->has_uniform(name))
+      register_location(name);
+    glUniform1ui(this->locations[name], val);
+  }
+  void set(const string &name, unsigned int val){
+    if(!this->has_uniform(name))
+      register_location(name);
+    glUniform1ui(this->locations[name], val);
+  }
+  void set(const string &name,int val){
+    if(!this->has_uniform(name))
+      register_location(name);
+    glUniform1i(this->locations[name], val);
+  }
+  void set(const string &name, float val){
+    if(!this->has_uniform(name))
+      register_location(name);
+    glUniform1f(this->locations[name], val);
+  }
+  void set(const string &name, const glm::vec3 &val){
+    if(!this->has_uniform(name))
+      register_location(name);
+    glUniform3fv(this->locations[name], 1, glm::value_ptr(val));
+  }
+  void set(const string &name, const glm::vec4 &val){
+    if(!this->has_uniform(name))
+      register_location(name);
+    glUniform4fv(this->locations[name], 1, glm::value_ptr(val));
+  }
+  void set(const string &name, const glm::mat3 &val){
+    if(!this->has_uniform(name))
+      register_location(name);
+    glUniformMatrix3fv(this->locations[name], 1,GL_FALSE, glm::value_ptr(val));
+  }
+  void set(const string &name, const glm::mat4 &val){
+    if(!this->has_uniform(name))
+      register_location(name);
+    glUniformMatrix4fv(this->locations[name], 1,GL_FALSE, glm::value_ptr(val));
+  }
 
   void use() { glUseProgram(this->program_id); }
 

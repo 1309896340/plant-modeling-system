@@ -234,18 +234,15 @@ public:
   void init_ubo() {
     glGenBuffers(1, &this->ubo);
     glBindBuffer(GL_UNIFORM_BUFFER, this->ubo);
-    glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4) * 3, nullptr,
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4) * 2, nullptr,
                  GL_STATIC_DRAW);
 
     mat4 projecion = this->camera.getProject();
     mat4 view = this->camera.getView();
-    mat4 model(1.0f);
     glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4),
                     glm::value_ptr(projecion));
     glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4),
                     glm::value_ptr(view));
-    glBufferSubData(GL_UNIFORM_BUFFER, 2*sizeof(glm::mat4), sizeof(glm::mat4),
-                    glm::value_ptr(model));
 
     glBindBufferBase(GL_UNIFORM_BUFFER, PVM_binding_point, this->ubo);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
@@ -422,159 +419,97 @@ public:
         ImGuiDockNodeFlags_None; // Config flags for the Dockspace
     dockspace_flags |= ImGuiDockNodeFlags_PassthruCentralNode;
 
-    // In this example, we're embedding the Dockspace into an invisible parent
-    // window to make it more configurable. We set ImGuiWindowFlags_NoDocking to
-    // make sure the parent isn't dockable into because this is handled by the
-    // Dockspace.
-    //
-    // ImGuiWindowFlags_MenuBar is to show a menu bar with config options. This
-    // isn't necessary to the functionality of a Dockspace, but it is here to
-    // provide a way to change the configuration flags interactively. You can
-    // remove the MenuBar flag if you don't want it in your app, but also
-    // remember to remove the code which actually renders the menu bar, found at
-    // the end of this function. ImGuiWindowFlags window_flags =
-    // ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
 
-    // Is the example in Fullscreen mode?
     if (opt_fullscreen) {
-      // If so, get the main viewport:
       const ImGuiViewport *viewport = ImGui::GetMainViewport();
 
-      // Set the parent window's position, size, and viewport to match that of
-      // the main viewport. This is so the parent window completely covers the
-      // main viewport, giving it a "full-screen" feel.
       ImGui::SetNextWindowPos(viewport->WorkPos);
       ImGui::SetNextWindowSize(viewport->WorkSize);
       ImGui::SetNextWindowViewport(viewport->ID);
 
-      // Set the parent window's styles to match that of the main viewport:
-      ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding,
-                          0.0f); // No corner rounding on the window
-      ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize,
-                          0.0f); // No border around the window
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+      ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
-      // Manipulate the window flags to make it inaccessible to the user (no
-      // titlebar, resize/move, or navigation)
       window_flags |= ImGuiWindowFlags_NoTitleBar |
                       ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
                       ImGuiWindowFlags_NoMove;
       window_flags |=
           ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
     } else {
-      // The example is not in Fullscreen mode (the parent window can be dragged
-      // around and resized), disable the ImGuiDockNodeFlags_PassthruCentralNode
-      // flag.
       dockspace_flags &= ~ImGuiDockNodeFlags_PassthruCentralNode;
     }
 
-    // When using ImGuiDockNodeFlags_PassthruCentralNode, DockSpace() will
-    // render our background and handle the pass-thru hole, so the parent window
-    // should not have its own background:
     if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode)
       window_flags |= ImGuiWindowFlags_NoBackground;
 
-    // If the padding option is disabled, set the parent window's padding size
-    // to 0 to effectively hide said padding.
     if (!opt_padding)
       ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 
-    // Important: note that we proceed even if Begin() returns false (aka window
-    // is collapsed). This is because we want to keep our DockSpace() active. If
-    // a DockSpace() is inactive, all active windows docked into it will lose
-    // their parent and become undocked. We cannot preserve the docking
-    // relationship between an active window and an inactive docking, otherwise
-    // any change of dockspace/settings would lead to windows being stuck in
-    // limbo and never being visible.
     ImGui::Begin("DockSpace Demo", p_open, window_flags);
 
-    // Remove the padding configuration - we pushed it, now we pop it:
     if (!opt_padding)
       ImGui::PopStyleVar();
 
-    // Pop the two style rules set in Fullscreen mode - the corner rounding and
-    // the border size.
     if (opt_fullscreen)
       ImGui::PopStyleVar(2);
 
-    // Check if Docking is enabled:
     ImGuiIO &io = ImGui::GetIO();
     if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
-      // If it is, draw the Dockspace with the DockSpace() function.
-      // The GetID() function is to give a unique identifier to the Dockspace -
-      // here, it's "MyDockSpace".
       ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
       ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
     } else {
-      // Docking is DISABLED - Show a warning message
       cout << "warning: docking is disabled!" << endl;
     }
 
-    // End the parent window that contains the Dockspace:
     ImGui::End();
   }
 
   void render() {
-    static uint32_t count = 0;
-    count++;
-    float t = static_cast<float>(count % 360) / 360;
+
+    mat4 view = this->camera.getView();
+    mat4 projection = this->camera.getProject();
+
+    // 更新P,V矩阵
+    glBindBuffer(GL_UNIFORM_BUFFER, this->ubo);
+    if (this->camera.project_is_changed) {
+      glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4),
+                      glm::value_ptr(projection));
+      this->camera.apply_projection_done();
+    }
+    if (this->camera.view_is_changed) {
+      glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4),
+                      glm::value_ptr(view));
+      this->camera.apply_view_done();
+    }
 
     for (auto &pair_obj : this->objs) {
       // 计算pvm矩阵
       GeometryObj *cur_obj = &pair_obj.second;
-      mat4 view = this->camera.getView();
-      mat4 projection = this->camera.getProject();
       mat4 model = cur_obj->transform.getModel();
 
-      
-      // 更新P,V矩阵
-      glBindBuffer(GL_UNIFORM_BUFFER, this->ubo);
-      if (this->camera.project_is_changed) {
-        glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4),
-                        glm::value_ptr(projection));
-        this->camera.apply_projection_done();
-      }
-      if (this->camera.view_is_changed) {
-        glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4),
-                        glm::value_ptr(view));
-        this->camera.apply_view_done();
-      }
-
-      // 渲染本体
+      // 1. 渲染本体
       Shader *cur_shader = this->shaders["default"];
       cur_shader->use();
+
+      // 1.1 传入model矩阵
+      cur_shader->set("model", model);
+
+      // 1.2 启用材质
+      cur_shader->set("useTexture", (cur_obj->texture != 0) ? true : false);
       glBindTexture(GL_TEXTURE_2D, cur_obj->texture);
-      // GLuint pvm_loc = glGetUniformLocation(cur_shader->program(), "PVM");
-      // assert(pvm_loc != -1);
-      // glUniformMatrix4fv(pvm_loc, 1, GL_FALSE, glm::value_ptr(pvm));
-      glBufferSubData(GL_UNIFORM_BUFFER, 2*sizeof(glm::mat4), sizeof(glm::mat4),
-                      glm::value_ptr(model));
-                      
-      // 应用材质
-      GLuint useTexture_loc =
-          glGetUniformLocation(cur_shader->program(), "useTexture");
-      assert(useTexture_loc != -1);
-      if (cur_obj->texture != 0) {
-        glUniform1ui(useTexture_loc, true); // 启用材质，而非使用颜色
-      } else {
-        glUniform1ui(useTexture_loc, false);
-      }
-      // glUniform1ui(useTexture_loc, false);
+
+      // 1.3 绘制
       glBindVertexArray(cur_obj->vao);
       glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3,
                      GL_UNSIGNED_INT, (void *)0);
 
 #ifdef ENABLE_NORMAL_VISUALIZATION
-      // 渲染法向量
-      this->shaders["normal"]->use();
-      GLuint projection_loc = glGetUniformLocation(
-          this->shaders["normal"]->program(), "projection");
-      GLuint model_view_loc = glGetUniformLocation(
-          this->shaders["normal"]->program(), "view_model");
-      glUniformMatrix4fv(projection_loc, 1, GL_FALSE,
-                         glm::value_ptr(projection));
-      glUniformMatrix4fv(model_view_loc, 1, GL_FALSE,
-                         glm::value_ptr(view_model));
+      // 2. 渲染法向量
+      cur_shader = this->shaders["normal"];
+      cur_shader->use();
+      cur_shader->set("model", model);
+
       glBindVertexArray(cur_obj->vao);
       glDrawArrays(GL_POINTS, 0, cur_obj->geometry->vertices.size());
 #endif
@@ -591,9 +526,6 @@ public:
 
       glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-      // this->camera.move_relative(vec3(0.05f, 0.0f, 0.0f));
-      // this->camera.lookAt(vec3(0.0f, 4.0f, 0.0f));
 
       render();
 
