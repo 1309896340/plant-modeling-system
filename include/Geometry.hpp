@@ -1,9 +1,13 @@
 ﻿#pragma once
 
+#include <any>
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <map>
+#include <string>
 #include <vector>
+
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
@@ -116,25 +120,31 @@ public:
 };
 
 class Sphere : public Mesh {
-private:
-  float radius;
+  // private:
+  //   float radius;
 
 public:
+  map<string, any> parameters;
+
   Sphere(float radius, uint32_t uNum = 100, uint32_t vNum = 100)
-      : Mesh(uNum, vNum),radius(radius) {
+      : Mesh(uNum, vNum) {
+    this->parameters["radius"] = radius;
     update();
   }
 
-  virtual void update(){
+  virtual void update() {
     this->updateVertex([this](float u, float v) -> Vertex {
       Vertex vt;
+      float radius = this->parameters["radius"];
+      // 需要对parameters["radius"]的类型进行判断然后使用any_cast<T>()来进行转换来取得值
+
       vt.nx = sin(PI * u) * cos(2 * PI * v);
       vt.ny = sin(PI * u) * sin(2 * PI * v);
       vt.nz = cos(PI * u);
 
-      vt.x = this->radius * vt.normal[0];
-      vt.y = this->radius * vt.normal[1];
-      vt.z = this->radius * vt.normal[2];
+      vt.x = radius * vt.normal[0];
+      vt.y = radius * vt.normal[1];
+      vt.z = radius * vt.normal[2];
 
       return vt;
     });
