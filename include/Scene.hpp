@@ -181,8 +181,10 @@ void errorCallback(int code, const char *msg) {
 class Scene {
 private:
   GLFWwindow *window{nullptr};
-
   ImGuiIO *io{nullptr};
+
+  GLuint ubo{0};
+  const GLuint PVM_binding_point = 0;
 
 public:
   const int width = 1200;
@@ -208,23 +210,45 @@ public:
     glEnable(GL_DEPTH_TEST); // 开启深度测试
     glEnable(GL_CULL_FACE);  // 开启面剔除
     glFrontFace(GL_CCW);
+
 #ifdef ENBALE_POLYGON_VISUALIZATION
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 #endif
 
     loadIcon();
-
     initImgui();
 
     glfwSetFramebufferSizeCallback(this->window, framebufferResizeCallback);
     glfwSetErrorCallback(errorCallback);
 
     loadAllShader();
+
+    init_ubo();
   }
   Scene(const Scene &sc) = delete;
   ~Scene() {
     for (const pair<string, Shader *> &sd : this->shaders)
       delete sd.second;
+  }
+
+  void init_ubo() {
+    glGenBuffers(1, &this->ubo);
+    glBindBuffer(GL_UNIFORM_BUFFER, this->ubo);
+    glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4) * 3, nullptr,
+                 GL_STATIC_DRAW);
+
+    mat4 projecion = this->camera.getProject();
+    mat4 view = this->camera.getView();
+    mat4 model(1.0f);
+    glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4),
+                    glm::value_ptr(projecion));
+    glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4),
+                    glm::value_ptr(view));
+    glBufferSubData(GL_UNIFORM_BUFFER, 2*sizeof(glm::mat4), sizeof(glm::mat4),
+                    glm::value_ptr(model));
+
+    glBindBufferBase(GL_UNIFORM_BUFFER, PVM_binding_point, this->ubo);
+    glBindBuffer(GL_UNIFORM_BUFFER, 0);
   }
 
   void loadIcon() {
@@ -300,14 +324,12 @@ public:
   void add(const string &name, Geometry *geo, vec3 position) {
     add(name, geo, Transform(position, glm::identity<glm::quat>()));
   }
-  void add(const string &name, Geometry *geo, vec3 position, vec3 rot_axis, float rot_angle) {
+  void add(const string &name, Geometry *geo, vec3 position, vec3 rot_axis,
+           float rot_angle) {
     add(name, geo, Transform(position, glm::normalize(rot_axis), rot_angle));
   }
 
-  void add(const string &name, Geometry *geo) {
-    add(name,geo,Transform());
-  }
-
+  void add(const string &name, Geometry *geo) { add(name, geo, Transform()); }
 
   void imgui_menu() {
 
@@ -500,17 +522,35 @@ public:
     for (auto &pair_obj : this->objs) {
       // 计算pvm矩阵
       GeometryObj *cur_obj = &pair_obj.second;
-      mat4 view_model = this->camera.getView() * cur_obj->transform.getModel();
+      mat4 view = this->camera.getView();
       mat4 projection = this->camera.getProject();
-      mat4 pvm = projection * view_model;
+      mat4 model = cur_obj->transform.getModel();
+
+      
+      // 更新P,V矩阵
+      glBindBuffer(GL_UNIFORM_BUFFER, this->ubo);
+      if (this->camera.project_is_changed) {
+        glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4),
+                        glm::value_ptr(projection));
+        this->camera.apply_projection_done();
+      }
+      if (this->camera.view_is_changed) {
+        glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4),
+                        glm::value_ptr(view));
+        this->camera.apply_view_done();
+      }
 
       // 渲染本体
       Shader *cur_shader = this->shaders["default"];
       cur_shader->use();
       glBindTexture(GL_TEXTURE_2D, cur_obj->texture);
-      GLuint pvm_loc = glGetUniformLocation(cur_shader->program(), "PVM");
-      assert(pvm_loc != -1);
-      glUniformMatrix4fv(pvm_loc, 1, GL_FALSE, glm::value_ptr(pvm));
+      // GLuint pvm_loc = glGetUniformLocation(cur_shader->program(), "PVM");
+      // assert(pvm_loc != -1);
+      // glUniformMatrix4fv(pvm_loc, 1, GL_FALSE, glm::value_ptr(pvm));
+      glBufferSubData(GL_UNIFORM_BUFFER, 2*sizeof(glm::mat4), sizeof(glm::mat4),
+                      glm::value_ptr(model));
+                      
+      // 应用材质
       GLuint useTexture_loc =
           glGetUniformLocation(cur_shader->program(), "useTexture");
       assert(useTexture_loc != -1);

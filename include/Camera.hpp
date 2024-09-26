@@ -53,6 +53,9 @@ public:
   float phi_s{0.0f};
   vec3 position_s{0.0f, 0.0f, 0.0f};
 
+  bool view_is_changed{true};
+  bool project_is_changed{true};
+
   Camera() { updateAttitude(); };
   Camera(vec3 position, vec3 target, float aspect)
       : position(position), aspect(aspect) {
@@ -64,6 +67,7 @@ public:
     this->position.x = this->position_s[0];
     this->position.y = this->position_s[1];
     this->position.z = this->position_s[2];
+    view_is_changed = true;
   }
 
   void updateToward() {
@@ -79,6 +83,7 @@ public:
   void setPosition(vec3 new_position) {
     this->position = new_position;
     updatePositionToShadow();
+    view_is_changed = true;
   }
 
   void move_relative(vec3 offset) {
@@ -88,12 +93,14 @@ public:
     this->position +=
         offset.x * _right + offset.y * _up - offset.z * this->toward;
     updatePositionToShadow();
+    view_is_changed = true;
   }
 
   void move_absolute(vec3 offset) {
     // 全局坐标系上的平移
     this->position += offset;
     updatePositionToShadow();
+    view_is_changed = true;
   }
 
   // void rotate_relative(vec3 offset) {
@@ -107,12 +114,14 @@ public:
     this->phi_s -= offset.x;
     this->theta_s += offset.y;
     this->updateToward();
+    view_is_changed = true;
   }
 
   void lookAt(vec3 target) {
     this->toward = glm::normalize(target - this->position);
     // std::cout << "view vec: " << glm::to_string(this->toward) << std::endl;
     updateAttitude();
+    view_is_changed = true;
   }
 
   mat4 getProject() const {
@@ -123,6 +132,13 @@ public:
     // printf("front: (%.2f, %.2f, %.2f)\n", toward.x, toward.y, toward.z);
     return glm::lookAt(this->position, this->position + this->toward,
                        this->upDir);
+  }
+
+  void apply_view_done(){
+    this->view_is_changed = false;
+  }
+  void apply_projection_done(){
+    this->project_is_changed = false;
   }
 };
 } // namespace
