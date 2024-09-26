@@ -78,6 +78,7 @@ public:
         sin(this->theta_s * PI / 180.0f) * sin(-this->phi_s * PI / 180.0f);
     this->toward = glm::normalize(vec3(fx, fy, fz));
     // printf("front: (%.2f, %.2f, %.2f)\n", toward.x, toward.y, toward.z);
+    this->view_is_changed = true;
   }
 
   void setPosition(vec3 new_position) {

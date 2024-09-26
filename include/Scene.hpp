@@ -74,12 +74,11 @@ class Light {
   // 简单封装一个点光源
 public:
   vec3 position{0.0f, 0.0f, 0.0f};
-  vec3 color{1.0f,1.0f,1.0f};
+  vec3 color{1.0f, 1.0f, 1.0f};
   // float intensity{1.0f};
 
   Light() = default;
-  Light(vec3 position, vec3 color)
-      : position(position), color(color) {}
+  Light(vec3 position, vec3 color) : position(position), color(color) {}
 };
 
 class GeometryObj {
@@ -197,7 +196,6 @@ private:
   GLuint ubo{0};
   const GLuint PVM_binding_point = 0;
 
-
 public:
   const int width = 1200;
   const int height = 900;
@@ -209,7 +207,7 @@ public:
   Camera camera{vec3(0.0f, 0.0f, 16.0f), vec3{0.0f, 0.0f, 0.0f},
                 static_cast<float>(width) / static_cast<float>(height)};
   Scene() {
-    if (glfwInit() == GLFW_FALSE){
+    if (glfwInit() == GLFW_FALSE) {
       string msg = "failed to init glfw!";
       cerr << msg << endl;
       throw runtime_error(msg);
@@ -221,7 +219,7 @@ public:
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     this->window = glfwCreateWindow(width, height, "demo", 0, 0);
     glfwMakeContextCurrent(this->window);
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)){
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
       string msg = "failed to init glad!";
       cerr << msg << endl;
       throw runtime_error(msg);
@@ -265,6 +263,96 @@ public:
 
     glBindBufferBase(GL_UNIFORM_BUFFER, PVM_binding_point, this->ubo);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
+  }
+
+  void imgui_menu() {
+
+    // ImGui::ShowDemoWindow();
+    imgui_docking_render();
+
+    ImGui::Begin("场景");
+    if (ImGui::TreeNodeEx("相机", ImGuiTreeNodeFlags_Selected |
+                                      ImGuiTreeNodeFlags_DefaultOpen)) {
+      bool is_theta_changed = ImGui::SliderFloat(
+          u8"天顶角", &this->camera.theta_s, 0.0f, 180.0f, "%.1f");
+      bool is_phi_changed = ImGui::SliderFloat(u8"方向角", &this->camera.phi_s,
+                                               -180.0f, 180.0f, "%.1f");
+      if (is_theta_changed || is_phi_changed)
+        this->camera.updateToward();
+
+      if (ImGui::InputFloat3(u8"位置", glm::value_ptr(this->camera.position_s),
+                             "%.2f", 0)) {
+        this->camera.updatePositionFromShadow();
+      }
+
+      // 鼠标交互动作
+      static vec3 anchor = {0.0f, 4.0f, 0.0f};
+      // 记录下“相机环绕”时的相机极坐标
+      static float theta_c = 0.0f;
+      static float phi_c = 0.0f;
+      static float dist = 0.0f;
+      if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        if (ImGui::IsKeyDown(ImGuiKey_ModShift)) {
+          vec3 dist_v = this->camera.position_s - anchor;
+          dist = glm::length(dist_v);
+          theta_c =
+              acos(glm::dot(glm::normalize(dist_v), vec3(0.0f, 1.0f, 0.0f)));
+          phi_c = atan2(dist_v.z, dist_v.x);
+        }
+      }
+
+      if (!io->WantCaptureMouse) {
+        if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
+          if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
+            // 以世界坐标锚点为中心做旋转
+            phi_c += MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x;
+            theta_c -= MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y;
+
+            vec3 new_pos;
+            new_pos.x = dist * sin(theta_c) * cos(phi_c);
+            new_pos.y = dist * cos(theta_c);
+            new_pos.z = dist * sin(theta_c) * sin(phi_c);
+            this->camera.setPosition(new_pos + anchor);
+            this->camera.lookAt({0.0f, 4.0f, 0.0f});
+          } else {
+            // 以相机为中心旋转
+            this->camera.rotate(
+                {MOUSE_VIEW_ROTATE_SENSITIVITY * io->MouseDelta.x,
+                 MOUSE_VIEW_ROTATE_SENSITIVITY * io->MouseDelta.y, 0.0});
+          }
+        }
+        if (ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f)) {
+          this->camera.move_relative(
+              {-MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.x,
+               MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.y, 0.0f});
+        }
+      }
+
+      if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+        // cout << "弹起鼠标左键  " << mouse_left_click_cnt++ << endl;
+      }
+
+      if (ImGui::IsKeyDown(ImGuiKey_W)) {
+        this->camera.move_relative({0.0f, 0.0f, -0.1f});
+      }
+      if (ImGui::IsKeyDown(ImGuiKey_S)) {
+        this->camera.move_relative({0.0f, 0.0f, 0.1f});
+      }
+      if (ImGui::IsKeyDown(ImGuiKey_A)) {
+        this->camera.move_relative({-0.1f, 0.0f, 0.0f});
+      }
+      if (ImGui::IsKeyDown(ImGuiKey_D)) {
+        this->camera.move_relative({0.1f, 0.0f, 0.0f});
+      }
+      ImGui::TreePop();
+    }
+
+    if (ImGui::TreeNodeEx("光源", ImGuiTreeNodeFlags_DefaultOpen)) {
+      ImGui::SliderFloat3("位置", glm::value_ptr(this->light.position), -10.0f,
+                          10.f);
+      ImGui::TreePop();
+    }
+    ImGui::End();
   }
 
   void loadIcon() {
@@ -346,88 +434,6 @@ public:
   }
 
   void add(const string &name, Geometry *geo) { add(name, geo, Transform()); }
-
-  void imgui_menu() {
-
-    // ImGui::ShowDemoWindow();
-    imgui_docking_render();
-
-    ImGui::Begin("相机");
-
-    bool is_theta_changed = ImGui::SliderFloat(
-        u8"天顶角", &this->camera.theta_s, 0.0f, 180.0f, "%.1f");
-    bool is_phi_changed = ImGui::SliderFloat(u8"方向角", &this->camera.phi_s,
-                                             -180.0f, 180.0f, "%.1f");
-    if (is_theta_changed || is_phi_changed)
-      this->camera.updateToward();
-
-    if (ImGui::InputFloat3(u8"位置", glm::value_ptr(this->camera.position_s),
-                           "%.2f", 0)) {
-      this->camera.updatePositionFromShadow();
-    }
-
-    // 鼠标交互动作
-    static vec3 anchor = {0.0f, 4.0f, 0.0f};
-    // 记录下“相机环绕”时的相机极坐标
-    static float theta_c = 0.0f;
-    static float phi_c = 0.0f;
-    static float dist = 0.0f;
-    if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-      if (ImGui::IsKeyDown(ImGuiKey_ModShift)) {
-        vec3 dist_v = this->camera.position_s - anchor;
-        dist = glm::length(dist_v);
-        theta_c =
-            acos(glm::dot(glm::normalize(dist_v), vec3(0.0f, 1.0f, 0.0f)));
-        phi_c = atan2(dist_v.z, dist_v.x);
-      }
-    }
-
-    if (!io->WantCaptureMouse) {
-      if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
-        if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
-          // 以世界坐标锚点为中心做旋转
-          phi_c += MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x;
-          theta_c -= MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y;
-
-          vec3 new_pos;
-          new_pos.x = dist * sin(theta_c) * cos(phi_c);
-          new_pos.y = dist * cos(theta_c);
-          new_pos.z = dist * sin(theta_c) * sin(phi_c);
-          this->camera.setPosition(new_pos + anchor);
-          this->camera.lookAt({0.0f, 4.0f, 0.0f});
-        } else {
-          // 以相机为中心旋转
-          this->camera.rotate({MOUSE_VIEW_ROTATE_SENSITIVITY * io->MouseDelta.x,
-                               MOUSE_VIEW_ROTATE_SENSITIVITY * io->MouseDelta.y,
-                               0.0});
-        }
-      }
-      if (ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f)) {
-        this->camera.move_relative(
-            {-MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.x,
-             MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.y, 0.0f});
-      }
-    }
-
-    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-      // cout << "弹起鼠标左键  " << mouse_left_click_cnt++ << endl;
-    }
-
-    if (ImGui::IsKeyDown(ImGuiKey_W)) {
-      this->camera.move_relative({0.0f, 0.0f, -0.1f});
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_S)) {
-      this->camera.move_relative({0.0f, 0.0f, 0.1f});
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_A)) {
-      this->camera.move_relative({-0.1f, 0.0f, 0.0f});
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_D)) {
-      this->camera.move_relative({0.1f, 0.0f, 0.0f});
-    }
-
-    ImGui::End();
-  }
 
   void imgui_docking_render(bool *p_open = nullptr) {
     // Variables to configure the Dockspace example.
@@ -526,8 +532,8 @@ public:
       glBindTexture(GL_TEXTURE_2D, cur_obj->texture);
       cur_shader->set("useTexture", (cur_obj->texture != 0) ? true : false);
       cur_shader->set("ambientStrength", 0.2f);
-      cur_shader->set("diffuseStrength", 0.8f);
-      cur_shader->set("specularStrength", 0.8f);
+      cur_shader->set("diffuseStrength", 1.0f);
+      cur_shader->set("specularStrength", 1.0f);
 
       // 1.5 绘制
       glBindVertexArray(cur_obj->vao);
