@@ -270,8 +270,8 @@ public:
     // ImGui::ShowDemoWindow();
     imgui_docking_render();
 
-    ImGui::Begin("场景");
-    if (ImGui::TreeNodeEx("相机", ImGuiTreeNodeFlags_Selected |
+    ImGui::Begin(u8"场景");
+    if (ImGui::TreeNodeEx(u8"相机", ImGuiTreeNodeFlags_Selected |
                                       ImGuiTreeNodeFlags_DefaultOpen)) {
       bool is_theta_changed = ImGui::SliderFloat(
           u8"天顶角", &this->camera.theta_s, 0.0f, 180.0f, "%.1f");
@@ -347,8 +347,8 @@ public:
       ImGui::TreePop();
     }
 
-    if (ImGui::TreeNodeEx("光源", ImGuiTreeNodeFlags_DefaultOpen)) {
-      ImGui::SliderFloat3("位置", glm::value_ptr(this->light.position), -10.0f,
+    if (ImGui::TreeNodeEx(u8"光源", ImGuiTreeNodeFlags_DefaultOpen)) {
+      ImGui::SliderFloat3(u8"位置", glm::value_ptr(this->light.position), -10.0f,
                           10.f);
       ImGui::TreePop();
     }

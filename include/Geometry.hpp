@@ -121,8 +121,11 @@ private:
 
 public:
   Sphere(float radius, uint32_t uNum = 100, uint32_t vNum = 100)
-      : Mesh(uNum, vNum) {
-    this->radius = radius;
+      : Mesh(uNum, vNum),radius(radius) {
+    update();
+  }
+
+  virtual void update(){
     this->updateVertex([this](float u, float v) -> Vertex {
       Vertex vt;
       vt.nx = sin(PI * u) * cos(2 * PI * v);
