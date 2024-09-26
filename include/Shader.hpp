@@ -92,7 +92,9 @@ private:
     } else if (ext == ".geo") {
       shader = createShader(GL_GEOMETRY_SHADER, source);
     } else {
-      throw runtime_error("unknown glsl extension!");
+      string msg = "unknown glsl extension!";
+      cerr << msg << endl;
+      throw runtime_error(msg);
     }
     assert(shader != 0);
     return shader;
@@ -167,50 +169,53 @@ public:
 
   void register_location(const string& name){
     GLuint loc = glGetUniformLocation(this->program_id, name.c_str());
-    if(loc==-1)
-      throw runtime_error("unknown uniform name: \"" + name + "\"");
+    if(loc==-1){
+      string msg = "unknown uniform name: \"" + name + "\"";
+      cerr << msg << endl;
+      throw runtime_error(msg);
+    }
     this->locations[name] = loc;
   }
 
-  void set(const string &name, bool val){
+  void set(const string &name, bool bool_val){
     if(!this->has_uniform(name))
       register_location(name);
-    glUniform1ui(this->locations[name], val);
+    glUniform1ui(this->locations[name], bool_val);
   }
-  void set(const string &name, unsigned int val){
+  void set(const string &name, unsigned int uint_val){
     if(!this->has_uniform(name))
       register_location(name);
-    glUniform1ui(this->locations[name], val);
+    glUniform1ui(this->locations[name], uint_val);
   }
-  void set(const string &name,int val){
+  void set(const string &name,int int_val){
     if(!this->has_uniform(name))
       register_location(name);
-    glUniform1i(this->locations[name], val);
+    glUniform1i(this->locations[name], int_val);
   }
-  void set(const string &name, float val){
+  void set(const string &name, float float_val){
     if(!this->has_uniform(name))
       register_location(name);
-    glUniform1f(this->locations[name], val);
+    glUniform1f(this->locations[name], float_val);
   }
-  void set(const string &name, const glm::vec3 &val){
+  void set(const string &name, const glm::vec3 &vec3_val){
     if(!this->has_uniform(name))
       register_location(name);
-    glUniform3fv(this->locations[name], 1, glm::value_ptr(val));
+    glUniform3fv(this->locations[name], 1, glm::value_ptr(vec3_val));
   }
-  void set(const string &name, const glm::vec4 &val){
+  void set(const string &name, const glm::vec4 &vec4_val){
     if(!this->has_uniform(name))
       register_location(name);
-    glUniform4fv(this->locations[name], 1, glm::value_ptr(val));
+    glUniform4fv(this->locations[name], 1, glm::value_ptr(vec4_val));
   }
-  void set(const string &name, const glm::mat3 &val){
+  void set(const string &name, const glm::mat3 &mat3_val){
     if(!this->has_uniform(name))
       register_location(name);
-    glUniformMatrix3fv(this->locations[name], 1,GL_FALSE, glm::value_ptr(val));
+    glUniformMatrix3fv(this->locations[name], 1,GL_FALSE, glm::value_ptr(mat3_val));
   }
-  void set(const string &name, const glm::mat4 &val){
+  void set(const string &name, const glm::mat4 &mat4_val){
     if(!this->has_uniform(name))
       register_location(name);
-    glUniformMatrix4fv(this->locations[name], 1,GL_FALSE, glm::value_ptr(val));
+    glUniformMatrix4fv(this->locations[name], 1,GL_FALSE, glm::value_ptr(mat4_val));
   }
 
   void use() { glUseProgram(this->program_id); }

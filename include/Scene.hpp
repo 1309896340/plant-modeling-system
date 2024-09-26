@@ -7,9 +7,6 @@
 // #include "glm/ext/quaternion_trigonometric.hpp"
 
 #include "GLFW/glfw3.h"
-#include "Scene.hpp"
-#include "glm/ext/matrix_transform.hpp"
-#include "glm/geometric.hpp"
 #include <cassert>
 #include <cstdint>
 #include <iostream>
@@ -73,6 +70,18 @@ public:
   }
 };
 
+class Light {
+  // 简单封装一个点光源
+public:
+  vec3 position{0.0f, 0.0f, 0.0f};
+  vec3 color{1.0f,1.0f,1.0f};
+  // float intensity{1.0f};
+
+  Light() = default;
+  Light(vec3 position, vec3 color)
+      : position(position), color(color) {}
+};
+
 class GeometryObj {
 private:
   void initBuffer() {
@@ -121,9 +130,11 @@ private:
       int width, height, nChannels;
       uint8_t *data = stbi_load("assets/textures/fabric.jpg", &width, &height,
                                 &nChannels, 0);
-      if (data == nullptr)
-        throw runtime_error(
-            "load texture \"assets/textures/fabric.jpg\" failed!");
+      if (data == nullptr) {
+        string msg = "load texture \"assets/textures/fabric.jpg\" failed!";
+        cerr << msg << endl;
+        throw runtime_error(msg);
+      }
       glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB,
                    GL_UNSIGNED_BYTE, data);
       glGenerateMipmap(GL_TEXTURE_2D);
@@ -186,6 +197,7 @@ private:
   GLuint ubo{0};
   const GLuint PVM_binding_point = 0;
 
+
 public:
   const int width = 1200;
   const int height = 900;
@@ -193,11 +205,15 @@ public:
   map<string, Shader *> shaders;
   map<string, GeometryObj> objs;
 
+  Light light;
   Camera camera{vec3(0.0f, 0.0f, 16.0f), vec3{0.0f, 0.0f, 0.0f},
                 static_cast<float>(width) / static_cast<float>(height)};
   Scene() {
-    if (glfwInit() == GLFW_FALSE)
-      throw runtime_error("failed to init glfw!");
+    if (glfwInit() == GLFW_FALSE){
+      string msg = "failed to init glfw!";
+      cerr << msg << endl;
+      throw runtime_error(msg);
+    }
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
@@ -205,8 +221,11 @@ public:
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     this->window = glfwCreateWindow(width, height, "demo", 0, 0);
     glfwMakeContextCurrent(this->window);
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
-      throw runtime_error("failed to init glad!");
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)){
+      string msg = "failed to init glad!";
+      cerr << msg << endl;
+      throw runtime_error(msg);
+    }
     glEnable(GL_DEPTH_TEST); // 开启深度测试
     glEnable(GL_CULL_FACE);  // 开启面剔除
     glFrontFace(GL_CCW);
@@ -385,8 +404,8 @@ public:
       }
       if (ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f)) {
         this->camera.move_relative(
-            {MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.x,
-             -MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.y, 0.0f});
+            {-MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.x,
+             MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.y, 0.0f});
       }
     }
 
@@ -495,11 +514,22 @@ public:
       // 1.1 传入model矩阵
       cur_shader->set("model", model);
 
-      // 1.2 启用材质
-      cur_shader->set("useTexture", (cur_obj->texture != 0) ? true : false);
-      glBindTexture(GL_TEXTURE_2D, cur_obj->texture);
+      // 1.2 传入灯光属性
+      cur_shader->set("lightPos", this->light.position);
+      cur_shader->set("lightColor", this->light.color);
+      // cur_shader->set("lightIntensity", this->light.intensity);
 
-      // 1.3 绘制
+      // 1.3 传入相机位置
+      cur_shader->set("eyePos", this->camera.position_s);
+
+      // 1.4 启用材质，设置材质属性
+      glBindTexture(GL_TEXTURE_2D, cur_obj->texture);
+      cur_shader->set("useTexture", (cur_obj->texture != 0) ? true : false);
+      cur_shader->set("ambientStrength", 0.2f);
+      cur_shader->set("diffuseStrength", 0.8f);
+      cur_shader->set("specularStrength", 0.8f);
+
+      // 1.5 绘制
       glBindVertexArray(cur_obj->vao);
       glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3,
                      GL_UNSIGNED_INT, (void *)0);
@@ -550,6 +580,10 @@ public:
     glfwDestroyWindow(window);
     glfwTerminate();
   }
+
+  // void setLightPos(vec3 position) { this->light.position = position; }
+
+  // void setLightColor(vec3 color) { this->light.color = color; }
 };
 
 } // namespace
