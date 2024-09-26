@@ -12,14 +12,14 @@ target("demo")
 
     after_build(
         function (target)
-            os.cp("shaders", path.join(target:targetdir(), "./"))
+            os.cp("assets", path.join(target:targetdir(), "./"))
             os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
 
-target("test")
-    set_kind("binary")
-    add_includedirs("include")
-    add_files("src/test.cpp")
-    add_packages("glm")
+-- target("test")
+--     set_kind("binary")
+--     add_includedirs("include")
+--     add_files("src/test.cpp")
+--     add_packages("glm")
 

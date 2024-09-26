@@ -8,6 +8,7 @@
 
 #include "GLFW/glfw3.h"
 #include "Scene.hpp"
+#include "glm/ext/matrix_transform.hpp"
 #include "glm/geometric.hpp"
 #include <cassert>
 #include <cstdint>
@@ -85,21 +86,48 @@ private:
                  this->geometry->vertices.size() * sizeof(Vertex),
                  this->geometry->vertices.data(), GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float),
+    size_t stride = sizeof(Vertex);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride,
                           (void *)0); // 位置
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float),
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride,
                           (void *)(3 * sizeof(float))); // 法向量
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 9 * sizeof(float),
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride,
                           (void *)(6 * sizeof(float))); // 颜色
+    glVertexAttribPointer(3, 2, GL_FLOAT, GL_FALSE, stride,
+                          (void *)(9 * sizeof(float))); // 纹理坐标
     glEnableVertexAttribArray(0);
     glEnableVertexAttribArray(1);
     glEnableVertexAttribArray(2);
+    glEnableVertexAttribArray(3);
 
     glGenBuffers(1, &this->ebo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER,
                  this->geometry->surfaces.size() * sizeof(Surface),
                  this->geometry->surfaces.data(), GL_STATIC_DRAW);
+
+    // 绑定纹理(根据子类型)
+    Plane *pln = dynamic_cast<Plane *>(this->geometry);
+    if (pln != nullptr) {
+      // 目前仅考虑为子类型为Plane的Geometry绑定纹理，其他不做处理
+      glGenTextures(1, &this->texture);
+      glBindTexture(GL_TEXTURE_2D, this->texture);
+
+      glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+      glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+      glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+      int width, height, nChannels;
+      uint8_t *data = stbi_load("assets/textures/fabric.jpg", &width, &height,
+                                &nChannels, 0);
+      if (data == nullptr)
+        throw runtime_error(
+            "load texture \"assets/textures/fabric.jpg\" failed!");
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB,
+                   GL_UNSIGNED_BYTE, data);
+      glGenerateMipmap(GL_TEXTURE_2D);
+    }
 
     glBindVertexArray(0);
   }
@@ -179,7 +207,7 @@ public:
       throw runtime_error("failed to init glad!");
     glEnable(GL_DEPTH_TEST); // 开启深度测试
     glEnable(GL_CULL_FACE);  // 开启面剔除
-    glFrontFace(GL_CW);
+    glFrontFace(GL_CCW);
 #ifdef ENBALE_POLYGON_VISUALIZATION
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 #endif
@@ -260,7 +288,7 @@ public:
 #endif
   }
 
-  void add(const string &name, Geometry *geo, Transform trans = Transform()) {
+  void add(const string &name, Geometry *geo, Transform trans) {
     if (this->objs.find(name) != this->objs.end()) {
       cout << "scene cannot add object with an existed name!" << endl;
       return;
@@ -268,6 +296,18 @@ public:
     GeometryObj obj(geo, trans);
     this->objs[name] = std::move(obj);
   }
+
+  void add(const string &name, Geometry *geo, vec3 position) {
+    add(name, geo, Transform(position, glm::identity<glm::quat>()));
+  }
+  void add(const string &name, Geometry *geo, vec3 position, vec3 rot_axis, float rot_angle) {
+    add(name, geo, Transform(position, glm::normalize(rot_axis), rot_angle));
+  }
+
+  void add(const string &name, Geometry *geo) {
+    add(name,geo,Transform());
+  }
+
 
   void imgui_menu() {
 
@@ -308,8 +348,8 @@ public:
       if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
         if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
           // 以世界坐标锚点为中心做旋转
-          phi_c -= MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x;
-          theta_c += MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y;
+          phi_c += MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x;
+          theta_c -= MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y;
 
           vec3 new_pos;
           new_pos.x = dist * sin(theta_c) * cos(phi_c);
@@ -465,11 +505,21 @@ public:
       mat4 pvm = projection * view_model;
 
       // 渲染本体
-      this->shaders["default"]->use();
-      GLuint pvm_loc =
-          glGetUniformLocation(this->shaders["default"]->program(), "PVM");
+      Shader *cur_shader = this->shaders["default"];
+      cur_shader->use();
+      glBindTexture(GL_TEXTURE_2D, cur_obj->texture);
+      GLuint pvm_loc = glGetUniformLocation(cur_shader->program(), "PVM");
       assert(pvm_loc != -1);
       glUniformMatrix4fv(pvm_loc, 1, GL_FALSE, glm::value_ptr(pvm));
+      GLuint useTexture_loc =
+          glGetUniformLocation(cur_shader->program(), "useTexture");
+      assert(useTexture_loc != -1);
+      if (cur_obj->texture != 0) {
+        glUniform1ui(useTexture_loc, true); // 启用材质，而非使用颜色
+      } else {
+        glUniform1ui(useTexture_loc, false);
+      }
+      // glUniform1ui(useTexture_loc, false);
       glBindVertexArray(cur_obj->vao);
       glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3,
                      GL_UNSIGNED_INT, (void *)0);

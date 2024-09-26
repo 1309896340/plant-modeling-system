@@ -2,8 +2,6 @@
 
 #include "constants.h"
 
-#include "glm/geometric.hpp"
-#include "glm/trigonometric.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -19,8 +17,8 @@ private:
   vec3 upDir{glm::vec3(0.0f, 1.0f, 0.0f)};   // 单位向量
 
   float fov{glm::radians(35.0f)};
-  float near{100.0f};
-  float far{0.1f};
+  float near{0.1f};
+  float far{100.0f};
   float aspect{1.0f};
 
   // 天顶角，范围[0,pi]
@@ -106,8 +104,8 @@ public:
   // }
 
   void rotate(vec3 offset) {
-    this->phi_s += offset.x;
-    this->theta_s -= offset.y;
+    this->phi_s -= offset.x;
+    this->theta_s += offset.y;
     this->updateToward();
   }
 

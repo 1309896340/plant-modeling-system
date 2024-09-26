@@ -18,6 +18,8 @@ class Shader {
 private:
   GLuint program_id{0};
 
+  const string prefix = "assets\\shaders\\";
+
   void readFile(string &dst, const string &filename) {
     stringstream ss;
     ifstream fp(filename);
@@ -91,7 +93,6 @@ private:
 public:
   Shader(const string &vertex_filename, const string &geometry_filename,
          const string &fragment_filename) {
-    string prefix = "shaders\\";
     GLuint vshader = createShader(prefix + vertex_filename);
     GLuint gshader = createShader(prefix + geometry_filename);
     GLuint fshader = createShader(prefix + fragment_filename);
@@ -122,7 +123,6 @@ public:
   }
 
   Shader(const string &vertex_filename, const string &fragment_filename) {
-    string prefix = "shaders\\";
     GLuint vshader = createShader(prefix + vertex_filename);
     GLuint fshader = createShader(prefix + fragment_filename);
 

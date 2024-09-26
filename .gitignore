@@ -1,6 +1,7 @@
 .vscode
 .xmake
 build
+assets/textures
 
 # Prerequisites
 *.d

@@ -44,9 +44,16 @@ struct Vertex {
       float b;
     };
   };
+  union {
+    unsigned int uv[2];
+    struct {
+      float u;
+      float v;
+    };
+  };
   Vertex()
       : position{0.0f, 0.0f, 0.0f}, normal{0.0f, 0.0f, 0.0f},
-        color{0.0f, 0.0f, 0.0f} {}
+        color{0.0f, 0.0f, 0.0f}, uv{0u, 0u} {}
 };
 
 struct Edge {
@@ -67,6 +74,8 @@ public:
   Geometry() = default;
   Geometry(const Geometry &) = default;
   ~Geometry() = default;
+
+  virtual void update() = 0;
 };
 
 class Mesh : public Geometry {
@@ -100,6 +109,10 @@ public:
       }
     }
   }
+
+  virtual void update() {
+    // 空实现
+  };
 };
 
 class Sphere : public Mesh {
@@ -119,10 +132,6 @@ public:
       vt.x = this->radius * vt.normal[0];
       vt.y = this->radius * vt.normal[1];
       vt.z = this->radius * vt.normal[2];
-
-      vt.r = 1.0f;
-      vt.g = 0.0f;
-      vt.b = 0.0f;
 
       return vt;
     });
@@ -159,7 +168,7 @@ public:
   void setHNum(uint32_t hNum) { this->HNum = hNum; }
   void setPNum(uint32_t pNum) { this->PNum = pNum; }
 
-  void update() {
+  virtual void update() {
     this->vertices.clear();
     this->surfaces.clear();
     Mesh bottom(RNum, PNum), side(HNum, PNum), top(RNum, PNum);
@@ -172,11 +181,6 @@ public:
       vt.x = r1 * u * cos(2 * PI * v);
       vt.y = r1 * u * sin(2 * PI * v);
       vt.z = 0.0f;
-
-      vt.r = 0.0f;
-      vt.g = 0.0f;
-      vt.b = 1.0f;
-
       return vt;
     });
     top.updateVertex([this](float u, float v) {
@@ -189,13 +193,9 @@ public:
       vt.y = r2 * u * sin(-2 * PI * v);
       vt.z = h;
 
-      vt.r = 0.0f;
-      vt.g = 0.0f;
-      vt.b = 1.0f;
-
       // 向方位角phi、天顶角rho的弯曲变换
       glm::mat4 rot_mat(1.0f);
-      rot_mat = glm::rotate(rho, glm::vec3(sin(phi), cos(phi), 0));
+      rot_mat = glm::rotate(rho, glm::vec3(-sin(phi), cos(phi), 0));
       // 位置
       glm::vec4 pos(vt.x, vt.y, vt.z, 1.0f);
       pos = rot_mat * pos;
@@ -224,13 +224,9 @@ public:
       vt.y = interp_r * sin(2 * PI * v);
       vt.z = h * u;
 
-      vt.r = 0.0f;
-      vt.g = 0.0f;
-      vt.b = 1.0f;
-
       // 向方位角phi、天顶角rho的弯曲变换
       glm::mat4 rot_mat(1.0f);
-      rot_mat = glm::rotate(u * rho, glm::vec3(sin(phi), cos(phi), 0));
+      rot_mat = glm::rotate(u * rho, glm::vec3(-sin(phi), cos(phi), 0));
       // 位置
       glm::vec4 pos_v(vt.x, vt.y, vt.z, 1.0f);
       pos_v = rot_mat * pos_v;
@@ -272,6 +268,38 @@ public:
     }
     vertices.insert(vertices.end(), top.vertices.begin(), top.vertices.end());
     surfaces.insert(surfaces.end(), top.surfaces.begin(), top.surfaces.end());
+  }
+};
+
+class Plane : public Mesh {
+private:
+  float width{0.0f};
+  float height{0.0f};
+
+public:
+  Plane(float width, float height) : Mesh(1, 1), width(width), height(height) {
+    update();
+  }
+
+  virtual void update() {
+    this->updateVertex([this](float u, float v) {
+      Vertex vt;
+      vt.x = (0.5f - u) * this->width;
+      vt.y = (v - 0.5f) * this->height;
+      vt.z = 0.0f;
+
+      vt.nx = 0.0f;
+      vt.ny = 0.0f;
+      vt.nz = 1.0f;
+
+      vt.r = 1.0f;
+      vt.g = 1.0f;
+      vt.b = 0.0f;
+
+      vt.u = u;
+      vt.v = v;
+      return vt;
+    });
   }
 };
 
