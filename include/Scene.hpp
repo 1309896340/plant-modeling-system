@@ -158,6 +158,8 @@ public:
 
   bool isSelected{false};
 
+  // bool mesh_is_changed{false};
+
   GeometryObj() = default;
   GeometryObj(Geometry *geo, Transform trans)
       : geometry(geo), transform(trans) {
@@ -183,6 +185,19 @@ public:
     this->geometry = geo.geometry;
     geo.geometry = nullptr;
     return *this;
+  }
+
+  // 需要区分是否是顶点数量进行变化
+  // 1. 顶点数量不变：只通过glBufferSubData进行更新
+  // 2. 顶点数量改变：需要glBufferData进行空间的重分配
+  // 先统一用glBufferData做更新
+  void updateVBO() {
+    glBindVertexArray(this->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
+    glBufferData(GL_ARRAY_BUFFER,
+                 this->geometry->vertices.size() * sizeof(Vertex),
+                 this->geometry->vertices.data(), GL_DYNAMIC_DRAW);
+    glBindVertexArray(0);
   }
 };
 
@@ -357,8 +372,8 @@ public:
       ImGui::TreePop();
     }
 
-    GeometryObj *cur_obj = &this->objs.begin()->second;
-    // GeometryObj *cur_obj{nullptr};
+    // GeometryObj *cur_obj = &this->objs.begin()->second;
+    static GeometryObj *cur_obj{nullptr};
     if (ImGui::TreeNodeEx(u8"几何管理", ImGuiTreeNodeFlags_DefaultOpen)) {
       bool is_hightlight = true;
       vector<string> items;
@@ -396,16 +411,17 @@ public:
         throw runtime_error(msg);
       }
       for (auto &param : cur_obj->geometry->parameters) {
-        string param_name = param.first;
-        auto param_val = param.second;
+        // string param_name = param.first;
+        // auto param_val = param.second;
         std::visit(
-            [param,cur_obj](auto &&arg) {
+            [param](auto &&arg) {
               using T = std::decay_t<decltype(arg)>;
               if constexpr (std::is_same_v<T, float>) {
-                if(ImGui::SliderFloat(param.first.c_str(), &arg, 0.0f, 10.0f)){
+                if (ImGui::SliderFloat(param.first.c_str(), &arg, 0.0f,
+                                       10.0f)) {
                   cur_obj->geometry->update();
                   // 还需要更新vbo
-                  等待修改
+                  cur_obj->updateVBO();
                 }
               }
             },
@@ -560,12 +576,12 @@ public:
 
     // 更新P,V矩阵
     glBindBuffer(GL_UNIFORM_BUFFER, this->ubo);
-    if (this->camera.project_is_changed) {
+    if (this->camera.isProjectionChanged()) {
       glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4),
                       glm::value_ptr(projection));
       this->camera.apply_projection_done();
     }
-    if (this->camera.view_is_changed) {
+    if (this->camera.isViewChanged()) {
       glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4),
                       glm::value_ptr(view));
       this->camera.apply_view_done();

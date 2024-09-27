@@ -26,6 +26,10 @@ private:
   // 方向角，与+x的夹角，范围(-pi,pi]
   float phi{0.0f};
 
+  bool view_is_changed{true};
+  bool project_is_changed{true};
+
+
   void updateAttitude() {
     // 更新姿态属性 theta 和 phi，务必在每次实际旋转的操作后调用
     float cos_theta = glm::dot(this->toward, this->upDir);
@@ -53,8 +57,6 @@ public:
   float phi_s{0.0f};
   vec3 position_s{0.0f, 0.0f, 0.0f};
 
-  bool view_is_changed{true};
-  bool project_is_changed{true};
 
   Camera() { updateAttitude(); };
   Camera(vec3 position, vec3 target, float aspect)
@@ -145,6 +147,13 @@ public:
   void setAspect(float aspect){
     this->aspect = aspect;
     this->project_is_changed = true;
+  }
+
+  bool isProjectionChanged()const{
+    return this->project_is_changed;
+  }
+  bool isViewChanged()const{
+    return this->view_is_changed;
   }
 };
 } // namespace
