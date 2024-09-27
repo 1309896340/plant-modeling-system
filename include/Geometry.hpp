@@ -101,7 +101,6 @@ public:
 
   void updateVertex(function<Vertex(float, float)> func) {
     reset();
-    // 遍历i=0, 1, .., uNum，j=0, 1, ..., vNum
     for (int i = 0; i <= this->uNum; i++) {
       for (int j = 0; j <= this->vNum; j++) {
         this->vertices[j + i * (vNum + 1)] =
@@ -118,18 +117,60 @@ public:
     }
   }
 
+  void transformVertex(function<Vertex(Vertex, float, float)> func) {
+    // 假定uNum和vNum没有发生改变，该函数也不会修改索引
+    for (int i = 0; i <= this->uNum; i++) {
+      for (int j = 0; j <= this->vNum; j++) {
+        float u = static_cast<float>(i) / uNum;
+        float v = static_cast<float>(j) / vNum;
+        Vertex &vt = this->vertices[j + i * (vNum + 1)];
+        vt = func(vt, u, v);
+      }
+    }
+  }
+
   virtual void update() {
     // 空实现
   };
 };
 
-class Sphere : public Mesh {
-  // private:
-  //   float radius;
-
+class FixedGeometry : public Geometry {
 public:
-  // map<string, param_variant> parameters;
+  FixedGeometry() {
+    // 没有任何可修改属性
+    this->parameters.clear();
+  }
 
+  FixedGeometry(const Geometry &geo) {
+    // 可以从Geometry构造
+    this->vertices = geo.vertices;
+    this->surfaces = geo.surfaces;
+    // 没有任何可修改属性
+    this->parameters.clear();
+  }
+
+  FixedGeometry(const vector<Vertex> &vertices, const vector<Surface> &surfaces) {
+    this->vertices = vertices;
+    this->surfaces = surfaces;
+    // 没有任何可修改属性
+    this->parameters.clear();
+  }
+
+  // 默认正常拷贝 vertices 和 surfaces
+  FixedGeometry(const FixedGeometry &) = default;
+
+  virtual void update() {
+    // 空实现，不会修改网格及其顶点的任何属性
+  }
+  virtual void reset() {
+    // 空实现，直到对象自动销毁前，不会有人为的清空操作
+  }
+};
+
+// FixedGeometry operator+(const Mesh & )
+
+class Sphere : public Mesh {
+public:
   Sphere(float radius, uint32_t uNum = 100, uint32_t vNum = 100)
       : Mesh(uNum, vNum) {
     this->parameters["radius"] = radius; // radius为float
@@ -137,6 +178,7 @@ public:
   }
 
   virtual void update() {
+    this->reset();
     this->updateVertex([this](float u, float v) -> Vertex {
       Vertex vt;
       float radius = std::get<float>(this->parameters["radius"]);
@@ -154,25 +196,101 @@ public:
   }
 };
 
-class Cone : public Geometry {
+// class Cone : public Geometry {
+// private:
+//   uint32_t RNum; // 半径细分
+//   uint32_t HNum; // 高度细分
+//   uint32_t PNum; // 圆周细分
+// public:
+//   Cone() : Cone(0.2f, 1.0f) {}
+//   Cone(float r, float h, uint32_t RNum = 8, uint32_t HNum = 10,
+//        uint32_t PNum = 36)
+//       : RNum(RNum), HNum(HNum), PNum(PNum) {
+//     this->parameters["r"] = r;
+//     this->parameters["h"] = h;
+//     update();
+//   }
+//   virtual void update() {}
+// };
+
+class ConeSide : public Mesh {
 private:
-  uint32_t RNum; // 半径细分
   uint32_t HNum; // 高度细分
   uint32_t PNum; // 圆周细分
+
 public:
-  Cone() : Cone(0.2f, 1.0f) {}
-  Cone(float r, float h, uint32_t RNum = 8, uint32_t HNum = 10,
-       uint32_t PNum = 36)
-      : RNum(RNum), HNum(HNum), PNum(PNum) {
-        this->parameters["r"] = r;
-        this->parameters["h"] = h;
-        update();
-      }
-  virtual void update(){
-    
+  ConeSide(float r, float h, uint32_t RNum = 8, uint32_t HNum = 10,
+           uint32_t PNum = 18)
+      : HNum(HNum), PNum(PNum) {
+    this->parameters["r"] = r;
+    this->parameters["h"] = h;
+    update();
+  }
+  virtual void update() {
+    this->updateVertex([this](float u, float v) {
+      Vertex vt;
+      float r = std::get<float>(this->parameters["r"]);
+      float h = std::get<float>(this->parameters["h"]);
+      vt.x = r * (1 - u) * cos(2 * PI * v);
+      vt.y = r * (1 - u) * sin(2 * PI * v);
+      vt.z = h * u;
+
+      float tmp = sqrt(r * r + h * h);
+      vt.nx = h / tmp * cos(2 * PI * v);
+      vt.ny = h / tmp * sin(2 * PI * v);
+      vt.nz = r / tmp;
+
+      vt.r = 1.0f;
+      vt.g = 0.0f;
+      vt.b = 0.0f;
+
+      vt.u = u;
+      vt.v = v;
+
+      return vt;
+    });
   }
 };
 
+class CylinderSide : public Mesh {
+private:
+  uint32_t HNum; // 高度细分
+  uint32_t PNum; // 圆周细分
+
+public:
+  CylinderSide(float r, float h, uint32_t RNum = 8, uint32_t HNum = 10,
+               uint32_t PNum = 18)
+      : HNum(HNum), PNum(PNum) {
+    this->parameters["r"] = r;
+    this->parameters["h"] = h;
+    update();
+  }
+  virtual void update() {
+    this->updateVertex([this](float u, float v) {
+      Vertex vt;
+      float r = std::get<float>(this->parameters["r"]);
+      float h = std::get<float>(this->parameters["h"]);
+      vt.x = r * cos(2 * PI * v);
+      vt.y = r * sin(2 * PI * v);
+      vt.z = h * u;
+
+      vt.nx = cos(2 * PI * v);
+      vt.ny = sin(2 * PI * v);
+      vt.nz = 0.0f;
+
+      vt.r = 1.0f;
+      vt.g = 0.0f;
+      vt.b = 0.0f;
+
+      vt.u = u;
+      vt.v = v;
+
+      return vt;
+    });
+  }
+};
+
+// 暂时先不修改，但是update的逻辑后面必须处理一下
 class CylinderEx : public Geometry {
 private:
   uint32_t RNum; // 半径细分
@@ -180,7 +298,6 @@ private:
   uint32_t PNum; // 圆周细分
 
 public:
-
   CylinderEx() : CylinderEx(1.0f, 1.0f, 3.0f, 0.0f, 0.0f) {}
   CylinderEx(float r1, float r2, float h, float phi, float rho,
              uint32_t RNum = 8, uint32_t HNum = 10, uint32_t PNum = 18)
@@ -192,10 +309,6 @@ public:
     this->parameters["rho"] = rho;
     update();
   }
-
-  // void setRNum(uint32_t rNum) { this->RNum = rNum; }
-  // void setHNum(uint32_t hNum) { this->HNum = hNum; }
-  // void setPNum(uint32_t pNum) { this->PNum = pNum; }
 
   virtual void update() {
     this->reset();

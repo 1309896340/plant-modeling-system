@@ -18,8 +18,13 @@ int main(int argc, char **argv) {
   Sphere s1(2.0f, 36, 72);
   Plane ground(20.0f, 15.0f);
 
+  CylinderSide cs1(3.2f,4.0f);
+  ConeSide cs2(2.2f,6.0f);
+
   scene.add("c1", &c1);
   scene.add("s1", &s1, {4.0f, 2.0f, -6.0f});
+  scene.add("cs1", &cs1, {4.0f, 0.0f, 6.0f});
+  scene.add("cs2", &cs2, {-6.0f, 0.0f, 6.0f});
   scene.add("ground", &ground);
 
   scene.mainloop();
