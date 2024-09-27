@@ -7,12 +7,14 @@
 // #include "glm/ext/quaternion_trigonometric.hpp"
 
 #include "GLFW/glfw3.h"
+#include <any>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <map>
 #include <stdexcept>
+#include <variant>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
@@ -154,6 +156,8 @@ public:
   GLuint ebo{0};
   GLuint texture{0};
 
+  bool isSelected{false};
+
   GeometryObj() = default;
   GeometryObj(Geometry *geo, Transform trans)
       : geometry(geo), transform(trans) {
@@ -196,8 +200,8 @@ private:
   const GLuint PVM_binding_point = 0;
 
 public:
-  const int width = 1200;
-  const int height = 900;
+  const int width = 1600;
+  const int height = 1200;
 
   map<string, Shader *> shaders;
   map<string, GeometryObj> objs;
@@ -352,6 +356,65 @@ public:
                           -10.0f, 10.f);
       ImGui::TreePop();
     }
+
+    GeometryObj *cur_obj = &this->objs.begin()->second;
+    // GeometryObj *cur_obj{nullptr};
+    if (ImGui::TreeNodeEx(u8"几何管理", ImGuiTreeNodeFlags_DefaultOpen)) {
+      bool is_hightlight = true;
+      vector<string> items;
+      static int selected_idx = 0;
+      static int highlighted_idx = 0;
+      for (auto &obj : this->objs) {
+        items.push_back(obj.first);
+      }
+      if (ImGui::BeginListBox(u8"物体")) {
+        for (int i = 0; i < items.size(); i++) {
+          const bool is_selected = (selected_idx == i);
+          if (ImGui::Selectable(items[i].c_str(), is_selected))
+            selected_idx = i;
+          if (is_hightlight && ImGui::IsItemHovered())
+            highlighted_idx = i;
+          if (is_selected) {
+            cur_obj = &this->objs[items[i]];
+            ImGui::SetItemDefaultFocus();
+          }
+        }
+        // 回传选中状态
+        for (int i = 0; i < items.size(); i++) {
+          this->objs[items[i]].isSelected = false;
+          if (selected_idx == i)
+            this->objs[items[i]].isSelected = true;
+        }
+        ImGui::EndListBox();
+      }
+
+      // 显示参数
+      ImGui::Text(u8"形体参数");
+      if (cur_obj == nullptr) {
+        string msg = "cur_obj 为 nullptr";
+        cerr << msg << endl;
+        throw runtime_error(msg);
+      }
+      for (auto &param : cur_obj->geometry->parameters) {
+        string param_name = param.first;
+        auto param_val = param.second;
+        std::visit(
+            [param,cur_obj](auto &&arg) {
+              using T = std::decay_t<decltype(arg)>;
+              if constexpr (std::is_same_v<T, float>) {
+                if(ImGui::SliderFloat(param.first.c_str(), &arg, 0.0f, 10.0f)){
+                  cur_obj->geometry->update();
+                  // 还需要更新vbo
+                  等待修改
+                }
+              }
+            },
+            param.second);
+      }
+
+      ImGui::TreePop();
+    }
+
     ImGui::End();
   }
 
@@ -542,12 +605,15 @@ public:
 
 #ifdef ENABLE_NORMAL_VISUALIZATION
       // 2. 渲染法向量
-      cur_shader = this->shaders["normal"];
-      cur_shader->use();
-      cur_shader->set("model", model);
 
-      glBindVertexArray(cur_obj->vao);
-      glDrawArrays(GL_POINTS, 0, cur_obj->geometry->vertices.size());
+      if (cur_obj->isSelected) {
+        cur_shader = this->shaders["normal"];
+        cur_shader->use();
+        cur_shader->set("model", model);
+
+        glBindVertexArray(cur_obj->vao);
+        glDrawArrays(GL_POINTS, 0, cur_obj->geometry->vertices.size());
+      }
 #endif
     }
   }
@@ -565,12 +631,12 @@ public:
 
       render();
 
-      // imgui_interaction();
       imgui_menu();
 
       ImGui::Render();
       ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
+      // imgui实现外部窗口的必要配置
       if (io->ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
         ImGui::UpdatePlatformWindows();
         ImGui::RenderPlatformWindowsDefault();
@@ -586,10 +652,6 @@ public:
     glfwDestroyWindow(window);
     glfwTerminate();
   }
-
-  // void setLightPos(vec3 position) { this->light.position = position; }
-
-  // void setLightColor(vec3 color) { this->light.color = color; }
 };
 
 void framebufferResizeCallback(GLFWwindow *window, int width, int height) {

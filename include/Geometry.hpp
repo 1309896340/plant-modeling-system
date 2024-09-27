@@ -16,61 +16,9 @@
 
 #define RADIANS(a) ((a) * PI / 180.0f)
 
-// #include <Eigen/Dense>
-// #include <glm/glm.hpp>
-
 namespace {
 using namespace std;
 using param_variant = variant<unsigned int, int, float, bool>;
-
-// struct Variant {
-//   double data;
-//   enum PType { INT, UINT, FLOAT, BOOL } ptype{FLOAT};
-//   Variant(PType ptype) : ptype(ptype) {
-//     switch (ptype) {
-//     case INT:
-//       *((int *)ptr) = 0;
-//       break;
-//     case UINT:
-//       ptr = new unsigned int;
-//       *((unsigned int *)ptr) = 0;
-//       break;
-//     case FLOAT:
-//       ptr = new float;
-//       *((float *)ptr) = 0;
-//       break;
-//     case BOOL:
-//       ptr = new bool;
-//       *((bool *)ptr) = 0;
-//       break;
-//     default:
-//       string msg = "unknown variant!";
-//       std::cerr << msg << endl;
-//       throw runtime_error(msg);
-//     }
-//   };
-//   Variant() : Variant(FLOAT) {}
-//   ~Variant() {
-//     switch (ptype) {
-//     case INT:
-//       delete (int *)ptr;
-//       break;
-//     case UINT:
-//       delete (unsigned int *)ptr;
-//       break;
-//     case FLOAT:
-//       delete (float *)ptr;
-//       break;
-//     case BOOL:
-//       delete (bool *)ptr;
-//       break;
-//     default:
-//       string msg = "unknown variant!";
-//       std::cerr << msg << endl;
-//       throw runtime_error(msg);
-//     }
-//   }
-// };
 
 struct Vertex {
   union {
@@ -141,10 +89,6 @@ class Mesh : public Geometry {
 private:
   uint32_t uNum{0}, vNum{0};
 
-  // // 记录updateVertexNext的位置
-  // uint32_t accu_vertices_pos{0};
-  // uint32_t accu_surfaces_pos{0};
-
 public:
   Mesh() : Mesh(50, 50) {} // 委托
   Mesh(uint32_t uNum, uint32_t vNum) : uNum(uNum), vNum(vNum) { reset(); }
@@ -153,9 +97,6 @@ public:
     this->vertices.resize((uNum + 1) * (vNum + 1));
     // this->edges.resize(3*uNum*vNum + uNum + vNum);
     this->surfaces.resize(uNum * vNum * 2);
-
-    // this->accu_vertices_pos = 0;
-    // this->accu_surfaces_pos = 0;
   }
 
   void updateVertex(function<Vertex(float, float)> func) {
@@ -176,35 +117,6 @@ public:
       }
     }
   }
-
-  // void updateVertexNext(uint32_t uNum, uint32_t vNum, function<Vertex(float,
-  // float)> func) {
-  //   // 考虑将updateVertex()改成默认开头reset()清理vertices和surfaces
-  //   // 而updateVertexNext()则是在已有vertices和surfaces基础上进行递增
-  //   // 因此需要在开始之前手动reset()
-  //   //
-  //   需要非常注意在Mesh::reset()中分配正确的vertices和surfaces的长度，短了会越界，长了会导致drawcall访问到padding值
-  //   // 为了保证不出错，引入acc_vertices_pos和acc_surfaces_pos来进行检查
-
-  //   // 每次加入的组合面可以有不同的u,v分割数，需要作为参数传入
-
-  //   uint32_t offset = this->vertices.size();
-  //   for (int i = 0; i <= this->uNum; i++) {
-  //     for (int j = 0; j <= this->vNum; j++) {
-  //       this->vertices[j + i * (vNum + 1)] =
-  //           func(static_cast<float>(i) / uNum, static_cast<float>(j) / vNum);
-  //       if (i != this->uNum && j != this->vNum) {
-  //         uint32_t ptr = (j + i * vNum) * 2;
-  //         this->surfaces[ptr + 0] = {offset + j + i * (vNum + 1),
-  //                                    offset + 1 + j + i * (vNum + 1),
-  //                                    offset + 1 + j + (i + 1) * (vNum + 1)};
-  //         this->surfaces[ptr + 1] = {offset + j + i * (vNum + 1),
-  //                                    offset + 1 + j + (i + 1) * (vNum + 1),
-  //                                    offset + j + (i + 1) * (vNum + 1)};
-  //       }
-  //     }
-  //   }
-  // };
 
   virtual void update() {
     // 空实现
@@ -229,8 +141,8 @@ public:
       Vertex vt;
       float radius = std::get<float>(this->parameters["radius"]);
 
-      vt.nx = sin(PI * u) * cos(2 * PI * v);
-      vt.ny = sin(PI * u) * sin(2 * PI * v);
+      vt.nx = sin(PI * u) * cos(-2 * PI * v);
+      vt.ny = sin(PI * u) * sin(-2 * PI * v);
       vt.nz = cos(PI * u);
 
       vt.x = radius * vt.normal[0];
@@ -244,12 +156,6 @@ public:
 
 class CylinderEx : public Geometry {
 private:
-  // float r1;
-  // float r2;
-  // float h;
-  // float phi;
-  // float rho;
-
   uint32_t RNum;
   uint32_t HNum;
   uint32_t PNum;
@@ -268,12 +174,6 @@ public:
     this->parameters["rho"] = rho;
     update();
   }
-
-  // void setR1(float r1) { this->r1 = r1; }
-  // void setR2(float r2) { this->r2 = r2; }
-  // void setH(float h) { this->h = h; }
-  // void setPhi(float phi) { this->phi = phi; }
-  // void setRho(float rho) { this->rho = rho; }
 
   void setRNum(uint32_t rNum) { this->RNum = rNum; }
   void setHNum(uint32_t hNum) { this->HNum = hNum; }
@@ -398,7 +298,7 @@ private:
   float height{0.0f};
 
 public:
-  Plane(float width, float height) : Mesh(1, 1), width(width), height(height) {
+  Plane(float width, float height) : Mesh(10, 10), width(width), height(height) {
     update();
   }
 
