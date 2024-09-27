@@ -31,9 +31,11 @@
 
 #include "proj.h"
 
+#include "Auxiliary.hpp"
 #include "Camera.hpp"
 #include "Geometry.hpp"
 #include "Shader.hpp"
+
 
 #define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
 #define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.02f
@@ -86,9 +88,35 @@ public:
   Light(vec3 position, vec3 color) : position(position), color(color) {}
 };
 
+// class AuxiliaryObj {
+// private:
+// public:
+//   Arrow *obj{nullptr};
+//   Transform transform;
+
+//   GLuint vao{0};
+//   GLuint vbo{0};
+//   GLuint ebo{0};
+
+//   AuxiliaryObj() {
+//     // 直接初始化网格，且不依赖于Geometry，与其完全隔离实现
+
+//     // 2. 初始化vbo
+//     glGenVertexArrays(1, &this->vao);
+//     glBindVertexArray(this->vao);
+
+//     glGenBuffers(1, &this->vbo);
+//     glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
+
+//     glGenBuffers(1, &this->ebo);
+//     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
+//     glBufferData(GL_ELEMENT_ARRAY_BUFFER, , )
+//   }
+// };
+
 class GeometryObj {
 private:
-  void initBuffer() {
+  void init_vbo() {
 
     glGenVertexArrays(1, &this->vao);
     glBindVertexArray(this->vao);
@@ -163,7 +191,7 @@ public:
   GeometryObj() = default;
   GeometryObj(Geometry *geo, Transform trans)
       : geometry(geo), transform(trans) {
-    initBuffer();
+    init_vbo();
   }
 
   GeometryObj(GeometryObj &&geo) noexcept { // 实现移动语义
@@ -220,6 +248,8 @@ public:
 
   map<string, Shader *> shaders;
   map<string, GeometryObj> objs;
+
+  // AuxiliaryObj axis_x, axis_y, axis_z;
 
   Light light;
   Camera camera{vec3(0.0f, 0.0f, 16.0f), vec3{0.0f, 0.0f, 0.0f},
@@ -373,7 +403,7 @@ public:
     }
 
     // GeometryObj *cur_obj = &this->objs.begin()->second;
-    static GeometryObj *cur_obj{nullptr};
+    static GeometryObj *cur_obj{&this->objs.begin()->second};
     if (ImGui::TreeNodeEx(u8"几何管理", ImGuiTreeNodeFlags_DefaultOpen)) {
       bool is_hightlight = true;
       vector<string> items;
@@ -631,6 +661,7 @@ public:
         glDrawArrays(GL_POINTS, 0, cur_obj->geometry->vertices.size());
       }
 #endif
+      // 3. 渲染场景辅助元素
     }
   }
 

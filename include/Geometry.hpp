@@ -154,14 +154,32 @@ public:
   }
 };
 
+class Cone : public Geometry {
+private:
+  uint32_t RNum; // 半径细分
+  uint32_t HNum; // 高度细分
+  uint32_t PNum; // 圆周细分
+public:
+  Cone() : Cone(0.2f, 1.0f) {}
+  Cone(float r, float h, uint32_t RNum = 8, uint32_t HNum = 10,
+       uint32_t PNum = 36)
+      : RNum(RNum), HNum(HNum), PNum(PNum) {
+        this->parameters["r"] = r;
+        this->parameters["h"] = h;
+        update();
+      }
+  virtual void update(){
+    
+  }
+};
+
 class CylinderEx : public Geometry {
 private:
-  uint32_t RNum;
-  uint32_t HNum;
-  uint32_t PNum;
+  uint32_t RNum; // 半径细分
+  uint32_t HNum; // 高度细分
+  uint32_t PNum; // 圆周细分
 
 public:
-  // map<string, param_variant> parameters;
 
   CylinderEx() : CylinderEx(1.0f, 1.0f, 3.0f, 0.0f, 0.0f) {}
   CylinderEx(float r1, float r2, float h, float phi, float rho,
@@ -175,9 +193,9 @@ public:
     update();
   }
 
-  void setRNum(uint32_t rNum) { this->RNum = rNum; }
-  void setHNum(uint32_t hNum) { this->HNum = hNum; }
-  void setPNum(uint32_t pNum) { this->PNum = pNum; }
+  // void setRNum(uint32_t rNum) { this->RNum = rNum; }
+  // void setHNum(uint32_t hNum) { this->HNum = hNum; }
+  // void setPNum(uint32_t pNum) { this->PNum = pNum; }
 
   virtual void update() {
     this->reset();
@@ -298,7 +316,8 @@ private:
   float height{0.0f};
 
 public:
-  Plane(float width, float height) : Mesh(10, 10), width(width), height(height) {
+  Plane(float width, float height)
+      : Mesh(10, 10), width(width), height(height) {
     update();
   }
 
