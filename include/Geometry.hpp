@@ -1,13 +1,12 @@
 ﻿#pragma once
 
-#include <any>
 #include <cmath>
 #include <cstdint>
 #include <functional>
 #include <map>
 #include <string>
+#include <variant>
 #include <vector>
-
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
@@ -22,6 +21,56 @@
 
 namespace {
 using namespace std;
+using param_variant = variant<unsigned int, int, float, bool>;
+
+// struct Variant {
+//   double data;
+//   enum PType { INT, UINT, FLOAT, BOOL } ptype{FLOAT};
+//   Variant(PType ptype) : ptype(ptype) {
+//     switch (ptype) {
+//     case INT:
+//       *((int *)ptr) = 0;
+//       break;
+//     case UINT:
+//       ptr = new unsigned int;
+//       *((unsigned int *)ptr) = 0;
+//       break;
+//     case FLOAT:
+//       ptr = new float;
+//       *((float *)ptr) = 0;
+//       break;
+//     case BOOL:
+//       ptr = new bool;
+//       *((bool *)ptr) = 0;
+//       break;
+//     default:
+//       string msg = "unknown variant!";
+//       std::cerr << msg << endl;
+//       throw runtime_error(msg);
+//     }
+//   };
+//   Variant() : Variant(FLOAT) {}
+//   ~Variant() {
+//     switch (ptype) {
+//     case INT:
+//       delete (int *)ptr;
+//       break;
+//     case UINT:
+//       delete (unsigned int *)ptr;
+//       break;
+//     case FLOAT:
+//       delete (float *)ptr;
+//       break;
+//     case BOOL:
+//       delete (bool *)ptr;
+//       break;
+//     default:
+//       string msg = "unknown variant!";
+//       std::cerr << msg << endl;
+//       throw runtime_error(msg);
+//     }
+//   }
+// };
 
 struct Vertex {
   union {
@@ -71,6 +120,8 @@ struct Surface {
 class Geometry {
 protected:
 public:
+  map<string, param_variant> parameters;
+
   vector<Vertex> vertices;
   // vector<Edge> edges;
   vector<Surface> surfaces;
@@ -80,23 +131,35 @@ public:
   ~Geometry() = default;
 
   virtual void update() = 0;
+  virtual void reset() {
+    this->vertices.clear();
+    this->surfaces.clear();
+  }
 };
 
 class Mesh : public Geometry {
 private:
   uint32_t uNum{0}, vNum{0};
 
+  // // 记录updateVertexNext的位置
+  // uint32_t accu_vertices_pos{0};
+  // uint32_t accu_surfaces_pos{0};
+
 public:
-  Mesh() : Mesh(50, 50) {}
-  Mesh(uint32_t uNum, uint32_t vNum) {
-    this->uNum = uNum;
-    this->vNum = vNum;
+  Mesh() : Mesh(50, 50) {} // 委托
+  Mesh(uint32_t uNum, uint32_t vNum) : uNum(uNum), vNum(vNum) { reset(); }
+
+  virtual void reset() {
     this->vertices.resize((uNum + 1) * (vNum + 1));
     // this->edges.resize(3*uNum*vNum + uNum + vNum);
     this->surfaces.resize(uNum * vNum * 2);
+
+    // this->accu_vertices_pos = 0;
+    // this->accu_surfaces_pos = 0;
   }
 
   void updateVertex(function<Vertex(float, float)> func) {
+    reset();
     // 遍历i=0, 1, .., uNum，j=0, 1, ..., vNum
     for (int i = 0; i <= this->uNum; i++) {
       for (int j = 0; j <= this->vNum; j++) {
@@ -114,6 +177,35 @@ public:
     }
   }
 
+  // void updateVertexNext(uint32_t uNum, uint32_t vNum, function<Vertex(float,
+  // float)> func) {
+  //   // 考虑将updateVertex()改成默认开头reset()清理vertices和surfaces
+  //   // 而updateVertexNext()则是在已有vertices和surfaces基础上进行递增
+  //   // 因此需要在开始之前手动reset()
+  //   //
+  //   需要非常注意在Mesh::reset()中分配正确的vertices和surfaces的长度，短了会越界，长了会导致drawcall访问到padding值
+  //   // 为了保证不出错，引入acc_vertices_pos和acc_surfaces_pos来进行检查
+
+  //   // 每次加入的组合面可以有不同的u,v分割数，需要作为参数传入
+
+  //   uint32_t offset = this->vertices.size();
+  //   for (int i = 0; i <= this->uNum; i++) {
+  //     for (int j = 0; j <= this->vNum; j++) {
+  //       this->vertices[j + i * (vNum + 1)] =
+  //           func(static_cast<float>(i) / uNum, static_cast<float>(j) / vNum);
+  //       if (i != this->uNum && j != this->vNum) {
+  //         uint32_t ptr = (j + i * vNum) * 2;
+  //         this->surfaces[ptr + 0] = {offset + j + i * (vNum + 1),
+  //                                    offset + 1 + j + i * (vNum + 1),
+  //                                    offset + 1 + j + (i + 1) * (vNum + 1)};
+  //         this->surfaces[ptr + 1] = {offset + j + i * (vNum + 1),
+  //                                    offset + 1 + j + (i + 1) * (vNum + 1),
+  //                                    offset + j + (i + 1) * (vNum + 1)};
+  //       }
+  //     }
+  //   }
+  // };
+
   virtual void update() {
     // 空实现
   };
@@ -124,19 +216,18 @@ class Sphere : public Mesh {
   //   float radius;
 
 public:
-  map<string, any> parameters;
+  // map<string, param_variant> parameters;
 
   Sphere(float radius, uint32_t uNum = 100, uint32_t vNum = 100)
       : Mesh(uNum, vNum) {
-    this->parameters["radius"] = radius;
+    this->parameters["radius"] = radius; // radius为float
     update();
   }
 
   virtual void update() {
     this->updateVertex([this](float u, float v) -> Vertex {
       Vertex vt;
-      float radius = this->parameters["radius"];
-      // 需要对parameters["radius"]的类型进行判断然后使用any_cast<T>()来进行转换来取得值
+      float radius = std::get<float>(this->parameters["radius"]);
 
       vt.nx = sin(PI * u) * cos(2 * PI * v);
       vt.ny = sin(PI * u) * sin(2 * PI * v);
@@ -153,39 +244,46 @@ public:
 
 class CylinderEx : public Geometry {
 private:
-  float r1;
-  float r2;
-  float h;
-  float phi;
-  float rho;
+  // float r1;
+  // float r2;
+  // float h;
+  // float phi;
+  // float rho;
 
   uint32_t RNum;
   uint32_t HNum;
   uint32_t PNum;
 
 public:
+  // map<string, param_variant> parameters;
+
   CylinderEx() : CylinderEx(1.0f, 1.0f, 3.0f, 0.0f, 0.0f) {}
   CylinderEx(float r1, float r2, float h, float phi, float rho,
              uint32_t RNum = 8, uint32_t HNum = 10, uint32_t PNum = 18)
-      : r1(r1), r2(r2), h(h), phi(phi), rho(rho), RNum(RNum), HNum(HNum),
-        PNum(PNum) {
+      : RNum(RNum), HNum(HNum), PNum(PNum) {
+    this->parameters["r1"] = r1;
+    this->parameters["r2"] = r2;
+    this->parameters["h"] = h;
+    this->parameters["phi"] = phi;
+    this->parameters["rho"] = rho;
     update();
   }
 
-  void setR1(float r1) { this->r1 = r1; }
-  void setR2(float r2) { this->r2 = r2; }
-  void setH(float h) { this->h = h; }
-  void setPhi(float phi) { this->phi = phi; }
-  void setRho(float rho) { this->rho = rho; }
+  // void setR1(float r1) { this->r1 = r1; }
+  // void setR2(float r2) { this->r2 = r2; }
+  // void setH(float h) { this->h = h; }
+  // void setPhi(float phi) { this->phi = phi; }
+  // void setRho(float rho) { this->rho = rho; }
+
   void setRNum(uint32_t rNum) { this->RNum = rNum; }
   void setHNum(uint32_t hNum) { this->HNum = hNum; }
   void setPNum(uint32_t pNum) { this->PNum = pNum; }
 
   virtual void update() {
-    this->vertices.clear();
-    this->surfaces.clear();
+    this->reset();
     Mesh bottom(RNum, PNum), side(HNum, PNum), top(RNum, PNum);
     bottom.updateVertex([this](float u, float v) {
+      float r1 = std::get<float>(this->parameters["r1"]);
       Vertex vt;
       vt.nx = 0.0f;
       vt.ny = 0.0f;
@@ -197,6 +295,11 @@ public:
       return vt;
     });
     top.updateVertex([this](float u, float v) {
+      float r1 = std::get<float>(this->parameters["r1"]);
+      float r2 = std::get<float>(this->parameters["r2"]);
+      float h = std::get<float>(this->parameters["h"]);
+      float rho = std::get<float>(this->parameters["rho"]);
+      float phi = std::get<float>(this->parameters["phi"]);
       Vertex vt;
       vt.nx = 0.0f;
       vt.ny = 0.0f;
@@ -225,6 +328,11 @@ public:
       return vt;
     });
     side.updateVertex([this](float u, float v) {
+      float r1 = std::get<float>(this->parameters["r1"]);
+      float r2 = std::get<float>(this->parameters["r2"]);
+      float h = std::get<float>(this->parameters["h"]);
+      float rho = std::get<float>(this->parameters["rho"]);
+      float phi = std::get<float>(this->parameters["phi"]);
       Vertex vt;
       // 法向量未测试是否正确
       float tmp = sqrt(h * h + pow(r1 - r2, 2.0f));
@@ -295,6 +403,7 @@ public:
   }
 
   virtual void update() {
+    reset();
     this->updateVertex([this](float u, float v) {
       Vertex vt;
       vt.x = (0.5f - u) * this->width;

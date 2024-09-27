@@ -141,5 +141,10 @@ public:
   void apply_projection_done(){
     this->project_is_changed = false;
   }
+
+  void setAspect(float aspect){
+    this->aspect = aspect;
+    this->project_is_changed = true;
+  }
 };
 } // namespace

@@ -8,6 +8,7 @@
 
 #include "GLFW/glfw3.h"
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <map>
@@ -43,6 +44,8 @@ using glm::mat4;
 using glm::quat;
 using glm::vec3;
 using glm::vec4;
+
+void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 
 class Transform {
 private:
@@ -179,10 +182,6 @@ public:
   }
 };
 
-void framebufferResizeCallback(GLFWwindow *window, int width, int height) {
-  glViewport(0, 0, width, height);
-}
-
 void errorCallback(int code, const char *msg) {
   cerr << "errors occured! error code: " << code << endl;
   cout << msg << endl;
@@ -219,6 +218,7 @@ public:
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     this->window = glfwCreateWindow(width, height, "demo", 0, 0);
     glfwMakeContextCurrent(this->window);
+    glfwSetWindowUserPointer(window, this);
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
       string msg = "failed to init glad!";
       cerr << msg << endl;
@@ -267,12 +267,12 @@ public:
 
   void imgui_menu() {
 
-    // ImGui::ShowDemoWindow();
+    ImGui::ShowDemoWindow();
     imgui_docking_render();
 
     ImGui::Begin(u8"场景");
     if (ImGui::TreeNodeEx(u8"相机", ImGuiTreeNodeFlags_Selected |
-                                      ImGuiTreeNodeFlags_DefaultOpen)) {
+                                        ImGuiTreeNodeFlags_DefaultOpen)) {
       bool is_theta_changed = ImGui::SliderFloat(
           u8"天顶角", &this->camera.theta_s, 0.0f, 180.0f, "%.1f");
       bool is_phi_changed = ImGui::SliderFloat(u8"方向角", &this->camera.phi_s,
@@ -348,8 +348,8 @@ public:
     }
 
     if (ImGui::TreeNodeEx(u8"光源", ImGuiTreeNodeFlags_DefaultOpen)) {
-      ImGui::SliderFloat3(u8"位置", glm::value_ptr(this->light.position), -10.0f,
-                          10.f);
+      ImGui::SliderFloat3(u8"位置", glm::value_ptr(this->light.position),
+                          -10.0f, 10.f);
       ImGui::TreePop();
     }
     ImGui::End();
@@ -591,5 +591,12 @@ public:
 
   // void setLightColor(vec3 color) { this->light.color = color; }
 };
+
+void framebufferResizeCallback(GLFWwindow *window, int width, int height) {
+  Scene *scene = (Scene *)glfwGetWindowUserPointer(window);
+  assert(scene != nullptr && "scene is nullptr");
+  scene->camera.setAspect(static_cast<float>(width) / height);
+  glViewport(0, 0, width, height);
+}
 
 } // namespace
