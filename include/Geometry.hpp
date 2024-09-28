@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include "glm/fwd.hpp"
 #include <cmath>
 #include <cstdint>
 #include <functional>
@@ -88,7 +89,20 @@ public:
     }
   }
 
-  
+  void rotate(float angle, glm::vec3 axis){
+    glm::mat3 rot_mat = glm::mat3(glm::rotate(angle, axis));
+    for(auto &vertex: this->vertices){
+      glm::vec3 new_pos = rot_mat * glm::make_vec3(vertex.position);
+      glm::vec3 new_normal = rot_mat * glm::make_vec3(vertex.normal);
+      vertex.x = new_pos.x;
+      vertex.y = new_pos.y;
+      vertex.z = new_pos.z;
+      vertex.nx = new_normal.x;
+      vertex.ny = new_normal.y;
+      vertex.nz = new_normal.z;
+    }
+  }
+
   void setColor(float r, float g, float b) {
     // 设置纯色
     for(auto &vertex: this->vertices){

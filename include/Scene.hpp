@@ -6,8 +6,6 @@
 // #include "glm/ext/quaternion_transform.hpp"
 // #include "glm/ext/quaternion_trigonometric.hpp"
 
-#include "GLFW/glfw3.h"
-#include <any>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -35,7 +33,6 @@
 #include "Camera.hpp"
 #include "Geometry.hpp"
 #include "Shader.hpp"
-
 
 #define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
 #define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.02f
@@ -88,33 +85,7 @@ public:
   Light(vec3 position, vec3 color) : position(position), color(color) {}
 };
 
-// class AuxiliaryObj {
-// private:
-// public:
-//   Arrow *obj{nullptr};
-//   Transform transform;
-
-//   GLuint vao{0};
-//   GLuint vbo{0};
-//   GLuint ebo{0};
-
-//   AuxiliaryObj() {
-//     // 直接初始化网格，且不依赖于Geometry，与其完全隔离实现
-
-//     // 2. 初始化vbo
-//     glGenVertexArrays(1, &this->vao);
-//     glBindVertexArray(this->vao);
-
-//     glGenBuffers(1, &this->vbo);
-//     glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
-
-//     glGenBuffers(1, &this->ebo);
-//     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
-//     glBufferData(GL_ELEMENT_ARRAY_BUFFER, , )
-//   }
-// };
-
-class GeometryObj {
+class GeometryRenderObject {
 private:
   void init_vbo() {
 
@@ -186,31 +157,35 @@ public:
 
   bool isSelected{false};
 
-  // bool mesh_is_changed{false};
-
-  GeometryObj() = default;
-  GeometryObj(Geometry *geo, Transform trans)
+  GeometryRenderObject() = default;
+  GeometryRenderObject(Geometry *geo, Transform trans)
       : geometry(geo), transform(trans) {
     init_vbo();
   }
 
-  GeometryObj(GeometryObj &&geo) noexcept { // 实现移动语义
+  GeometryRenderObject(GeometryRenderObject &&geo) noexcept { // 实现移动语义
     this->transform = geo.transform;
     this->vao = geo.vao;
     this->vbo = geo.vbo;
     this->ebo = geo.ebo;
     this->texture = geo.texture;
     this->geometry = geo.geometry;
+    geo.vao = 0;
+    geo.vbo = 0;
+    geo.ebo = 0;
     geo.geometry = nullptr;
   }
 
-  GeometryObj &operator=(GeometryObj &&geo) noexcept {
+  GeometryRenderObject &operator=(GeometryRenderObject &&geo) noexcept {
     this->transform = geo.transform;
     this->vao = geo.vao;
     this->vbo = geo.vbo;
     this->ebo = geo.ebo;
     this->texture = geo.texture;
     this->geometry = geo.geometry;
+    geo.vao = 0;
+    geo.vbo = 0;
+    geo.ebo = 0;
     geo.geometry = nullptr;
     return *this;
   }
@@ -227,6 +202,74 @@ public:
                  this->geometry->vertices.data(), GL_DYNAMIC_DRAW);
     glBindVertexArray(0);
   }
+  ~GeometryRenderObject() {
+    glDeleteBuffers(1, &this->vbo);
+    glDeleteBuffers(1, &this->ebo);
+    glDeleteVertexArrays(1, &this->vao);
+  }
+};
+
+class AuxiliaryRenderObject {
+  // 使用 auxiliary 着色器程序渲染
+  // 只有位置、颜色
+private:
+public:
+  GLuint vao{0};
+  GLuint vbo{0};
+  GLuint ebo{0};
+
+  uint32_t v_size{0};
+  AuxiliaryRenderObject() = default;
+  AuxiliaryRenderObject(const Geometry &geometry)
+      : v_size(geometry.surfaces.size() * 3) {
+    glGenVertexArrays(1, &this->vao);
+    glBindVertexArray(this->vao);
+
+    glGenBuffers(1, &this->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
+    glBufferData(GL_ARRAY_BUFFER, geometry.vertices.size() * sizeof(Vertex),
+                 geometry.vertices.data(), GL_STATIC_DRAW);
+
+    size_t stride = sizeof(Vertex);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride,
+                          (void *)0); // 位置
+    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride,
+                          (void *)(6 * sizeof(float))); // 颜色
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(2);
+
+    glGenBuffers(1, &this->ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                 geometry.surfaces.size() * sizeof(Surface),
+                 geometry.surfaces.data(), GL_STATIC_DRAW);
+
+    glBindVertexArray(0);
+  }
+  AuxiliaryRenderObject(AuxiliaryRenderObject &&ax) noexcept {
+    this->vao = ax.vao;
+    this->vbo = ax.vbo;
+    this->ebo = ax.ebo;
+    this->v_size = ax.v_size;
+    ax.vao = 0;
+    ax.vbo = 0;
+    ax.ebo = 0;
+  }
+  AuxiliaryRenderObject &operator=(AuxiliaryRenderObject &&ax) noexcept {
+    this->vao = ax.vao;
+    this->vbo = ax.vbo;
+    this->ebo = ax.ebo;
+    this->v_size = ax.v_size;
+    ax.vao = 0;
+    ax.vbo = 0;
+    ax.ebo = 0;
+    return *this;
+  }
+  ~AuxiliaryRenderObject() {
+    glDeleteBuffers(1, &this->vbo);
+    glDeleteBuffers(1, &this->ebo);
+    glDeleteVertexArrays(1, &this->vao);
+  }
 };
 
 void errorCallback(int code, const char *msg) {
@@ -242,17 +285,18 @@ private:
   GLuint ubo{0};
   const GLuint PVM_binding_point = 0;
 
+  bool isShowAxis{false};
+
 public:
   const int width = 1600;
   const int height = 1200;
 
   map<string, Shader *> shaders;
-  map<string, GeometryObj> objs;
-
-  // AuxiliaryObj axis_x, axis_y, axis_z;
+  map<string, GeometryRenderObject> objs;
+  map<string, AuxiliaryRenderObject> aux;
 
   Light light;
-  Camera camera{vec3(0.0f, 0.0f, 16.0f), vec3{0.0f, 0.0f, 0.0f},
+  Camera camera{vec3(0.0f, 0.0f, 20.0f), vec3{0.0f, 0.0f, 0.0f},
                 static_cast<float>(width) / static_cast<float>(height)};
   Scene() {
     if (glfwInit() == GLFW_FALSE) {
@@ -287,9 +331,11 @@ public:
     glfwSetFramebufferSizeCallback(this->window, framebufferResizeCallback);
     glfwSetErrorCallback(errorCallback);
 
-    loadAllShader();
+    load_all_shader();
 
     init_ubo();
+
+    init_axis_display();
   }
   Scene(const Scene &sc) = delete;
   ~Scene() {
@@ -312,6 +358,17 @@ public:
 
     glBindBufferBase(GL_UNIFORM_BUFFER, PVM_binding_point, this->ubo);
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
+  }
+
+  void init_axis_display() {
+    Arrow axis_x = Arrow::getAxisX();
+    Arrow axis_y = Arrow::getAxisY();
+    Arrow axis_z = Arrow::getAxisZ();
+    vector<string> names = {"axis_x", "axis_y", "axis_z"};
+    vector<Arrow *> buf{&axis_x, &axis_y, &axis_z};
+    for (int i = 0; i < 3; i++) {
+      this->aux[names[i]] = std::move(AuxiliaryRenderObject(*buf[i]));
+    }
   }
 
   void imgui_menu() {
@@ -402,8 +459,8 @@ public:
       ImGui::TreePop();
     }
 
-    // GeometryObj *cur_obj = &this->objs.begin()->second;
-    static GeometryObj *cur_obj{&this->objs.begin()->second};
+    // GeometryRenderObject *cur_obj = &this->objs.begin()->second;
+    static GeometryRenderObject *cur_obj{&this->objs.begin()->second};
     if (ImGui::TreeNodeEx(u8"几何管理", ImGuiTreeNodeFlags_DefaultOpen)) {
       bool is_hightlight = true;
       vector<string> items;
@@ -497,7 +554,7 @@ public:
     ImGui_ImplGlfw_InitForOpenGL(this->window, true);
     ImGui_ImplOpenGL3_Init();
   }
-  void loadAllShader() {
+  void load_all_shader() {
     // // 读取shaders目录下的所有文件
     // set<string> shader_names;
     // fs::path shader_dir = "shaders";
@@ -519,6 +576,7 @@ public:
 
     shaders["default"] = new Shader("default.vert", "default.frag");
     shaders["normal"] = new Shader("normal.vert", "normal.geo", "normal.frag");
+    shaders["auxiliary"] = new Shader("auxiliary.vert", "auxiliary.frag");
 
 #ifndef NDEBUG
     cout << "all shaders compile finished!" << endl;
@@ -530,7 +588,7 @@ public:
       cout << "scene cannot add object with an existed name!" << endl;
       return;
     }
-    GeometryObj obj(geo, trans);
+    GeometryRenderObject obj(geo, trans);
     this->objs[name] = std::move(obj);
   }
 
@@ -619,7 +677,7 @@ public:
 
     for (auto &pair_obj : this->objs) {
       // 计算pvm矩阵
-      GeometryObj *cur_obj = &pair_obj.second;
+      GeometryRenderObject *cur_obj = &pair_obj.second;
       mat4 model = cur_obj->transform.getModel();
 
       // 1. 渲染本体
@@ -662,6 +720,14 @@ public:
       }
 #endif
       // 3. 渲染场景辅助元素
+      if (this->isShowAxis) {
+        cur_shader = this->shaders["auxiliary"];
+        cur_shader->use();
+        for (auto &[objName, auxObj] : this->aux) {
+          glBindVertexArray(auxObj.vao);
+          glDrawElements(GL_TRIANGLES, auxObj.v_size, GL_UNSIGNED_INT, nullptr);
+        }
+      }
     }
   }
 
@@ -699,6 +765,8 @@ public:
     glfwDestroyWindow(window);
     glfwTerminate();
   }
+
+  void showAxis() { this->isShowAxis = true; }
 };
 
 void framebufferResizeCallback(GLFWwindow *window, int width, int height) {
