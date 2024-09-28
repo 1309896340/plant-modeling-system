@@ -10,7 +10,9 @@
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/transform.hpp>
+
 
 #include "constants.h"
 
@@ -85,13 +87,68 @@ public:
   }
 };
 
+class FixedGeometry : public Geometry {
+public:
+  FixedGeometry() {
+    // 没有任何可修改属性
+    this->parameters.clear();
+  }
+
+  FixedGeometry(const Geometry &geometry) {
+    // 可以从Geometry构造（这是个有点奇怪的操作，引入了从父类到子类的隐式转换）
+    this->vertices = geometry.vertices;
+    this->surfaces = geometry.surfaces;
+    // 没有任何可修改属性
+    this->parameters.clear();
+  }
+
+  FixedGeometry(const vector<Vertex> &vertices,
+                const vector<Surface> &surfaces) {
+    this->vertices = vertices;
+    this->surfaces = surfaces;
+    // 没有任何可修改属性
+    this->parameters.clear();
+  }
+
+  // 默认正常拷贝 vertices 和 surfaces
+  FixedGeometry(const FixedGeometry &) = default;
+
+  virtual void update() {
+    // 空实现，不会修改网格及其顶点的任何属性
+  }
+  virtual void reset() {
+    // 空实现，直到对象自动销毁前，不会有人为的清空操作
+  }
+
+  FixedGeometry operator+(const FixedGeometry &b) const {
+    FixedGeometry c(*this);
+    // 1. 将两组vertices进行简单拼接
+    c.vertices.insert(c.vertices.end(), b.vertices.begin(), b.vertices.end());
+    // 2. 将b的surfaces的索引偏移this->vertices.size()，然后拼接
+    const uint32_t offset = this->vertices.size();
+    vector<Surface> sfs = b.surfaces;
+    for (auto &surf_ids : sfs) {
+      surf_ids.tidx[0] += offset;
+      surf_ids.tidx[1] += offset;
+      surf_ids.tidx[2] += offset;
+    }
+    c.surfaces.insert(c.surfaces.end(), sfs.begin(), sfs.end());
+    return c;
+  }
+};
+
 class Mesh : public Geometry {
 private:
   uint32_t uNum{0}, vNum{0};
 
 public:
-  Mesh() : Mesh(50, 50) {} // 委托
+  Mesh() : Mesh(50, 50) {}
   Mesh(uint32_t uNum, uint32_t vNum) : uNum(uNum), vNum(vNum) { reset(); }
+
+  FixedGeometry operator+(const Mesh &other) const {
+    FixedGeometry a(*this), b(other);
+    return a + b;
+  }
 
   virtual void reset() {
     this->vertices.resize((uNum + 1) * (vNum + 1));
@@ -117,7 +174,7 @@ public:
     }
   }
 
-  void transformVertex(function<Vertex(Vertex, float, float)> func) {
+  void transformVertex(function<Vertex(const Vertex &, float, float)> func) {
     // 假定uNum和vNum没有发生改变，该函数也不会修改索引
     for (int i = 0; i <= this->uNum; i++) {
       for (int j = 0; j <= this->vNum; j++) {
@@ -130,44 +187,10 @@ public:
   }
 
   virtual void update() {
-    // 空实现
+    // 空实现，将要移除，将Mesh当作接口使用
+    // 在没有重构CylinderEx前先保留该空实现
   };
 };
-
-class FixedGeometry : public Geometry {
-public:
-  FixedGeometry() {
-    // 没有任何可修改属性
-    this->parameters.clear();
-  }
-
-  FixedGeometry(const Geometry &geo) {
-    // 可以从Geometry构造
-    this->vertices = geo.vertices;
-    this->surfaces = geo.surfaces;
-    // 没有任何可修改属性
-    this->parameters.clear();
-  }
-
-  FixedGeometry(const vector<Vertex> &vertices, const vector<Surface> &surfaces) {
-    this->vertices = vertices;
-    this->surfaces = surfaces;
-    // 没有任何可修改属性
-    this->parameters.clear();
-  }
-
-  // 默认正常拷贝 vertices 和 surfaces
-  FixedGeometry(const FixedGeometry &) = default;
-
-  virtual void update() {
-    // 空实现，不会修改网格及其顶点的任何属性
-  }
-  virtual void reset() {
-    // 空实现，直到对象自动销毁前，不会有人为的清空操作
-  }
-};
-
-// FixedGeometry operator+(const Mesh & )
 
 class Sphere : public Mesh {
 public:
@@ -213,14 +236,48 @@ public:
 //   virtual void update() {}
 // };
 
+class Disk : public Mesh {
+private:
+  uint32_t RNum; // 半径细分
+  uint32_t PNum; // 圆周细分
+
+public:
+  Disk(float r, uint32_t RNum = 8, uint32_t PNum = 18)
+      : RNum(RNum), PNum(PNum) {
+    this->parameters["r"] = r;
+    update();
+  }
+  virtual void update() {
+    this->updateVertex([this](float u, float v) {
+      Vertex vt;
+      float r = std::get<float>(this->parameters["r"]);
+      vt.x = r * u * cos(-2 * PI * v);
+      vt.y = r * u * sin(-2 * PI * v);
+      vt.z = 0.0f;
+
+      vt.nx = 0.0f;
+      vt.ny = 0.0f;
+      vt.nz = 1.0f;
+
+      vt.r = 0.0f;
+      vt.g = 1.0f;
+      vt.b = 0.0f;
+
+      vt.u = u;
+      vt.v = v;
+
+      return vt;
+    });
+  }
+};
+
 class ConeSide : public Mesh {
 private:
   uint32_t HNum; // 高度细分
   uint32_t PNum; // 圆周细分
 
 public:
-  ConeSide(float r, float h, uint32_t RNum = 8, uint32_t HNum = 10,
-           uint32_t PNum = 18)
+  ConeSide(float r, float h, uint32_t HNum = 10, uint32_t PNum = 18)
       : HNum(HNum), PNum(PNum) {
     this->parameters["r"] = r;
     this->parameters["h"] = h;
@@ -249,6 +306,36 @@ public:
 
       return vt;
     });
+  }
+};
+
+class Cone : public FixedGeometry {
+public:
+  Cone(float radius, float height, uint32_t RNum = 8, uint32_t HNum = 10,
+       uint32_t PNum = 18) {
+    ConeSide cs(radius, height, HNum, PNum);
+    Disk ds(radius, RNum, PNum);
+
+    // 圆盘方向旋转朝下
+    glm::mat3 rot_mat = glm::mat3(
+        glm::rotate(glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
+    ds.transformVertex([rot_mat](const Vertex &vt0, float u, float v) {
+      Vertex vt(vt0);
+      glm::vec3 new_position = rot_mat * glm::make_vec3(vt.position);
+      glm::vec3 new_normal = rot_mat * glm::make_vec3(vt.normal);
+      vt.x = new_position.x;
+      vt.y = new_position.y;
+      vt.z = new_position.z;
+      vt.nx = new_normal.x;
+      vt.ny = new_normal.y;
+      vt.nz = new_normal.z;
+      return vt;
+    });
+
+    // 组合
+    FixedGeometry &&res = cs + ds;
+    this->vertices = res.vertices;
+    this->surfaces = res.surfaces;
   }
 };
 
@@ -287,6 +374,42 @@ public:
 
       return vt;
     });
+  }
+};
+
+class Cylinder : public FixedGeometry {
+public:
+  Cylinder(float radius, float height, uint32_t RNum = 8, uint32_t HNum = 10,
+           uint32_t PNum = 18) {
+    CylinderSide cs(radius, height, RNum, HNum, PNum);
+    Disk ds_bottom(radius, RNum, PNum), ds_top(radius, RNum, PNum);
+
+    // 圆盘方向旋转朝下
+    glm::mat3 rot_mat = glm::mat3(
+        glm::rotate(glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
+    ds_bottom.transformVertex([rot_mat](const Vertex &vt0, float u, float v) {
+      Vertex vt(vt0);
+      glm::vec3 new_position = rot_mat * glm::make_vec3(vt.position);
+      glm::vec3 new_normal = rot_mat * glm::make_vec3(vt.normal);
+      vt.x = new_position.x;
+      vt.y = new_position.y;
+      vt.z = new_position.z;
+      vt.nx = new_normal.x;
+      vt.ny = new_normal.y;
+      vt.nz = new_normal.z;
+      return vt;
+    });
+
+    ds_top.transformVertex([height](const Vertex &vt0, float u, float v) {
+      Vertex vt(vt0);
+      vt.z += height;
+      return vt;
+    });
+
+    // 组合
+    FixedGeometry &&res = cs + ds_top + ds_bottom;
+    this->vertices = res.vertices;
+    this->surfaces = res.surfaces;
   }
 };
 

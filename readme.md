@@ -21,3 +21,9 @@
 
 
 问题：在实现第5步过程中，发现问题，形体由多个Mesh子类构成，Mesh子类通过继承Mesh来具体化，由于对于 `operator+()` 无法进行向上转型，因此需要靠多个重载才能将所有形体之间的相加运算完全定义
+解决：将重载运算符定义为Mesh的方法，但是目前不清楚如果将另一个算子定义为 `const Mesh &m` 会不会对Mesh的子类进行“向上转型”的操作，需要测试
+测试：写了一个demo来测试可行性，实测可以正常进行向上转型操作
+补充想法：也许应该将Mesh的求和重载在 `FixedGeometry` 上做具体实现，而将Mesh的求和重载先将两个算子构造为 `FixedGeometry`，再将它们进行求和。同样的运算也可以对两个Geometry对象做，那么干脆将这个运算重载从Mesh中移除，放到Geometry中，这样相当于将这个运算从Geometry继承过来，而原本相加操作就是定义在vertices和surfaces这两个Geometry层面的成员上的，非常合理
+问题：不该在Geometry上重载求和运算符返回 `FixedGeometry`，这么做使得Geometry依赖于FixedGeometry，是非常不合理的
+
+
