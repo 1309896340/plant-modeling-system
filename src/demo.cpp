@@ -24,6 +24,7 @@ int main(int argc, char **argv) {
   Cone c2(2.0f, 3.0f);
   Cylinder c3(2.5f, 5.0f);
 
+
   scene.add("CylinderEx", &c1, {-4.0f, 0.0f, -6.0f});
   scene.add("Sphere", &s1, {4.0f, 2.0f, -6.0f});
   // scene.add("cs1", &cs1, {4.0f, 0.0f, 6.0f});

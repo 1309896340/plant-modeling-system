@@ -13,7 +13,6 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/transform.hpp>
 
-
 #include "constants.h"
 
 #define RADIANS(a) ((a) * PI / 180.0f)
@@ -156,6 +155,17 @@ public:
     this->surfaces.resize(uNum * vNum * 2);
   }
 
+  void updateColor(float r, float g, float b) {
+    // 设置纯色
+    this->transformVertex([r, g, b](const Vertex &vt0, float u, float v) {
+      Vertex vt(vt0);
+      vt.r = r;
+      vt.g = g;
+      vt.b = b;
+      return vt;
+    });
+  }
+
   void updateVertex(function<Vertex(float, float)> func) {
     reset();
     for (int i = 0; i <= this->uNum; i++) {
@@ -214,27 +224,16 @@ public:
       vt.y = radius * vt.normal[1];
       vt.z = radius * vt.normal[2];
 
+      vt.r = vt.x;
+      vt.g = vt.y;
+      vt.b = vt.z;
+
+      vt.u = u;
+      vt.v = v;
       return vt;
     });
   }
 };
-
-// class Cone : public Geometry {
-// private:
-//   uint32_t RNum; // 半径细分
-//   uint32_t HNum; // 高度细分
-//   uint32_t PNum; // 圆周细分
-// public:
-//   Cone() : Cone(0.2f, 1.0f) {}
-//   Cone(float r, float h, uint32_t RNum = 8, uint32_t HNum = 10,
-//        uint32_t PNum = 36)
-//       : RNum(RNum), HNum(HNum), PNum(PNum) {
-//     this->parameters["r"] = r;
-//     this->parameters["h"] = h;
-//     update();
-//   }
-//   virtual void update() {}
-// };
 
 class Disk : public Mesh {
 private:
@@ -384,6 +383,9 @@ public:
     CylinderSide cs(radius, height, RNum, HNum, PNum);
     Disk ds_bottom(radius, RNum, PNum), ds_top(radius, RNum, PNum);
 
+    cs.updateColor(0.0f, 0.0f, 1.0f);
+    ds_top.updateColor(1.0f, 0.2f, 1.0f);
+
     // 圆盘方向旋转朝下
     glm::mat3 rot_mat = glm::mat3(
         glm::rotate(glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
@@ -446,6 +448,11 @@ public:
       vt.x = r1 * u * cos(2 * PI * v);
       vt.y = r1 * u * sin(2 * PI * v);
       vt.z = 0.0f;
+
+      vt.r = vt.x;
+      vt.g = vt.y;
+      vt.b = vt.z;
+
       return vt;
     });
     top.updateVertex([this](float u, float v) {
@@ -478,6 +485,13 @@ public:
       vt.nx = norm_v.x;
       vt.ny = norm_v.y;
       vt.nz = norm_v.z;
+
+      vt.r = vt.x;
+      vt.g = vt.y;
+      vt.b = vt.z;
+
+      vt.u = u;
+      vt.v = v;
 
       return vt;
     });
@@ -514,6 +528,13 @@ public:
       vt.nx = norm_v.x;
       vt.ny = norm_v.y;
       vt.nz = norm_v.z;
+
+      vt.r = vt.x;
+      vt.g = vt.y;
+      vt.b = vt.z;
+
+      vt.u = u;
+      vt.v = v;
 
       return vt;
     });

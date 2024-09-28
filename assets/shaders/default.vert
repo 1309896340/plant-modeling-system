@@ -18,7 +18,8 @@ uniform mat4 model;
 void main(){
     gl_Position = projection * view * model * vec4(aPos, 1.0f);
     vertPos = vec3(model * vec4(aPos, 1.0f));
-    vertColor = clamp(aPos, 0.2f, 1.0f);
+    vertColor = aColor;
+    // vertColor = clamp(aPos, 0.2f, 1.0f);
     // vertColor = normalize(aPos) + vec3(0.2f,0.5f,0.3f);
     vertNorm =  vec3(transpose(inverse(model)) * vec4(aNorm, 0.0f));
     TexCoord = aTexCoord;
