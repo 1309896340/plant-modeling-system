@@ -29,8 +29,9 @@
 
 9月28日：
 1. 实现一些基于不可变网格`FixedGeometry`的多Mesh拼接的简单几何体，如`Cone`, `Cylinder` （完成，已测试）
-2. 重构 `CylinderEx` 以及包括其在内的可变网格的接口设计
+2. 重构`CylinderEx`以及包括其在内的可变网格的接口设计
 3. 给`Mesh`的私有属性`uNum`, `vNum`开放getter方法，并加入一个`resize(uint32_t uNum, uint32_t vNum)`更新结构，并重新生成顶点。通过缓存`updateVertex()`传入的lambda来实现 （完成，未测试）
+4. 通过`FixedGeometry`构建坐标轴标志的几何描述，并渲染出来
 
 
 

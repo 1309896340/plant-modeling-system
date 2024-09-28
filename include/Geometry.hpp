@@ -79,6 +79,26 @@ public:
   Geometry(const Geometry &) = default;
   ~Geometry() = default;
 
+  
+  void translate(float x_offset, float y_offset, float z_offset) {
+    for(auto &vertex: this->vertices){
+      vertex.x += x_offset;
+      vertex.y += y_offset;
+      vertex.z += z_offset;
+    }
+  }
+
+  
+  void setColor(float r, float g, float b) {
+    // 设置纯色
+    for(auto &vertex: this->vertices){
+      vertex.r = r;
+      vertex.g = g;
+      vertex.b = b;
+    }
+  }
+
+
   virtual void update() = 0;
   virtual void reset() {
     this->vertices.clear();
@@ -167,16 +187,16 @@ public:
     this->surfaces.resize(uNum * vNum * 2);
   }
 
-  void updateColor(float r, float g, float b) {
-    // 设置纯色
-    this->transformVertex([r, g, b](const Vertex &vt0, float u, float v) {
-      Vertex vt(vt0);
-      vt.r = r;
-      vt.g = g;
-      vt.b = b;
-      return vt;
-    });
-  }
+  // void updateColor(float r, float g, float b) {
+  //   // 设置纯色
+  //   this->transformVertex([r, g, b](const Vertex &vt0, float u, float v) {
+  //     Vertex vt(vt0);
+  //     vt.r = r;
+  //     vt.g = g;
+  //     vt.b = b;
+  //     return vt;
+  //   });
+  // }
 
   void updateVertex(function<Vertex(float, float)> func) {
     reset();
@@ -396,8 +416,8 @@ public:
     CylinderSide cs(radius, height, RNum, HNum, PNum);
     Disk ds_bottom(radius, RNum, PNum), ds_top(radius, RNum, PNum);
 
-    cs.updateColor(0.0f, 0.0f, 1.0f);
-    ds_top.updateColor(1.0f, 0.2f, 1.0f);
+    cs.setColor(0.0f, 0.0f, 1.0f);
+    ds_top.setColor(1.0f, 0.2f, 1.0f);
 
     // 圆盘方向旋转朝下
     glm::mat3 rot_mat = glm::mat3(

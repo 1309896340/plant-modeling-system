@@ -15,7 +15,16 @@ using glm::mat4;
 using glm::vec3;
 
 class Arrow : public Geometry{
+    private:
+        const float body_ratio = 0.85f;
+        const float radius_ratio = 0.85f;
+    public:
+    Arrow(float radius, float length){
+        Cone arrow(0.2f,1-body_ratio);
+        Cylinder body(radius_ratio*radius, body_ratio*length);
+        
 
+    }
 };
 
 // class Arrow {
