@@ -201,17 +201,6 @@ public:
     this->surfaces.resize(uNum * vNum * 2);
   }
 
-  // void updateColor(float r, float g, float b) {
-  //   // 设置纯色
-  //   this->transformVertex([r, g, b](const Vertex &vt0, float u, float v) {
-  //     Vertex vt(vt0);
-  //     vt.r = r;
-  //     vt.g = g;
-  //     vt.b = b;
-  //     return vt;
-  //   });
-  // }
-
   void updateVertex(function<Vertex(float, float)> func) {
     reset();
     this->meshUpdator = func; // 缓存更新函数用于resize中保留uv更新顶点属性

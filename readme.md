@@ -1,6 +1,21 @@
-
-
 ### shaders
+
+
+```mermaid
+graph BT
+b1[Geometry] --> a[Scene]
+b2[Shader] --> a
+b3[Camera] --> a
+```
+
+1. `Scene` 负责管理场景资源、渲染、交互
+2. `Camera` 管理主窗口的视角参数
+3. `Geometry` 描述B-Rep结构，封装基础几何体元素的生成算法
+4. `Shader` 管理渲染管线
+
+---
+
+着色器程序
 
 1. default: 默认管线，拥有3个属性组“位置”、“法向量”、“颜色”、“材质坐标”，带一个材质图片
 2. normal: 法向量可视化管线，顶点着色器和default基本一致，添加了几何着色器将点元发射为法向量，不做其他图元的处理
@@ -31,9 +46,14 @@
 1. 实现一些基于不可变网格`FixedGeometry`的多Mesh拼接的简单几何体，如`Cone`, `Cylinder` （完成，已测试）
 2. 重构`CylinderEx`以及包括其在内的可变网格的接口设计
 3. 给`Mesh`的私有属性`uNum`, `vNum`开放getter方法，并加入一个`resize(uint32_t uNum, uint32_t vNum)`更新结构，并重新生成顶点。通过缓存`updateVertex()`传入的lambda来实现 （完成，未测试）
-4. 通过`FixedGeometry`构建坐标轴标志的几何描述，并渲染出来
+4. 通过`FixedGeometry`构建坐标轴标志的几何描述，并渲染出来（完成，已测试）
 
 
+实现一个与`FixedGeometry`相对应的动态网格：
+1. 声明一个`MultiMeshGeometry`类，继承自`Geometry`类，其具有一个`vector<Mesh> meshes`成员
+2. 重载`Mesh`的`*`运算符，与`+`不同，该运算符生成`MultiMeshGeometry`，将参与运算的`Mesh`加入到`meshes`中
+3. 实现`Geometry`的虚函数`update()`，遍历`meshes`并更新所有网格，最后将它们全部拼接，来更新自己的`vertices`和`surfaces`
 
+问题：`MultiMeshGeometry`需要暴露一个参数列表给外部，以访问和修改其中每个`Mesh`的属性
 
 
