@@ -140,9 +140,21 @@ class Mesh : public Geometry {
 private:
   uint32_t uNum{0}, vNum{0};
 
+  function<Vertex(float, float)> meshUpdator;
+
 public:
   Mesh() : Mesh(50, 50) {}
   Mesh(uint32_t uNum, uint32_t vNum) : uNum(uNum), vNum(vNum) { reset(); }
+
+  void resize(uint32_t uNum, uint32_t vNum) {
+    this->uNum = uNum;
+    this->vNum = vNum;
+    this->reset();
+    this->updateVertex(this->meshUpdator);
+  }
+
+  uint32_t getUNum() const { return this->uNum; }
+  uint32_t getVNum() const { return this->vNum; }
 
   FixedGeometry operator+(const Mesh &other) const {
     FixedGeometry a(*this), b(other);
@@ -168,6 +180,7 @@ public:
 
   void updateVertex(function<Vertex(float, float)> func) {
     reset();
+    this->meshUpdator = func; // 缓存更新函数用于resize中保留uv更新顶点属性
     for (int i = 0; i <= this->uNum; i++) {
       for (int j = 0; j <= this->vNum; j++) {
         this->vertices[j + i * (vNum + 1)] =
