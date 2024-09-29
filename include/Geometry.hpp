@@ -22,6 +22,8 @@ namespace {
 using namespace std;
 using param_variant = variant<unsigned int, int, float, bool>;
 
+// class MultiMeshGeometry : public Geometry {};
+
 struct Vertex {
   union {
     float position[3];
@@ -80,18 +82,17 @@ public:
   Geometry(const Geometry &) = default;
   ~Geometry() = default;
 
-  
   void translate(float x_offset, float y_offset, float z_offset) {
-    for(auto &vertex: this->vertices){
+    for (auto &vertex : this->vertices) {
       vertex.x += x_offset;
       vertex.y += y_offset;
       vertex.z += z_offset;
     }
   }
 
-  void rotate(float angle, glm::vec3 axis){
+  void rotate(float angle, glm::vec3 axis) {
     glm::mat3 rot_mat = glm::mat3(glm::rotate(angle, axis));
-    for(auto &vertex: this->vertices){
+    for (auto &vertex : this->vertices) {
       glm::vec3 new_pos = rot_mat * glm::make_vec3(vertex.position);
       glm::vec3 new_normal = rot_mat * glm::make_vec3(vertex.normal);
       vertex.x = new_pos.x;
@@ -105,13 +106,12 @@ public:
 
   void setColor(float r, float g, float b) {
     // 设置纯色
-    for(auto &vertex: this->vertices){
+    for (auto &vertex : this->vertices) {
       vertex.r = r;
       vertex.g = g;
       vertex.b = b;
     }
   }
-
 
   virtual void update() = 0;
   virtual void reset() {
@@ -170,6 +170,11 @@ public:
   }
 };
 
+// 为了让Mesh的operator*返回MultiMeshGeometry进行的前向声明
+// MultiMeshGeometry operator*(const Mesh &m1,const Mesh &m2)
+// 将在两个类的后面进行实现
+class MultiMeshGeometry;
+
 class Mesh : public Geometry {
 private:
   uint32_t uNum{0}, vNum{0};
@@ -191,9 +196,11 @@ public:
   uint32_t getVNum() const { return this->vNum; }
 
   FixedGeometry operator+(const Mesh &other) const {
-    FixedGeometry a(*this), b(other);
-    return a + b;
+    FixedGeometry b(other);
+    return FixedGeometry(*this) + b;
   }
+
+  friend MultiMeshGeometry operator*(const Mesh &m1, const Mesh &m2);
 
   virtual void reset() {
     this->vertices.resize((uNum + 1) * (vNum + 1));
@@ -236,6 +243,28 @@ public:
     // 空实现，将要移除，将Mesh当作接口使用
     // 在没有重构CylinderEx前先保留该空实现
   };
+};
+
+class MultiMeshGeometry : public Geometry {
+private:
+public:
+  vector<Mesh> meshes;
+
+  MultiMeshGeometry() = default;
+  MultiMeshGeometry(const Mesh &m) { this->meshes.emplace_back(m); }
+  MultiMeshGeometry operator*(const MultiMeshGeometry &other) {
+    MultiMeshGeometry c(*this);
+    c.meshes.insert(c.meshes.end(), other.meshes.begin(), other.meshes.end());
+    // 但是注意这里只是对MultiMeshGeometry的meshes进行了拼接，而没有处理父类Geometry的vertices和surfaces
+    // 这一步需要在virtual void Geometry::update中进行定义
+    return c;
+  }
+
+  void add(const Mesh &m) { this->meshes.emplace_back(m); }
+  virtual void update() {
+    // 逐个调用 this->meshes
+    // 中每个Mesh的update，并调用+运算生成FixedMesh作为结果，更新MultiMeshGeometry的vertices和surfaces
+  }
 };
 
 class Sphere : public Mesh {
@@ -636,5 +665,10 @@ public:
     });
   }
 };
+
+MultiMeshGeometry operator*(const Mesh &m1, const Mesh &m2) {
+  MultiMeshGeometry a(m1),b(m2);
+  return a * b;
+}
 
 } // namespace
