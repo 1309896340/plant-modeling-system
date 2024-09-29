@@ -15,8 +15,7 @@ int main(int argc, char **argv) {
   scene.light.color = {1.0f, 0.3f, 0.3f};
   scene.light.position = {1.0f, 7.0f, 2.0f};
 
-  // CylinderEx c(1.0f, 0.2f, 8.0f, RADIANS(0.0f), RADIANS(0.0f));
-  CylinderEx c1(2.0f, 0.5f, 6.0f, RADIANS(0.0f), RADIANS(00.0f), 8, 16, 36);
+  CylinderEx c1(2.0f, 0.5f, 6.0f, RADIANS(0.0f), RADIANS(0.0f), 8, 16, 36);
   Sphere s1(2.0f, 36, 72);
   Plane ground(24.0f, 24.0f);
 
@@ -25,11 +24,8 @@ int main(int argc, char **argv) {
 
   scene.add("CylinderEx", &c1, {-4.0f, 0.0f, -6.0f});
   scene.add("Sphere", &s1, {4.0f, 2.0f, -6.0f});
-
-
   scene.add("Cone", &c2, {0.0f, 0.0f, 6.0f});
   scene.add("Cylinder", &c3,{5.0f, 0.0f, 0.0f});
-
 
   scene.add("Ground", &ground);
 

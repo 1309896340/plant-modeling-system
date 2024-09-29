@@ -1,6 +1,8 @@
 ﻿#pragma once
 
 #include "glm/fwd.hpp"
+#include "glm/geometric.hpp"
+#include "glm/trigonometric.hpp"
 #include <cmath>
 #include <cstdint>
 #include <functional>
@@ -120,16 +122,20 @@ public:
 
 class FixedGeometry : public Geometry {
 public:
-  FixedGeometry() {
-    // 没有任何可修改属性
-    this->parameters.clear();
-  }
+  FixedGeometry() { this->parameters.clear(); }
 
   FixedGeometry(const Geometry &geometry) {
     // 可以从Geometry构造（这是个有点奇怪的操作，引入了从父类到子类的隐式转换）
     this->vertices = geometry.vertices;
     this->surfaces = geometry.surfaces;
-    // 没有任何可修改属性
+    this->parameters.clear();
+  }
+
+  FixedGeometry(Geometry &&geometry) noexcept {
+    this->vertices = geometry.vertices;
+    this->surfaces = geometry.surfaces;
+    geometry.vertices.clear();
+    geometry.surfaces.clear();
     this->parameters.clear();
   }
 
@@ -151,7 +157,7 @@ public:
     // 空实现，直到对象自动销毁前，不会有人为的清空操作
   }
 
-  FixedGeometry operator+(const FixedGeometry &b) const {
+  FixedGeometry operator+(const Geometry &b) const {
     FixedGeometry c(*this);
     // 1. 将两组vertices进行简单拼接
     c.vertices.insert(c.vertices.end(), b.vertices.begin(), b.vertices.end());
@@ -211,8 +217,11 @@ public:
     this->meshUpdator = func; // 缓存更新函数用于resize中保留uv更新顶点属性
     for (int i = 0; i <= this->uNum; i++) {
       for (int j = 0; j <= this->vNum; j++) {
-        this->vertices[j + i * (vNum + 1)] =
-            func(static_cast<float>(i) / uNum, static_cast<float>(j) / vNum);
+        float u=static_cast<float>(i) / uNum;
+        float v=static_cast<float>(j) / vNum;
+        Vertex &vt = this->vertices[j + i * (vNum + 1)];
+        vt = func(u,v);
+        // 待优化，不必每次更新顶点都要重置网格
         if (i != this->uNum && j != this->vNum) {
           uint32_t ptr = (j + i * vNum) * 2;
           this->surfaces[ptr + 0] = {j + i * (vNum + 1), 1 + j + i * (vNum + 1),
@@ -237,34 +246,34 @@ public:
     }
   }
 
-  virtual void update() {
-    // 空实现，将要移除，将Mesh当作接口使用
-    // 在没有重构CylinderEx前先保留该空实现
-  };
+  // virtual void update() {
+  //   // 空实现，将要移除，将Mesh当作接口使用
+  //   // 在没有重构CylinderEx前先保留该空实现
+  // };
 };
 
-class Entity : public Geometry {
-private:
-  vector<Mesh> meshes;
-  vector<glm::mat4> transforms;
+// class Entity : public Geometry {
+// private:
+//   vector<Mesh> meshes;
+//   vector<glm::mat4> transforms;
 
-public:
-  Entity() {}
+// public:
+//   Entity() {}
 
-  void push(const Mesh &mesh, const glm::mat4 transform) {
-    this->meshes.emplace_back(mesh);
-    this->transforms.emplace_back(transform);
-  }
+//   void push(const Mesh &mesh, const glm::mat4 transform) {
+//     this->meshes.emplace_back(mesh);
+//     this->transforms.emplace_back(transform);
+//   }
 
-  Mesh pop() {
-    this->transforms.pop_back();
-    Mesh &m = this->meshes.back();
-    this->meshes.pop_back();
-    return m;
-  }
+//   Mesh pop() {
+//     this->transforms.pop_back();
+//     Mesh &m = this->meshes.back();
+//     this->meshes.pop_back();
+//     return m;
+//   }
 
-  virtual void assembly() = 0;
-};
+//   virtual void assembly() = 0;
+// };
 
 // class MultiMeshGeometry : public Geometry {
 // private:
@@ -404,28 +413,45 @@ public:
   }
 };
 
-class Cone : public FixedGeometry {
+class Cone : public Geometry {
 public:
   Cone(float radius, float height, uint32_t RNum = 8, uint32_t HNum = 10,
        uint32_t PNum = 18) {
+
+    this->parameters["radius"] = radius;
+    this->parameters["height"] = height;
+    this->parameters["PNum"] = PNum;
+    this->parameters["RNum"] = RNum;
+    this->parameters["HNum"] = HNum;
+
+    this->update();
+  }
+
+  virtual void update() {
+    float radius = std::get<float>(this->parameters["radius"]);
+    float height = std::get<float>(this->parameters["height"]);
+    uint32_t RNum = std::get<uint32_t>(this->parameters["RNum"]);
+    uint32_t HNum = std::get<uint32_t>(this->parameters["HNum"]);
+    uint32_t PNum = std::get<uint32_t>(this->parameters["PNum"]);
     ConeSide cs(radius, height, HNum, PNum);
     Disk ds(radius, RNum, PNum);
 
     // 圆盘方向旋转朝下
-    glm::mat3 rot_mat = glm::mat3(
-        glm::rotate(glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
-    ds.transformVertex([rot_mat](const Vertex &vt0, float u, float v) {
-      Vertex vt(vt0);
-      glm::vec3 new_position = rot_mat * glm::make_vec3(vt.position);
-      glm::vec3 new_normal = rot_mat * glm::make_vec3(vt.normal);
-      vt.x = new_position.x;
-      vt.y = new_position.y;
-      vt.z = new_position.z;
-      vt.nx = new_normal.x;
-      vt.ny = new_normal.y;
-      vt.nz = new_normal.z;
-      return vt;
-    });
+    // glm::mat3 rot_mat = glm::mat3(
+    //     glm::rotate(glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
+    // ds.transformVertex([rot_mat](const Vertex &vt0, float u, float v) {
+    //   Vertex vt(vt0);
+    //   glm::vec3 new_position = rot_mat * glm::make_vec3(vt.position);
+    //   glm::vec3 new_normal = rot_mat * glm::make_vec3(vt.normal);
+    //   vt.x = new_position.x;
+    //   vt.y = new_position.y;
+    //   vt.z = new_position.z;
+    //   vt.nx = new_normal.x;
+    //   vt.ny = new_normal.y;
+    //   vt.nz = new_normal.z;
+    //   return vt;
+    // });
+    ds.rotate(glm::radians(180.0f), {1.0f, 0.0f, 0.0f});
 
     // 组合
     FixedGeometry &&res = cs + ds;
@@ -472,37 +498,76 @@ public:
   }
 };
 
+class TruncatedConeSide : public Mesh {
+private:
+  uint32_t HNum; // 高度细分
+  uint32_t PNum; // 圆周细分
+
+public:
+  TruncatedConeSide(float r1, float r2, float h, uint32_t RNum = 8,
+                    uint32_t HNum = 10, uint32_t PNum = 18)
+      : HNum(HNum), PNum(PNum) {
+    this->parameters["r1"] = r1;
+    this->parameters["r2"] = r2;
+    this->parameters["h"] = h;
+    update();
+  }
+  virtual void update() {
+    this->updateVertex([this](float u, float v) {
+      Vertex vt;
+      float r1 = std::get<float>(this->parameters["r1"]);
+      float r2 = std::get<float>(this->parameters["r2"]);
+      float h = std::get<float>(this->parameters["h"]);
+
+      float interp_r = u * (r2 - r1) + r1;
+      vt.x = interp_r * cos(2 * PI * v);
+      vt.y = interp_r * sin(2 * PI * v);
+      vt.z = h * u;
+
+      float tmp = sqrt(h * h + pow(r1 - r2, 2.0f));
+      vt.nx = h / tmp * cos(2 * PI * v);
+      vt.ny = h / tmp * sin(2 * PI * v);
+      vt.nz = (r1 - r2) / tmp;
+
+      vt.r = 1.0f;
+      vt.g = 0.0f;
+      vt.b = 0.0f;
+
+      vt.u = u;
+      vt.v = v;
+
+      return vt;
+    });
+  }
+};
+
 class Cylinder : public FixedGeometry {
 public:
   Cylinder(float radius, float height, uint32_t RNum = 8, uint32_t HNum = 10,
            uint32_t PNum = 18) {
+    this->parameters["radius"] = radius;
+    this->parameters["height"] = height;
+    this->parameters["RNum"] = RNum;
+    this->parameters["HNum"] = HNum;
+    this->parameters["PNum"] = PNum;
+
+    this->update();
+  }
+
+  virtual void update() {
+    float radius = std::get<float>(this->parameters["radius"]);
+    float height = std::get<float>(this->parameters["height"]);
+    uint32_t RNum = std::get<uint32_t>(this->parameters["RNum"]);
+    uint32_t HNum = std::get<uint32_t>(this->parameters["HNum"]);
+    uint32_t PNum = std::get<uint32_t>(this->parameters["PNum"]);
+
     CylinderSide cs(radius, height, RNum, HNum, PNum);
     Disk ds_bottom(radius, RNum, PNum), ds_top(radius, RNum, PNum);
 
     cs.setColor(0.0f, 0.0f, 1.0f);
     ds_top.setColor(1.0f, 0.2f, 1.0f);
-
-    // 圆盘方向旋转朝下
-    glm::mat3 rot_mat = glm::mat3(
-        glm::rotate(glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
-    ds_bottom.transformVertex([rot_mat](const Vertex &vt0, float u, float v) {
-      Vertex vt(vt0);
-      glm::vec3 new_position = rot_mat * glm::make_vec3(vt.position);
-      glm::vec3 new_normal = rot_mat * glm::make_vec3(vt.normal);
-      vt.x = new_position.x;
-      vt.y = new_position.y;
-      vt.z = new_position.z;
-      vt.nx = new_normal.x;
-      vt.ny = new_normal.y;
-      vt.nz = new_normal.z;
-      return vt;
-    });
-
-    ds_top.transformVertex([height](const Vertex &vt0, float u, float v) {
-      Vertex vt(vt0);
-      vt.z += height;
-      return vt;
-    });
+    ds_bottom.rotate(glm::radians(180.0f), {1.0f, 0.0f, 0.0f});
+    ds_top.translate(0.0f, 0.0f, height);
 
     // 组合
     FixedGeometry &&res = cs + ds_top + ds_bottom;
@@ -511,7 +576,6 @@ public:
   }
 };
 
-// 暂时先不修改，但是update的逻辑后面必须处理一下
 class CylinderEx : public Geometry {
 private:
   uint32_t RNum; // 半径细分
@@ -532,134 +596,52 @@ public:
   }
 
   virtual void update() {
-    this->reset();
-    Mesh bottom(RNum, PNum), side(HNum, PNum), top(RNum, PNum);
-    bottom.updateVertex([this](float u, float v) {
-      float r1 = std::get<float>(this->parameters["r1"]);
-      Vertex vt;
-      vt.nx = 0.0f;
-      vt.ny = 0.0f;
-      vt.nz = -1.0f;
+    float r1 = std::get<float>(this->parameters["r1"]);
+    float r2 = std::get<float>(this->parameters["r2"]);
+    float h = std::get<float>(this->parameters["h"]);
+    float phi = std::get<float>(this->parameters["phi"]);
+    float rho = std::get<float>(this->parameters["rho"]);
 
-      vt.x = r1 * u * cos(2 * PI * v);
-      vt.y = r1 * u * sin(2 * PI * v);
-      vt.z = 0.0f;
+    Disk bottom(r1, RNum, PNum);
+    Disk top(r2, RNum, PNum);
+    TruncatedConeSide side(r1, r2, h, RNum, HNum, PNum);
+    bottom.rotate(glm::radians(180.0f), {1.0f, 0.0f, 0.0f});
+    top.translate(0.0f, 0.0f, h);
 
-      vt.r = vt.x;
-      vt.g = vt.y;
-      vt.b = vt.z;
 
+    top.transformVertex([phi, rho](const Vertex &vt0, float u, float v) {
+      Vertex vt(vt0);
+      glm::mat3 rot_mat =
+          glm::mat3(glm::rotate(rho, glm::vec3(cos(phi), sin(phi), 0.0f)));
+      glm::vec3 n_pos = rot_mat * glm::make_vec3(vt.position);
+      glm::vec3 n_norm = rot_mat * glm::make_vec3(vt.normal);
+      vt.x = n_pos.x;
+      vt.y = n_pos.y;
+      vt.z = n_pos.z;
+      vt.nx = n_norm.x;
+      vt.ny = n_norm.y;
+      vt.nz = n_norm.z;
       return vt;
     });
-    top.updateVertex([this](float u, float v) {
-      float r1 = std::get<float>(this->parameters["r1"]);
-      float r2 = std::get<float>(this->parameters["r2"]);
-      float h = std::get<float>(this->parameters["h"]);
-      float rho = std::get<float>(this->parameters["rho"]);
-      float phi = std::get<float>(this->parameters["phi"]);
-      Vertex vt;
-      vt.nx = 0.0f;
-      vt.ny = 0.0f;
-      vt.nz = 1.0f;
-
-      vt.x = r2 * u * cos(-2 * PI * v);
-      vt.y = r2 * u * sin(-2 * PI * v);
-      vt.z = h;
-
-      // 向方位角phi、天顶角rho的弯曲变换
-      glm::mat4 rot_mat(1.0f);
-      rot_mat = glm::rotate(rho, glm::vec3(-sin(phi), cos(phi), 0));
-      // 位置
-      glm::vec4 pos(vt.x, vt.y, vt.z, 1.0f);
-      pos = rot_mat * pos;
-      vt.x = pos.x;
-      vt.y = pos.y;
-      vt.z = pos.z;
-      // 法向量
-      glm::vec4 norm_v(vt.nx, vt.ny, vt.nz, 0.0f);
-      norm_v = rot_mat * norm_v;
-      vt.nx = norm_v.x;
-      vt.ny = norm_v.y;
-      vt.nz = norm_v.z;
-
-      vt.r = vt.x;
-      vt.g = vt.y;
-      vt.b = vt.z;
-
-      vt.u = u;
-      vt.v = v;
-
-      return vt;
-    });
-    side.updateVertex([this](float u, float v) {
-      float r1 = std::get<float>(this->parameters["r1"]);
-      float r2 = std::get<float>(this->parameters["r2"]);
-      float h = std::get<float>(this->parameters["h"]);
-      float rho = std::get<float>(this->parameters["rho"]);
-      float phi = std::get<float>(this->parameters["phi"]);
-      Vertex vt;
-      // 法向量未测试是否正确
-      float tmp = sqrt(h * h + pow(r1 - r2, 2.0f));
-      vt.nx = cos(2 * PI * v) * h / tmp;
-      vt.ny = sin(2 * PI * v) * h / tmp;
-      vt.nz = (r1 - r2) / tmp;
-
-      float interp_r = u * (r2 - r1) + r1;
-      vt.x = interp_r * cos(2 * PI * v);
-      vt.y = interp_r * sin(2 * PI * v);
-      vt.z = h * u;
-
-      // 向方位角phi、天顶角rho的弯曲变换
-      glm::mat4 rot_mat(1.0f);
-      rot_mat = glm::rotate(u * rho, glm::vec3(-sin(phi), cos(phi), 0));
-      // 位置
-      glm::vec4 pos_v(vt.x, vt.y, vt.z, 1.0f);
-      pos_v = rot_mat * pos_v;
-      vt.x = pos_v.x;
-      vt.y = pos_v.y;
-      vt.z = pos_v.z;
-      // 法向量
-      glm::vec4 norm_v(vt.nx, vt.ny, vt.nz, 0.0f);
-      norm_v = rot_mat * norm_v;
-      vt.nx = norm_v.x;
-      vt.ny = norm_v.y;
-      vt.nz = norm_v.z;
-
-      vt.r = vt.x;
-      vt.g = vt.y;
-      vt.b = vt.z;
-
-      vt.u = u;
-      vt.v = v;
-
+    side.transformVertex([phi, rho](const Vertex &vt0, float u, float v) {
+      Vertex vt(vt0);
+      glm::mat3 rot_mat =
+          glm::mat3(glm::rotate(u * rho, glm::vec3(cos(phi), sin(phi), 0.0f)));
+      glm::vec3 n_pos = rot_mat * glm::make_vec3(vt.position);
+      glm::vec3 n_norm = rot_mat * glm::make_vec3(vt.normal);
+      vt.x = n_pos.x;
+      vt.y = n_pos.y;
+      vt.z = n_pos.z;
+      vt.nx = n_norm.x;
+      vt.ny = n_norm.y;
+      vt.nz = n_norm.z;
       return vt;
     });
 
-    // 将bottom, side, top组装起来
-    uint32_t offset = 0;
-    // 第1个mesh不需要偏移
-    vertices.insert(vertices.end(), bottom.vertices.begin(),
-                    bottom.vertices.end());
-    surfaces.insert(surfaces.end(), bottom.surfaces.begin(),
-                    bottom.surfaces.end());
-    // 第2个mesh需要对surface中的元素值进行偏移
-    offset += bottom.vertices.size();
-    for (auto &sur : side.surfaces) {
-      sur.tidx[0] += offset;
-      sur.tidx[1] += offset;
-      sur.tidx[2] += offset;
-    }
-    vertices.insert(vertices.end(), side.vertices.begin(), side.vertices.end());
-    surfaces.insert(surfaces.end(), side.surfaces.begin(), side.surfaces.end());
-    // 第3个mesh需要对surface中的元素值进行偏移
-    offset += side.vertices.size();
-    for (auto &sur : top.surfaces) {
-      sur.tidx[0] += offset;
-      sur.tidx[1] += offset;
-      sur.tidx[2] += offset;
-    }
-    vertices.insert(vertices.end(), top.vertices.begin(), top.vertices.end());
-    surfaces.insert(surfaces.end(), top.surfaces.begin(), top.surfaces.end());
+    // 组合
+    FixedGeometry &&res = bottom + top + side;
+    this->vertices = res.vertices;
+    this->surfaces = res.surfaces;
   }
 };
 

@@ -373,7 +373,7 @@ public:
 
   void imgui_menu() {
 
-    ImGui::ShowDemoWindow();
+    // ImGui::ShowDemoWindow();
     imgui_docking_render();
 
     ImGui::Begin(u8"场景");

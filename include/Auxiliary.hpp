@@ -27,7 +27,7 @@ public:
 
     arrow.translate(0.0f, 0.0f, body_ratio * length);
 
-    FixedGeometry a = arrow + body;
+    FixedGeometry a = FixedGeometry(std::move(arrow)) + body;
     this->vertices = a.vertices;
     this->surfaces = a.surfaces;
   }
