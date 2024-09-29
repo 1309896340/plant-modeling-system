@@ -124,9 +124,6 @@ public:
       cout << log << endl;
 #endif
     }
-#ifndef NDEBUG
-    cout << "secceed to link program!" << endl;
-#endif
     glDeleteShader(vshader);
     glDeleteShader(gshader);
     glDeleteShader(fshader);
@@ -152,9 +149,6 @@ public:
       cout << log << endl;
 #endif
     }
-#ifndef NDEBUG
-    cout << "secceed to link program!" << endl;
-#endif
     glDeleteShader(vshader);
     glDeleteShader(fshader);
   }

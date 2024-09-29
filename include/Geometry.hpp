@@ -1,11 +1,10 @@
 ﻿#pragma once
 
-#include "glm/fwd.hpp"
-#include "glm/geometric.hpp"
-#include "glm/trigonometric.hpp"
 #include <cmath>
 #include <cstdint>
+#include <cstdio>
 #include <functional>
+#include <iostream>
 #include <map>
 #include <string>
 #include <variant>
@@ -181,23 +180,28 @@ public:
 
 class Mesh : public Geometry {
 private:
-  uint32_t uNum{0}, vNum{0};
-
+  // uint32_t uNum{0}, vNum{0};
   function<Vertex(float, float)> meshUpdator;
 
 public:
   Mesh() : Mesh(50, 50) {}
-  Mesh(uint32_t uNum, uint32_t vNum) : uNum(uNum), vNum(vNum) { reset(); }
-
-  void resize(uint32_t uNum, uint32_t vNum) {
-    this->uNum = uNum;
-    this->vNum = vNum;
-    this->reset();
-    this->updateVertex(this->meshUpdator);
+  Mesh(uint32_t uNum, uint32_t vNum) {
+    this->parameters["uNum"] = uNum;
+    this->parameters["vNum"] = vNum;
+    resize();
   }
 
-  uint32_t getUNum() const { return this->uNum; }
-  uint32_t getVNum() const { return this->vNum; }
+  // void resize(uint32_t uNum, uint32_t vNum) {
+  //   // uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]);
+  //   // uint32_t vNum = std::get<uint32_t>(this->parameters["vNum"]);
+  //   this->uNum = uNum;
+  //   this->vNum = vNum;
+  //   this->reset();
+  //   this->updateVertex(this->meshUpdator);
+  // }
+
+  // uint32_t getUNum() const { return this->uNum; }
+  // uint32_t getVNum() const { return this->vNum; }
 
   FixedGeometry operator+(const Mesh &other) const {
     FixedGeometry b(other);
@@ -206,23 +210,45 @@ public:
 
   // friend MultiMeshGeometry operator*(const Mesh &m1, const Mesh &m2);
 
-  virtual void reset() {
+  void resize() {
+    // // 将最新的uNum，vNum更新到类
+    // uint32_t uNum = this->uNum;
+    // uint32_t vNum = this->vNum;
+
+    // this->uNum = std::get<uint32_t>(this->parameters["uNum"]);
+    // this->vNum = std::get<uint32_t>(this->parameters["vNum"]);
+
+    // if (uNum != this->uNum || vNum != this->vNum) {
+    //   // 由外部干预导致的网格分割数变化
+    //   cout << "外部干预网格发生变化，执行resize，利用缓存lambda更新顶点"
+    //        << endl;
+    //   this->vertices.resize((uNum + 1) * (vNum + 1));
+    //   // this->edges.resize(3*uNum*vNum + uNum + vNum);
+    //   this->surfaces.resize(uNum * vNum * 2);
+    //   this->updateVertex(this->meshUpdator);
+    // }
+
+    uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]);
+    uint32_t vNum = std::get<uint32_t>(this->parameters["vNum"]);
+
     this->vertices.resize((uNum + 1) * (vNum + 1));
     // this->edges.resize(3*uNum*vNum + uNum + vNum);
     this->surfaces.resize(uNum * vNum * 2);
   }
 
   void updateVertex(function<Vertex(float, float)> func) {
-    reset();
+    resize();
+    uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]);
+    uint32_t vNum = std::get<uint32_t>(this->parameters["vNum"]);
     this->meshUpdator = func; // 缓存更新函数用于resize中保留uv更新顶点属性
-    for (int i = 0; i <= this->uNum; i++) {
-      for (int j = 0; j <= this->vNum; j++) {
-        float u=static_cast<float>(i) / uNum;
-        float v=static_cast<float>(j) / vNum;
+    for (int i = 0; i <= uNum; i++) {
+      for (int j = 0; j <= vNum; j++) {
+        float u = static_cast<float>(i) / uNum;
+        float v = static_cast<float>(j) / vNum;
         Vertex &vt = this->vertices[j + i * (vNum + 1)];
-        vt = func(u,v);
+        vt = func(u, v);
         // 待优化，不必每次更新顶点都要重置网格
-        if (i != this->uNum && j != this->vNum) {
+        if (i != uNum && j != vNum) {
           uint32_t ptr = (j + i * vNum) * 2;
           this->surfaces[ptr + 0] = {j + i * (vNum + 1), 1 + j + i * (vNum + 1),
                                      1 + j + (i + 1) * (vNum + 1)};
@@ -235,9 +261,10 @@ public:
   }
 
   void transformVertex(function<Vertex(const Vertex &, float, float)> func) {
-    // 假定uNum和vNum没有发生改变，该函数也不会修改索引
-    for (int i = 0; i <= this->uNum; i++) {
-      for (int j = 0; j <= this->vNum; j++) {
+    uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]);
+    uint32_t vNum = std::get<uint32_t>(this->parameters["vNum"]);
+    for (int i = 0; i <= uNum; i++) {
+      for (int j = 0; j <= vNum; j++) {
         float u = static_cast<float>(i) / uNum;
         float v = static_cast<float>(j) / vNum;
         Vertex &vt = this->vertices[j + i * (vNum + 1)];
@@ -342,12 +369,8 @@ public:
 
 class Disk : public Mesh {
 private:
-  uint32_t RNum; // 半径细分
-  uint32_t PNum; // 圆周细分
-
 public:
-  Disk(float r, uint32_t RNum = 8, uint32_t PNum = 18)
-      : RNum(RNum), PNum(PNum) {
+  Disk(float r, uint32_t RNum = 8, uint32_t PNum = 18) : Mesh(RNum, PNum) {
     this->parameters["r"] = r;
     update();
   }
@@ -377,12 +400,9 @@ public:
 
 class ConeSide : public Mesh {
 private:
-  uint32_t HNum; // 高度细分
-  uint32_t PNum; // 圆周细分
-
 public:
   ConeSide(float r, float h, uint32_t HNum = 10, uint32_t PNum = 18)
-      : HNum(HNum), PNum(PNum) {
+      : Mesh(HNum, PNum) {
     this->parameters["r"] = r;
     this->parameters["h"] = h;
     update();
@@ -433,24 +453,10 @@ public:
     uint32_t RNum = std::get<uint32_t>(this->parameters["RNum"]);
     uint32_t HNum = std::get<uint32_t>(this->parameters["HNum"]);
     uint32_t PNum = std::get<uint32_t>(this->parameters["PNum"]);
+
     ConeSide cs(radius, height, HNum, PNum);
     Disk ds(radius, RNum, PNum);
 
-    // 圆盘方向旋转朝下
-    // glm::mat3 rot_mat = glm::mat3(
-    //     glm::rotate(glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f)));
-    // ds.transformVertex([rot_mat](const Vertex &vt0, float u, float v) {
-    //   Vertex vt(vt0);
-    //   glm::vec3 new_position = rot_mat * glm::make_vec3(vt.position);
-    //   glm::vec3 new_normal = rot_mat * glm::make_vec3(vt.normal);
-    //   vt.x = new_position.x;
-    //   vt.y = new_position.y;
-    //   vt.z = new_position.z;
-    //   vt.nx = new_normal.x;
-    //   vt.ny = new_normal.y;
-    //   vt.nz = new_normal.z;
-    //   return vt;
-    // });
     ds.rotate(glm::radians(180.0f), {1.0f, 0.0f, 0.0f});
 
     // 组合
@@ -462,13 +468,9 @@ public:
 
 class CylinderSide : public Mesh {
 private:
-  uint32_t HNum; // 高度细分
-  uint32_t PNum; // 圆周细分
-
 public:
-  CylinderSide(float r, float h, uint32_t RNum = 8, uint32_t HNum = 10,
-               uint32_t PNum = 18)
-      : HNum(HNum), PNum(PNum) {
+  CylinderSide(float r, float h, uint32_t HNum = 10, uint32_t PNum = 18)
+      : Mesh(HNum, PNum) {
     this->parameters["r"] = r;
     this->parameters["h"] = h;
     update();
@@ -488,7 +490,7 @@ public:
 
       vt.r = 1.0f;
       vt.g = 0.0f;
-      vt.b = 0.0f;
+      vt.b = 1.0f;
 
       vt.u = u;
       vt.v = v;
@@ -500,13 +502,10 @@ public:
 
 class TruncatedConeSide : public Mesh {
 private:
-  uint32_t HNum; // 高度细分
-  uint32_t PNum; // 圆周细分
-
 public:
   TruncatedConeSide(float r1, float r2, float h, uint32_t RNum = 8,
                     uint32_t HNum = 10, uint32_t PNum = 18)
-      : HNum(HNum), PNum(PNum) {
+      : Mesh(HNum, PNum) {
     this->parameters["r1"] = r1;
     this->parameters["r2"] = r2;
     this->parameters["h"] = h;
@@ -561,11 +560,10 @@ public:
     uint32_t HNum = std::get<uint32_t>(this->parameters["HNum"]);
     uint32_t PNum = std::get<uint32_t>(this->parameters["PNum"]);
 
-    CylinderSide cs(radius, height, RNum, HNum, PNum);
+    CylinderSide cs(radius, height, HNum, PNum);
     Disk ds_bottom(radius, RNum, PNum), ds_top(radius, RNum, PNum);
 
     cs.setColor(0.0f, 0.0f, 1.0f);
-    ds_top.setColor(1.0f, 0.2f, 1.0f);
     ds_bottom.rotate(glm::radians(180.0f), {1.0f, 0.0f, 0.0f});
     ds_top.translate(0.0f, 0.0f, height);
 
@@ -576,22 +574,25 @@ public:
   }
 };
 
-class CylinderEx : public Geometry {
+class TruncatedConeEx : public Geometry {
 private:
   uint32_t RNum; // 半径细分
   uint32_t HNum; // 高度细分
   uint32_t PNum; // 圆周细分
 
 public:
-  CylinderEx() : CylinderEx(1.0f, 1.0f, 3.0f, 0.0f, 0.0f) {}
-  CylinderEx(float r1, float r2, float h, float phi, float rho,
-             uint32_t RNum = 8, uint32_t HNum = 10, uint32_t PNum = 18)
+  TruncatedConeEx() : TruncatedConeEx(1.0f, 1.0f, 3.0f, 0.0f, 0.0f) {}
+  TruncatedConeEx(float r1, float r2, float h, float phi, float rho,
+                  uint32_t RNum = 8, uint32_t HNum = 10, uint32_t PNum = 18)
       : RNum(RNum), HNum(HNum), PNum(PNum) {
     this->parameters["r1"] = r1;
     this->parameters["r2"] = r2;
     this->parameters["h"] = h;
     this->parameters["phi"] = phi;
     this->parameters["rho"] = rho;
+    this->parameters["RNum"] = RNum;
+    this->parameters["HNum"] = HNum;
+    this->parameters["PNum"] = PNum;
     update();
   }
 
@@ -601,13 +602,17 @@ public:
     float h = std::get<float>(this->parameters["h"]);
     float phi = std::get<float>(this->parameters["phi"]);
     float rho = std::get<float>(this->parameters["rho"]);
+    float RNum = std::get<uint32_t>(this->parameters["RNum"]);
+    float HNum = std::get<uint32_t>(this->parameters["HNum"]);
+    float PNum = std::get<uint32_t>(this->parameters["PNum"]);
 
     Disk bottom(r1, RNum, PNum);
     Disk top(r2, RNum, PNum);
     TruncatedConeSide side(r1, r2, h, RNum, HNum, PNum);
+    side.setColor(0.8f, 0.2f, 0.6f);
+    top.setColor(0.0f, 1.0f, 1.0f);
     bottom.rotate(glm::radians(180.0f), {1.0f, 0.0f, 0.0f});
     top.translate(0.0f, 0.0f, h);
-
 
     top.transformVertex([phi, rho](const Vertex &vt0, float u, float v) {
       Vertex vt(vt0);

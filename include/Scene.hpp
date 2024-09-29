@@ -200,6 +200,10 @@ public:
     glBufferData(GL_ARRAY_BUFFER,
                  this->geometry->vertices.size() * sizeof(Vertex),
                  this->geometry->vertices.data(), GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                 this->geometry->surfaces.size() * sizeof(Surface),
+                 this->geometry->surfaces.data(), GL_DYNAMIC_DRAW);
     glBindVertexArray(0);
   }
   ~GeometryRenderObject() {
@@ -455,7 +459,7 @@ public:
 
     if (ImGui::TreeNodeEx(u8"光源", ImGuiTreeNodeFlags_DefaultOpen)) {
       ImGui::SliderFloat3(u8"位置", glm::value_ptr(this->light.position),
-                          -10.0f, 10.f);
+                          -20.0f, 20.f);
       ImGui::TreePop();
     }
 
@@ -507,7 +511,12 @@ public:
                 if (ImGui::SliderFloat(param.first.c_str(), &arg, 0.0f,
                                        10.0f)) {
                   cur_obj->geometry->update();
-                  // 还需要更新vbo
+                  cur_obj->updateVBO();
+                }
+              } else if constexpr (std::is_same_v<T, uint32_t>) {
+                if (ImGui::SliderInt(param.first.c_str(),
+                                     reinterpret_cast<int *>(&arg), 2, 50)) {
+                  cur_obj->geometry->update();
                   cur_obj->updateVBO();
                 }
               }
@@ -555,32 +564,9 @@ public:
     ImGui_ImplOpenGL3_Init();
   }
   void load_all_shader() {
-    // // 读取shaders目录下的所有文件
-    // set<string> shader_names;
-    // fs::path shader_dir = "shaders";
-    // for (auto &file : fs::directory_iterator(shader_dir)) {
-    //   fs::path pp = file.path();
-    //   if (!fs::is_regular_file(pp))
-    //     throw runtime_error("\"/shaders\" cannot contain directory");
-    //   fs::path fname = pp.filename();
-    //   string ext = fname.extension().string();
-    //   if (ext != ".vert" && ext != ".frag" && ext != ".geo") {
-    //     stringstream err_msg;
-    //     err_msg << "invalid glsl extension: " << fname;
-    //     throw err_msg.str();
-    //   }
-    //   shader_names.insert(fname.stem().string());
-    // }
-    // for (const string &sdns : shader_names)
-    //   shaders[sdns] = new Shader(sdns + ".vert", sdns + ".frag");
-
     shaders["default"] = new Shader("default.vert", "default.frag");
     shaders["normal"] = new Shader("normal.vert", "normal.geo", "normal.frag");
     shaders["auxiliary"] = new Shader("auxiliary.vert", "auxiliary.frag");
-
-#ifndef NDEBUG
-    cout << "all shaders compile finished!" << endl;
-#endif
   }
 
   void add(const string &name, Geometry *geo, Transform trans) {

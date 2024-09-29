@@ -38,11 +38,11 @@ void main(){
     vec3 ambient = ambientStrength * lightColor;
     // 漫反射
     vec3 lightDir = normalize(lightPos - vertPos);
-    float diffuse = diffuseStrength * max(dot(lightColor, vertNorm), 0.0f);
+    vec3 diffuse = diffuseStrength * lightColor * max(dot(lightDir, vertNorm), 0.0f);
     // 镜面反射
     vec3 reflectDir = reflect(-lightDir, vertNorm);
     vec3 eyeDir = normalize(eyePos - vertPos);
-    float specular = specularStrength * pow(max(dot(eyeDir, reflectDir), 0.0f), 32);
+    vec3 specular = specularStrength * lightColor * pow(max(dot(eyeDir, reflectDir), 0.0f), 32);
     // 颜色混合
     vec3 resColor = (ambient + diffuse + specular) * texColor;
     // vec3 resColor = ambient * texColor;
