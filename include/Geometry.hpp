@@ -22,8 +22,6 @@ namespace {
 using namespace std;
 using param_variant = variant<unsigned int, int, float, bool>;
 
-// class MultiMeshGeometry : public Geometry {};
-
 struct Vertex {
   union {
     float position[3];
@@ -173,7 +171,7 @@ public:
 // 为了让Mesh的operator*返回MultiMeshGeometry进行的前向声明
 // MultiMeshGeometry operator*(const Mesh &m1,const Mesh &m2)
 // 将在两个类的后面进行实现
-class MultiMeshGeometry;
+// class MultiMeshGeometry;
 
 class Mesh : public Geometry {
 private:
@@ -200,7 +198,7 @@ public:
     return FixedGeometry(*this) + b;
   }
 
-  friend MultiMeshGeometry operator*(const Mesh &m1, const Mesh &m2);
+  // friend MultiMeshGeometry operator*(const Mesh &m1, const Mesh &m2);
 
   virtual void reset() {
     this->vertices.resize((uNum + 1) * (vNum + 1));
@@ -245,27 +243,60 @@ public:
   };
 };
 
-class MultiMeshGeometry : public Geometry {
+class Entity : public Geometry {
 private:
-public:
   vector<Mesh> meshes;
+  vector<glm::mat4> transforms;
 
-  MultiMeshGeometry() = default;
-  MultiMeshGeometry(const Mesh &m) { this->meshes.emplace_back(m); }
-  MultiMeshGeometry operator*(const MultiMeshGeometry &other) {
-    MultiMeshGeometry c(*this);
-    c.meshes.insert(c.meshes.end(), other.meshes.begin(), other.meshes.end());
-    // 但是注意这里只是对MultiMeshGeometry的meshes进行了拼接，而没有处理父类Geometry的vertices和surfaces
-    // 这一步需要在virtual void Geometry::update中进行定义
-    return c;
+public:
+  Entity() {}
+
+  void push(const Mesh &mesh, const glm::mat4 transform) {
+    this->meshes.emplace_back(mesh);
+    this->transforms.emplace_back(transform);
   }
 
-  void add(const Mesh &m) { this->meshes.emplace_back(m); }
-  virtual void update() {
-    // 逐个调用 this->meshes
-    // 中每个Mesh的update，并调用+运算生成FixedMesh作为结果，更新MultiMeshGeometry的vertices和surfaces
+  Mesh pop() {
+    this->transforms.pop_back();
+    Mesh &m = this->meshes.back();
+    this->meshes.pop_back();
+    return m;
   }
+
+  virtual void assembly() = 0;
 };
+
+// class MultiMeshGeometry : public Geometry {
+// private:
+// public:
+//   vector<Mesh> meshes;
+
+//   MultiMeshGeometry() = default;
+//   MultiMeshGeometry(const Mesh &m) { this->meshes.emplace_back(m); }
+//   MultiMeshGeometry operator*(const MultiMeshGeometry &other) {
+//     MultiMeshGeometry c(*this);
+//     c.meshes.insert(c.meshes.end(), other.meshes.begin(),
+//     other.meshes.end());
+//     //
+//     但是注意这里只是对MultiMeshGeometry的meshes进行了拼接，而没有处理父类Geometry的vertices和surfaces
+//     // 这一步需要在virtual void Geometry::update中进行定义
+//     // this->parameters也进行合并，相同键的值进行覆盖
+//     c.parameters.insert(other.parameters.begin(), other.parameters.end());
+//     return c;
+//   }
+
+//   void add(const Mesh &m) { this->meshes.emplace_back(m); }
+//   virtual void update() {
+//     // 逐个调用 this->meshes
+//     //
+//     中每个Mesh的update，并调用+运算生成FixedMesh作为结果，更新MultiMeshGeometry的vertices和surfaces
+//     // 对每个Mesh进行update前需要将this->parameters同步到每个Mesh中
+//     for(Mesh &mesh : this->meshes){
+//       mesh.parameters = this->parameters;
+//       mesh.update();
+//     }
+//   }
+// };
 
 class Sphere : public Mesh {
 public:
@@ -666,9 +697,9 @@ public:
   }
 };
 
-MultiMeshGeometry operator*(const Mesh &m1, const Mesh &m2) {
-  MultiMeshGeometry a(m1),b(m2);
-  return a * b;
-}
+// MultiMeshGeometry operator*(const Mesh &m1, const Mesh &m2) {
+//   MultiMeshGeometry a(m1),b(m2);
+//   return a * b;
+// }
 
 } // namespace
