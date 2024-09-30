@@ -1,6 +1,5 @@
-﻿#include "glm/trigonometric.hpp"
-#define ENABLE_NORMAL_VISUALIZATION
-// #define ENBALE_POLYGON_VISUALIZATION
+﻿// #define ENABLE_NORMAL_VISUALIZATION
+#define ENBALE_POLYGON_VISUALIZATION
 #include "Scene.hpp"
 
 uint32_t count = 0;

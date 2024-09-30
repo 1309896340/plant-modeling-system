@@ -173,14 +173,9 @@ public:
   }
 };
 
-// 为了让Mesh的operator*返回MultiMeshGeometry进行的前向声明
-// MultiMeshGeometry operator*(const Mesh &m1,const Mesh &m2)
-// 将在两个类的后面进行实现
-// class MultiMeshGeometry;
 
 class Mesh : public Geometry {
 private:
-  // uint32_t uNum{0}, vNum{0};
   function<Vertex(float, float)> meshUpdator;
 
 public:
@@ -191,43 +186,12 @@ public:
     resize();
   }
 
-  // void resize(uint32_t uNum, uint32_t vNum) {
-  //   // uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]);
-  //   // uint32_t vNum = std::get<uint32_t>(this->parameters["vNum"]);
-  //   this->uNum = uNum;
-  //   this->vNum = vNum;
-  //   this->reset();
-  //   this->updateVertex(this->meshUpdator);
-  // }
-
-  // uint32_t getUNum() const { return this->uNum; }
-  // uint32_t getVNum() const { return this->vNum; }
-
   FixedGeometry operator+(const Mesh &other) const {
     FixedGeometry b(other);
     return FixedGeometry(*this) + b;
   }
 
-  // friend MultiMeshGeometry operator*(const Mesh &m1, const Mesh &m2);
-
   void resize() {
-    // // 将最新的uNum，vNum更新到类
-    // uint32_t uNum = this->uNum;
-    // uint32_t vNum = this->vNum;
-
-    // this->uNum = std::get<uint32_t>(this->parameters["uNum"]);
-    // this->vNum = std::get<uint32_t>(this->parameters["vNum"]);
-
-    // if (uNum != this->uNum || vNum != this->vNum) {
-    //   // 由外部干预导致的网格分割数变化
-    //   cout << "外部干预网格发生变化，执行resize，利用缓存lambda更新顶点"
-    //        << endl;
-    //   this->vertices.resize((uNum + 1) * (vNum + 1));
-    //   // this->edges.resize(3*uNum*vNum + uNum + vNum);
-    //   this->surfaces.resize(uNum * vNum * 2);
-    //   this->updateVertex(this->meshUpdator);
-    // }
-
     uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]);
     uint32_t vNum = std::get<uint32_t>(this->parameters["vNum"]);
 
@@ -273,66 +237,7 @@ public:
     }
   }
 
-  // virtual void update() {
-  //   // 空实现，将要移除，将Mesh当作接口使用
-  //   // 在没有重构CylinderEx前先保留该空实现
-  // };
 };
-
-// class Entity : public Geometry {
-// private:
-//   vector<Mesh> meshes;
-//   vector<glm::mat4> transforms;
-
-// public:
-//   Entity() {}
-
-//   void push(const Mesh &mesh, const glm::mat4 transform) {
-//     this->meshes.emplace_back(mesh);
-//     this->transforms.emplace_back(transform);
-//   }
-
-//   Mesh pop() {
-//     this->transforms.pop_back();
-//     Mesh &m = this->meshes.back();
-//     this->meshes.pop_back();
-//     return m;
-//   }
-
-//   virtual void assembly() = 0;
-// };
-
-// class MultiMeshGeometry : public Geometry {
-// private:
-// public:
-//   vector<Mesh> meshes;
-
-//   MultiMeshGeometry() = default;
-//   MultiMeshGeometry(const Mesh &m) { this->meshes.emplace_back(m); }
-//   MultiMeshGeometry operator*(const MultiMeshGeometry &other) {
-//     MultiMeshGeometry c(*this);
-//     c.meshes.insert(c.meshes.end(), other.meshes.begin(),
-//     other.meshes.end());
-//     //
-//     但是注意这里只是对MultiMeshGeometry的meshes进行了拼接，而没有处理父类Geometry的vertices和surfaces
-//     // 这一步需要在virtual void Geometry::update中进行定义
-//     // this->parameters也进行合并，相同键的值进行覆盖
-//     c.parameters.insert(other.parameters.begin(), other.parameters.end());
-//     return c;
-//   }
-
-//   void add(const Mesh &m) { this->meshes.emplace_back(m); }
-//   virtual void update() {
-//     // 逐个调用 this->meshes
-//     //
-//     中每个Mesh的update，并调用+运算生成FixedMesh作为结果，更新MultiMeshGeometry的vertices和surfaces
-//     // 对每个Mesh进行update前需要将this->parameters同步到每个Mesh中
-//     for(Mesh &mesh : this->meshes){
-//       mesh.parameters = this->parameters;
-//       mesh.update();
-//     }
-//   }
-// };
 
 class Sphere : public Mesh {
 public:
@@ -680,26 +585,6 @@ public:
     this->vertices = a.vertices;
     this->surfaces = a.surfaces;
   }
-
-  // // 静态方法
-  // static Arrow getAxisX() {
-  //   Arrow axis_x(0.05f, 1.0f);
-  //   axis_x.setColor(1.0f, 0.0f, 0.0f);
-  //   axis_x.rotate(glm::radians(90.0f),{0.0f,1.0f,0.0f});
-  //   return axis_x;
-  // }
-  // static Arrow getAxisY() {
-  //   Arrow axis_y(0.05f, 1.0f);
-  //   axis_y.setColor(0.0f, 1.0f, 0.0f);
-  //   axis_y.rotate(glm::radians(90.0f),{-1.0f,0.0f,0.0f});
-  //   return axis_y;
-  // }
-  // static Arrow getAxisZ() {
-  //   Arrow axis_z(0.05f, 1.0f);
-  //   axis_z.setColor(0.0f, 0.0f, 1.0f);
-  //   // axis_z.rotate(glm::radians(90.0f),{1.0f,0.0f,0.0f});
-  //   return axis_z;
-  // }
 };
 
 class Plane : public Mesh {
@@ -736,9 +621,5 @@ public:
   }
 };
 
-// MultiMeshGeometry operator*(const Mesh &m1, const Mesh &m2) {
-//   MultiMeshGeometry a(m1),b(m2);
-//   return a * b;
-// }
 
 } // namespace
