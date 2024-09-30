@@ -685,10 +685,11 @@ public:
       glBindVertexArray(cur_obj->vao);
       glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3,
                      GL_UNSIGNED_INT, (void *)0);
-
+    }
 #ifdef ENABLE_NORMAL_VISUALIZATION
       // 2. 渲染法向量
-
+    for(auto &pair_obj : this->objs){
+      GeometryRenderObject *cur_obj = &pair_obj.second;
       if (cur_obj->isSelected) {
         cur_shader = this->shaders["normal"];
         cur_shader->use();
@@ -697,19 +698,30 @@ public:
         glBindVertexArray(cur_obj->vao);
         glDrawArrays(GL_POINTS, 0, cur_obj->geometry->vertices.size());
       }
+    }
 #endif
       // 3. 渲染场景辅助元素
-      if (this->isShowAxis) {
-        cur_shader = this->shaders["auxiliary"];
-        cur_shader->use();
-        for (auto &[objName, auxObj] : this->aux) {
-          cur_shader->set("model", auxObj.transform.getModel());
-          // cur_shader->set("model", glm::mat4(1.0f));
-          glBindVertexArray(auxObj.vao);
-          glDrawElements(GL_TRIANGLES, auxObj.v_size, GL_UNSIGNED_INT, nullptr);
-        }
-      }
+    if (this->isShowAxis) {
+      Shader *cur_shader = this->shaders["auxiliary"];
+      cur_shader->use();
+
+      AuxiliaryRenderObject &auxObj_x = this->aux["axis_x"];
+      cur_shader->set("model", auxObj_x.transform.getModel());
+      glBindVertexArray(auxObj_x.vao);
+      glDrawElements(GL_TRIANGLES, auxObj_x.v_size, GL_UNSIGNED_INT, nullptr);
+      
+      AuxiliaryRenderObject &auxObj_y = this->aux["axis_y"];
+      cur_shader->set("model", auxObj_y.transform.getModel());
+      glBindVertexArray(auxObj_y.vao);
+      glDrawElements(GL_TRIANGLES, auxObj_y.v_size, GL_UNSIGNED_INT, nullptr);
+      
+      AuxiliaryRenderObject &auxObj_z = this->aux["axis_z"];
+      cur_shader->set("model", auxObj_z.transform.getModel());
+      glBindVertexArray(auxObj_z.vao);
+      glDrawElements(GL_TRIANGLES, auxObj_z.v_size, GL_UNSIGNED_INT, nullptr);
+      
     }
+    
   }
 
   void mainloop() {
