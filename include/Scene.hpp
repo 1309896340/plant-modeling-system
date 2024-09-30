@@ -9,6 +9,7 @@
 #include <iostream>
 #include <map>
 #include <stdexcept>
+#include <type_traits>
 #include <variant>
 
 #include <glm/glm.hpp>
@@ -28,8 +29,8 @@
 #include "Auxiliary.hpp"
 #include "Camera.hpp"
 #include "Geometry.hpp"
-#include "Transform.hpp"
 #include "Shader.hpp"
+#include "Transform.hpp"
 
 #define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
 #define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.02f
@@ -42,6 +43,11 @@ using glm::mat4;
 using glm::quat;
 using glm::vec3;
 using glm::vec4;
+
+template <class... Ts> struct overloads : Ts... {
+  using Ts::operator()...;
+};
+template <class... Ts> overloads(Ts...) -> overloads<Ts...>;
 
 void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 
@@ -494,27 +500,25 @@ public:
         cerr << msg << endl;
         throw runtime_error(msg);
       }
-      for (auto &param : cur_obj->geometry->parameters) {
-        // string param_name = param.first;
-        // auto param_val = param.second;
+      for (auto &[name, arg_val] : cur_obj->geometry->parameters) {
+        const char *cname = name.c_str();
         std::visit(
-            [param](auto &&arg) {
-              using T = std::decay_t<decltype(arg)>;
-              if constexpr (std::is_same_v<T, float>) {
-                if (ImGui::SliderFloat(param.first.c_str(), &arg, 0.0f,
-                                       10.0f)) {
+            [=](auto &&arg) {
+              using T = decay_t<decltype(arg)>;
+              if constexpr (is_same_v<T, float>) {
+                if (ImGui::SliderFloat(cname, &arg, 0.0f, 10.0f)) {
                   cur_obj->geometry->update();
                   cur_obj->updateVBO();
                 }
-              } else if constexpr (std::is_same_v<T, uint32_t>) {
-                if (ImGui::SliderInt(param.first.c_str(),
-                                     reinterpret_cast<int *>(&arg), 2, 50)) {
+              } else if constexpr (is_same_v<T, uint32_t>) {
+                if (ImGui::SliderInt(cname, reinterpret_cast<int *>(&arg), 2,
+                                     50)) {
                   cur_obj->geometry->update();
                   cur_obj->updateVBO();
                 }
               }
             },
-            param.second);
+            arg_val);
       }
 
       ImGui::TreePop();
@@ -687,8 +691,8 @@ public:
                      GL_UNSIGNED_INT, (void *)0);
     }
 #ifdef ENABLE_NORMAL_VISUALIZATION
-      // 2. 渲染法向量
-    for(auto &pair_obj : this->objs){
+    // 2. 渲染法向量
+    for (auto &pair_obj : this->objs) {
       GeometryRenderObject *cur_obj = &pair_obj.second;
       if (cur_obj->isSelected) {
         cur_shader = this->shaders["normal"];
@@ -700,28 +704,42 @@ public:
       }
     }
 #endif
-      // 3. 渲染场景辅助元素
+    // 3. 渲染场景辅助元素
     if (this->isShowAxis) {
       Shader *cur_shader = this->shaders["auxiliary"];
       cur_shader->use();
 
-      AuxiliaryRenderObject &auxObj_x = this->aux["axis_x"];
-      cur_shader->set("model", auxObj_x.transform.getModel());
-      glBindVertexArray(auxObj_x.vao);
-      glDrawElements(GL_TRIANGLES, auxObj_x.v_size, GL_UNSIGNED_INT, nullptr);
-      
-      AuxiliaryRenderObject &auxObj_y = this->aux["axis_y"];
-      cur_shader->set("model", auxObj_y.transform.getModel());
-      glBindVertexArray(auxObj_y.vao);
-      glDrawElements(GL_TRIANGLES, auxObj_y.v_size, GL_UNSIGNED_INT, nullptr);
-      
-      AuxiliaryRenderObject &auxObj_z = this->aux["axis_z"];
-      cur_shader->set("model", auxObj_z.transform.getModel());
-      glBindVertexArray(auxObj_z.vao);
-      glDrawElements(GL_TRIANGLES, auxObj_z.v_size, GL_UNSIGNED_INT, nullptr);
-      
+      vector<string> names = {"axis_x", "axis_y", "axis_z", "light"};
+      for (auto &name : names) {
+        AuxiliaryRenderObject &obj = this->aux[name];
+        cur_shader->set("model", obj.transform.getModel());
+        glBindVertexArray(obj.vao);
+        glDrawElements(GL_TRIANGLES, obj.v_size, GL_UNSIGNED_INT, nullptr);
+      }
+
+      // AuxiliaryRenderObject &auxObj_x = this->aux["axis_x"];
+      // cur_shader->set("model", auxObj_x.transform.getModel());
+      // glBindVertexArray(auxObj_x.vao);
+      // glDrawElements(GL_TRIANGLES, auxObj_x.v_size, GL_UNSIGNED_INT,
+      // nullptr);
+
+      // AuxiliaryRenderObject &auxObj_y = this->aux["axis_y"];
+      // cur_shader->set("model", auxObj_y.transform.getModel());
+      // glBindVertexArray(auxObj_y.vao);
+      // glDrawElements(GL_TRIANGLES, auxObj_y.v_size, GL_UNSIGNED_INT,
+      // nullptr);
+
+      // AuxiliaryRenderObject &auxObj_z = this->aux["axis_z"];
+      // cur_shader->set("model", auxObj_z.transform.getModel());
+      // glBindVertexArray(auxObj_z.vao);
+      // glDrawElements(GL_TRIANGLES, auxObj_z.v_size, GL_UNSIGNED_INT,
+      // nullptr);
+
+      // AuxiliaryRenderObject &light = this->aux["light"];
+      // cur_shader->set("model", light.transform.getModel());
+      // glBindVertexArray(light.vao);
+      // glDrawElements(GL_TRIANGLES, light.v_size, GL_UNSIGNED_INT, nullptr);
     }
-    
   }
 
   void mainloop() {

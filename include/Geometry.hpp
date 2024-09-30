@@ -8,18 +8,15 @@
 #include <variant>
 #include <vector>
 
-#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <glm/gtx/transform.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "constants.h"
 
-#define RADIANS(a) ((a) * PI / 180.0f)
-
 namespace {
 using namespace std;
-using param_variant = variant<unsigned int, int, float, bool, glm::vec3>;
+using param_variant = variant<uint32_t, int, float, bool, glm::vec3>;
 
 struct Vertex {
   union {
@@ -88,7 +85,7 @@ public:
   }
 
   void rotate(float angle, glm::vec3 axis) {
-    glm::mat3 rot_mat = glm::mat3(glm::rotate(angle, axis));
+    glm::mat3 rot_mat = glm::mat3(glm::rotate(glm::mat4(1.0f),angle, axis));
     for (auto &vertex : this->vertices) {
       glm::vec3 new_pos = rot_mat * glm::make_vec3(vertex.position);
       glm::vec3 new_normal = rot_mat * glm::make_vec3(vertex.normal);
@@ -517,7 +514,8 @@ public:
     top.transformVertex([phi, rho](const Vertex &vt0, float u, float v) {
       Vertex vt(vt0);
       glm::mat3 rot_mat =
-          glm::mat3(glm::rotate(rho, glm::vec3(cos(phi), sin(phi), 0.0f)));
+          glm::mat3(glm::rotate(glm::mat4(1.0f),rho, glm::vec3(cos(phi), sin(phi), 0.0f)));
+          
       glm::vec3 n_pos = rot_mat * glm::make_vec3(vt.position);
       glm::vec3 n_norm = rot_mat * glm::make_vec3(vt.normal);
       vt.x = n_pos.x;
@@ -531,7 +529,7 @@ public:
     side.transformVertex([phi, rho](const Vertex &vt0, float u, float v) {
       Vertex vt(vt0);
       glm::mat3 rot_mat =
-          glm::mat3(glm::rotate(u * rho, glm::vec3(cos(phi), sin(phi), 0.0f)));
+          glm::mat3(glm::rotate(glm::mat4(1.0f),u * rho, glm::vec3(cos(phi), sin(phi), 0.0f)));
       glm::vec3 n_pos = rot_mat * glm::make_vec3(vt.position);
       glm::vec3 n_norm = rot_mat * glm::make_vec3(vt.normal);
       vt.x = n_pos.x;
