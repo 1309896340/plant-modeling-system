@@ -7,11 +7,11 @@ layout(std140, binding=0) uniform PV{
     mat4 projection;
     mat4 view;
 };
+uniform mat4 model;
 
-// out vec3 vertPos;
 out vec3 vertColor;
 
 void main(){
-    gl_Position = projection * view * vec4(aPos, 1.0f);
+    gl_Position = projection * view * model * vec4(aPos, 1.0f);
     vertColor = aColor;
 }

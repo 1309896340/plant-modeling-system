@@ -6,6 +6,7 @@
 // #include "glm/ext/quaternion_transform.hpp"
 // #include "glm/ext/quaternion_trigonometric.hpp"
 
+#include "glm/fwd.hpp"
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -60,10 +61,13 @@ public:
     this->attitude = glm::rotate(this->attitude, attitude_angle, attitude_vec);
   }
   Transform(vec3 position, quat attitude) : position(position) {
+    // 未测试
     this->attitude = attitude * this->attitude * glm::conjugate(attitude);
   }
 
   Transform() : position{0.0f, 0.0f, 0.0f} {}
+
+  void setPosition(vec3 new_position){this->position = new_position;};
 
   mat4 getModel() const {
     mat4 mvp(1.0f);
@@ -218,6 +222,8 @@ class AuxiliaryRenderObject {
   // 只有位置、颜色
 private:
 public:
+  Transform transform;
+
   GLuint vao{0};
   GLuint vbo{0};
   GLuint ebo{0};
@@ -258,12 +264,14 @@ public:
     ax.vao = 0;
     ax.vbo = 0;
     ax.ebo = 0;
+    ax.v_size = 0;
   }
   AuxiliaryRenderObject &operator=(AuxiliaryRenderObject &&ax) noexcept {
     this->vao = ax.vao;
     this->vbo = ax.vbo;
     this->ebo = ax.ebo;
     this->v_size = ax.v_size;
+    ax.v_size = 0;
     ax.vao = 0;
     ax.vbo = 0;
     ax.ebo = 0;
@@ -340,6 +348,7 @@ public:
     init_ubo();
 
     init_axis_display();
+    init_light_display();
   }
   Scene(const Scene &sc) = delete;
   ~Scene() {
@@ -365,14 +374,29 @@ public:
   }
 
   void init_axis_display() {
-    Arrow axis_x = Arrow::getAxisX();
-    Arrow axis_y = Arrow::getAxisY();
-    Arrow axis_z = Arrow::getAxisZ();
+    Arrow axis_x(0.05f, 1.0f);
+    axis_x.setColor(1.0f, 0.0f, 0.0f);
+    axis_x.rotate(glm::radians(90.0f), {0.0f, 1.0f, 0.0f});
+
+    Arrow axis_y(0.05f, 1.0f);
+    axis_y.setColor(0.0f, 1.0f, 0.0f);
+    // axis_y.rotate(glm::radians(90.0f), {-1.0f, 0.0f, 0.0f});
+
+    Arrow axis_z(0.05f, 1.0f);
+    axis_z.setColor(0.0f, 0.0f, 1.0f);
+    axis_z.rotate(glm::radians(90.0f), {1.0f, 0.0f, 0.0f});
+
     vector<string> names = {"axis_x", "axis_y", "axis_z"};
     vector<Arrow *> buf{&axis_x, &axis_y, &axis_z};
     for (int i = 0; i < 3; i++) {
       this->aux[names[i]] = std::move(AuxiliaryRenderObject(*buf[i]));
     }
+  }
+
+  void init_light_display() {
+    Sphere lightBall(0.2f, 36, 72);
+    lightBall.setColor(1.0f, 1.0f, 1.0f);
+    this->aux["light"] = std::move(AuxiliaryRenderObject(lightBall));
   }
 
   void imgui_menu() {
@@ -460,6 +484,8 @@ public:
     if (ImGui::TreeNodeEx(u8"光源", ImGuiTreeNodeFlags_DefaultOpen)) {
       ImGui::SliderFloat3(u8"位置", glm::value_ptr(this->light.position),
                           -20.0f, 20.f);
+      // 暂时这么写
+      this->aux["light"].transform.setPosition(light.position);
       ImGui::TreePop();
     }
 
@@ -710,6 +736,8 @@ public:
         cur_shader = this->shaders["auxiliary"];
         cur_shader->use();
         for (auto &[objName, auxObj] : this->aux) {
+          cur_shader->set("model", auxObj.transform.getModel());
+          // cur_shader->set("model", glm::mat4(1.0f));
           glBindVertexArray(auxObj.vao);
           glDrawElements(GL_TRIANGLES, auxObj.v_size, GL_UNSIGNED_INT, nullptr);
         }
