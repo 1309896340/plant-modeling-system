@@ -1,5 +1,5 @@
 ﻿// #define ENABLE_NORMAL_VISUALIZATION
-#define ENBALE_POLYGON_VISUALIZATION
+// #define ENBALE_POLYGON_VISUALIZATION
 #include "Scene.hpp"
 
 uint32_t count = 0;
@@ -15,7 +15,7 @@ int main(int argc, char **argv) {
   scene.light.color = {0.6f, 0.6f, 0.6f};
   scene.light.position = {1.0f, 7.0f, 2.0f};
 
-  TruncatedConeEx c1(2.0f, 0.5f, 6.0f, RADIANS(0.0f), RADIANS(0.0f), 8, 16, 36);
+  TruncatedConeEx c1(2.0f, 0.5f, 6.0f, glm::radians(0.0f),  glm::radians(0.0f), 8, 16, 36);
   Sphere s1(2.0f, 36, 72);
   Plane ground(24.0f, 24.0f);
 

@@ -2,9 +2,7 @@
 
 #include <cmath>
 #include <cstdint>
-#include <cstdio>
 #include <functional>
-#include <iostream>
 #include <map>
 #include <string>
 #include <variant>
@@ -512,7 +510,7 @@ public:
     Disk top(r2, RNum, PNum);
     TruncatedConeSide side(r1, r2, h, RNum, HNum, PNum);
     side.setColor(0.8f, 0.2f, 0.6f);
-    top.setColor(0.0f, 1.0f, 1.0f);
+    top.setColor(1.0f, 1.0f, 0.0f);
     bottom.rotate(glm::radians(180.0f), {1.0f, 0.0f, 0.0f});
     top.translate(0.0f, 0.0f, h);
 

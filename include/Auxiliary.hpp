@@ -1,9 +1,8 @@
 #pragma once
-#include <vector>
+
+// 暂时没用到
 
 #include <glm/glm.hpp>
-
-#include "Geometry.hpp"
 #include "constants.h"
 
 namespace {
