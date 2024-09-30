@@ -500,26 +500,28 @@ public:
         cerr << msg << endl;
         throw runtime_error(msg);
       }
-      for (auto &[name, arg_val] : cur_obj->geometry->parameters) {
-        const char *cname = name.c_str();
-        std::visit(
-            [=](auto &&arg) {
-              using T = decay_t<decltype(arg)>;
-              if constexpr (is_same_v<T, float>) {
-                if (ImGui::SliderFloat(cname, &arg, 0.0f, 10.0f)) {
-                  cur_obj->geometry->update();
-                  cur_obj->updateVBO();
-                }
-              } else if constexpr (is_same_v<T, uint32_t>) {
-                if (ImGui::SliderInt(cname, reinterpret_cast<int *>(&arg), 2,
-                                     50)) {
-                  cur_obj->geometry->update();
-                  cur_obj->updateVBO();
-                }
-              }
-            },
-            arg_val);
-      }
+      struct visitor {
+        string pname;
+        visitor(string name) : pname(name) {}
+        void operator()(float &arg) {
+          if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
+            cur_obj->geometry->update();
+            cur_obj->updateVBO();
+          }
+        }
+        void operator()(uint32_t &arg) {
+          if (ImGui::SliderInt(this->pname.c_str(),
+                               reinterpret_cast<int *>(&arg), 2, 50)) {
+            cur_obj->geometry->update();
+            cur_obj->updateVBO();
+          }
+        }
+        void operator()(bool &arg) {}
+        void operator()(int &arg) {}
+        void operator()(vec3 &arg) {}
+      };
+      for (auto &[name, arg_val] : cur_obj->geometry->parameters)
+        std::visit(visitor(name), arg_val);
 
       ImGui::TreePop();
     }
