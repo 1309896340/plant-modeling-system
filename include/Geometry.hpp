@@ -13,6 +13,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "constants.h"
+#include "glm/trigonometric.hpp"
 
 namespace {
 using namespace std;
@@ -264,6 +265,8 @@ public:
       vt.v = v;
       return vt;
     });
+    
+    this->rotate(glm::radians(-90.0f), _right);
   }
 };
 
@@ -295,6 +298,8 @@ public:
 
       return vt;
     });
+    
+    this->rotate(glm::radians(-90.0f), _right);
   }
 };
 
@@ -330,6 +335,8 @@ public:
 
       return vt;
     });
+    
+    this->rotate(glm::radians(-90.0f), _right);
   }
 };
 
@@ -361,6 +368,7 @@ public:
 
     // 组合
     FixedGeometry &&res = cs + ds;
+    // res.rotate(glm::radians(-90.0f), _right);
     this->vertices = res.vertices;
     this->surfaces = res.surfaces;
   }
@@ -397,6 +405,7 @@ public:
 
       return vt;
     });
+    this->rotate(glm::radians(-90.0f), _right);
   }
 };
 
@@ -437,6 +446,8 @@ public:
 
       return vt;
     });
+    
+    this->rotate(glm::radians(-90.0f), _right);
   }
 };
 
@@ -465,10 +476,11 @@ public:
 
     cs.setColor(0.0f, 0.0f, 1.0f);
     ds_bottom.rotate(glm::radians(180.0f), {1.0f, 0.0f, 0.0f});
-    ds_top.translate(0.0f, 0.0f, height);
+    ds_top.translate(0.0f, height, 0.0f);
 
     // 组合
     FixedGeometry &&res = cs + ds_top + ds_bottom;
+    // res.rotate(glm::radians(90.0f), _right);
     this->vertices = res.vertices;
     this->surfaces = res.surfaces;
   }
@@ -509,12 +521,12 @@ public:
     side.setColor(0.8f, 0.2f, 0.6f);
     top.setColor(1.0f, 1.0f, 0.0f);
     bottom.rotate(glm::radians(180.0f), {1.0f, 0.0f, 0.0f});
-    top.translate(0.0f, 0.0f, h);
+    top.translate(0.0f, h, 0.0f);
 
     top.transformVertex([phi, rho](const Vertex &vt0, float u, float v) {
       Vertex vt(vt0);
       glm::mat3 rot_mat =
-          glm::mat3(glm::rotate(glm::mat4(1.0f),rho, glm::vec3(cos(phi), sin(phi), 0.0f)));
+          glm::mat3(glm::rotate(glm::mat4(1.0f),rho, glm::vec3(cos(phi), 0.0f,sin(phi))));
           
       glm::vec3 n_pos = rot_mat * glm::make_vec3(vt.position);
       glm::vec3 n_norm = rot_mat * glm::make_vec3(vt.normal);
@@ -529,7 +541,7 @@ public:
     side.transformVertex([phi, rho](const Vertex &vt0, float u, float v) {
       Vertex vt(vt0);
       glm::mat3 rot_mat =
-          glm::mat3(glm::rotate(glm::mat4(1.0f),u * rho, glm::vec3(cos(phi), sin(phi), 0.0f)));
+          glm::mat3(glm::rotate(glm::mat4(1.0f),u * rho, glm::vec3(cos(phi), 0.0f,sin(phi))));
       glm::vec3 n_pos = rot_mat * glm::make_vec3(vt.position);
       glm::vec3 n_norm = rot_mat * glm::make_vec3(vt.normal);
       vt.x = n_pos.x;
@@ -543,6 +555,7 @@ public:
 
     // 组合
     FixedGeometry &&res = bottom + top + side;
+    // res.rotate(glm::radians(-90.0f), _right);
     this->vertices = res.vertices;
     this->surfaces = res.surfaces;
   }
@@ -575,9 +588,10 @@ public:
     arrow.setColor(arrow_color.r,arrow_color.g,arrow_color.b);
     body.setColor(body_color.r,body_color.g,body_color.b);
 
-    arrow.translate(0.0f, 0.0f, body_ratio * length);
+    arrow.translate(0.0f, body_ratio * length, 0.0f);
 
     FixedGeometry a = FixedGeometry(std::move(arrow)) + body;
+    // a.rotate(glm::radians(-90.0f), _right);
     this->vertices = a.vertices;
     this->surfaces = a.surfaces;
   }
@@ -614,6 +628,7 @@ public:
       vt.v = v;
       return vt;
     });
+    this->rotate(glm::radians(-90.0f), _right);
   }
 };
 

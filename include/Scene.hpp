@@ -37,7 +37,6 @@
 
 namespace {
 using namespace std;
-// namespace fs = std::filesystem;
 
 using glm::mat4;
 using glm::quat;
@@ -349,7 +348,7 @@ public:
   void init_axis_display() {
     Arrow axis_x(0.05f, 1.0f);
     axis_x.setColor(1.0f, 0.0f, 0.0f);
-    axis_x.rotate(glm::radians(90.0f), {0.0f, 1.0f, 0.0f});
+    axis_x.rotate(glm::radians(-90.0f), {0.0f, 0.0f, 1.0f});
 
     Arrow axis_y(0.05f, 1.0f);
     axis_y.setColor(0.0f, 1.0f, 0.0f);
@@ -586,6 +585,16 @@ public:
   }
 
   void add(const string &name, Geometry *geo) { add(name, geo, Transform()); }
+
+  // void add(const string &name, Geometry &&geometry, Transform transform){
+    
+  //   if (this->objs.find(name) != this->objs.end()) {
+  //     cout << "scene cannot add object with an existed name!" << endl;
+  //     return;
+  //   }
+  //   GeometryRenderObject obj(geometry, transform);
+  //   this->objs[name] = std::move(obj);
+  // }
 
   void imgui_docking_render(bool *p_open = nullptr) {
     // Variables to configure the Dockspace example.
