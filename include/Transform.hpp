@@ -15,26 +15,21 @@ using glm::vec4;
 
 class Transform {
 private:
-  vec3 position;
+  vec3 position{0.0f, 0.0f, 0.0f};
   // quat attitude{glm::angleAxis(-PI / 2, glm::vec3(1.0f, 0.0f, 0.0f))};
   quat attitude{glm::identity<quat>()};
 
 public:
-  // 构造函数中默认做了一个绕x轴-90°旋转，将OpenGL坐标系(y朝上，z朝屏幕外)转换为z朝上，y朝屏幕内
   Transform(vec3 position, vec3 attitude_vec, float attitude_angle)
-      : position(position) {
-    // this->attitude = glm::rotate(this->attitude, attitude_angle, attitude_vec);
-    this->attitude = glm::angleAxis(attitude_angle, attitude_vec);
-  }
-  Transform(vec3 position, quat attitude) : position(position) {
-    // this->attitude = attitude * this->attitude * glm::inverse(attitude);
-    this->attitude = attitude;
-  }
-
-  Transform() : position{0.0f, 0.0f, 0.0f} {}
-  Transform(quat origin_attitude) : attitude(origin_attitude) {
-    // 无预置姿态的初始化
-  }
+      : position(position),
+        attitude(glm::angleAxis(attitude_angle, attitude_vec)) {}
+  Transform(vec3 position, quat attitude)
+      : position(position), attitude(attitude) {}
+  Transform(quat attitude) : attitude(attitude) {}
+  Transform(vec3 position) : position(position) {}
+  Transform(const Transform &transform)
+      : position(transform.position), attitude(transform.attitude) {}
+  Transform() = default;
 
   void setPosition(vec3 new_position) { this->position = new_position; };
   vec3 getPosition() const { return this->position; };
@@ -46,7 +41,7 @@ public:
     this->position += offset;
   }
   void translate_relative(vec3 offset) {
-    // 当前姿态相关的空间偏移
+    // 当前姿态相关的空间偏移（未测试）
     mat3 rot_mat = glm::mat3_cast(this->attitude);
     vec3 rel_up = rot_mat * _up;
     vec3 rel_right = rot_mat * _right;

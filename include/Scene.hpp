@@ -202,8 +202,8 @@ public:
 
   uint32_t v_size{0};
   AuxiliaryRenderObject() = default;
-  AuxiliaryRenderObject(const Geometry &geometry)
-      : v_size(geometry.surfaces.size() * 3) {
+  AuxiliaryRenderObject(const Geometry &geometry, Transform transform)
+      : transform(transform), v_size(geometry.surfaces.size() * 3) {
     glGenVertexArrays(1, &this->vao);
     glBindVertexArray(this->vao);
 
@@ -228,7 +228,11 @@ public:
 
     glBindVertexArray(0);
   }
+  AuxiliaryRenderObject(const Geometry &geometry)
+      : AuxiliaryRenderObject(geometry, Transform()) {}
+
   AuxiliaryRenderObject(AuxiliaryRenderObject &&ax) noexcept {
+    this->transform = ax.transform;
     this->vao = ax.vao;
     this->vbo = ax.vbo;
     this->ebo = ax.ebo;
@@ -239,6 +243,7 @@ public:
     ax.v_size = 0;
   }
   AuxiliaryRenderObject &operator=(AuxiliaryRenderObject &&ax) noexcept {
+    this->transform = ax.transform;
     this->vao = ax.vao;
     this->vbo = ax.vbo;
     this->ebo = ax.ebo;
@@ -269,7 +274,7 @@ private:
   GLuint ubo{0};
   const GLuint PVM_binding_point = 0;
 
-  bool isShowAxis{false};
+  bool isShowAuxiliary{false};
 
 public:
   const int width = 1600;
@@ -371,6 +376,17 @@ public:
     this->aux["light"] = std::move(AuxiliaryRenderObject(lightBall));
   }
 
+  void add(const string &name, AuxiliaryRenderObject &&obj) {
+    if (this->aux.find(name) != this->aux.end())
+      throw runtime_error("scene cannot add object with an existed name!");
+    this->aux[name] = std::move(obj);
+    // obj.ebo = 0;
+    // obj.vbo = 0;
+    // obj.vao = 0;
+    // obj.v_size = 0;
+    cout << "加入 " << name << endl;
+  }
+
   void imgui_menu() {
 
     // ImGui::ShowDemoWindow();
@@ -392,7 +408,7 @@ public:
       }
 
       // 鼠标交互动作
-      static vec3 anchor = {0.0f, 4.0f, 0.0f};
+      static vec3 anchor = {0.0f, 1.0f, 0.0f};
       // 记录下“相机环绕”时的相机极坐标
       static float theta_c = 0.0f;
       static float phi_c = 0.0f;
@@ -587,7 +603,7 @@ public:
   void add(const string &name, Geometry *geo) { add(name, geo, Transform()); }
 
   // void add(const string &name, Geometry &&geometry, Transform transform){
-    
+
   //   if (this->objs.find(name) != this->objs.end()) {
   //     cout << "scene cannot add object with an existed name!" << endl;
   //     return;
@@ -716,40 +732,25 @@ public:
     }
 #endif
     // 3. 渲染场景辅助元素
-    if (this->isShowAxis) {
+    if (this->isShowAuxiliary) {
       Shader *cur_shader = this->shaders["auxiliary"];
       cur_shader->use();
 
-      vector<string> names = {"axis_x", "axis_y", "axis_z", "light"};
-      for (auto &name : names) {
-        AuxiliaryRenderObject &obj = this->aux[name];
+      // vector<string> names = {"axis_x", "axis_y", "axis_z", "light"};
+      // for (auto &name : names) {
+      for (auto &[name, obj] : this->aux) {
+        // AuxiliaryRenderObject &obj = this->aux[name];
         cur_shader->set("model", obj.transform.getModel());
         glBindVertexArray(obj.vao);
         glDrawElements(GL_TRIANGLES, obj.v_size, GL_UNSIGNED_INT, nullptr);
       }
-
-      // AuxiliaryRenderObject &auxObj_x = this->aux["axis_x"];
-      // cur_shader->set("model", auxObj_x.transform.getModel());
-      // glBindVertexArray(auxObj_x.vao);
-      // glDrawElements(GL_TRIANGLES, auxObj_x.v_size, GL_UNSIGNED_INT,
-      // nullptr);
-
-      // AuxiliaryRenderObject &auxObj_y = this->aux["axis_y"];
-      // cur_shader->set("model", auxObj_y.transform.getModel());
-      // glBindVertexArray(auxObj_y.vao);
-      // glDrawElements(GL_TRIANGLES, auxObj_y.v_size, GL_UNSIGNED_INT,
-      // nullptr);
-
-      // AuxiliaryRenderObject &auxObj_z = this->aux["axis_z"];
-      // cur_shader->set("model", auxObj_z.transform.getModel());
-      // glBindVertexArray(auxObj_z.vao);
-      // glDrawElements(GL_TRIANGLES, auxObj_z.v_size, GL_UNSIGNED_INT,
-      // nullptr);
-
-      // AuxiliaryRenderObject &light = this->aux["light"];
-      // cur_shader->set("model", light.transform.getModel());
-      // glBindVertexArray(light.vao);
-      // glDrawElements(GL_TRIANGLES, light.v_size, GL_UNSIGNED_INT, nullptr);
+    } else {
+      Shader *cur_shader = this->shaders["auxiliary"];
+      cur_shader->use();
+      AuxiliaryRenderObject &obj = this->aux["axis1"];
+      cur_shader->set("model", obj.transform.getModel());
+      glBindVertexArray(obj.vao);
+      glDrawElements(GL_TRIANGLES, obj.v_size, GL_UNSIGNED_INT, nullptr);
     }
   }
 
@@ -788,7 +789,7 @@ public:
     glfwTerminate();
   }
 
-  void showAxis() { this->isShowAxis = true; }
+  void showAuxiliary() { this->isShowAuxiliary = true; }
 };
 
 void framebufferResizeCallback(GLFWwindow *window, int width, int height) {
