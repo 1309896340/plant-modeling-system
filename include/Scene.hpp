@@ -2,14 +2,14 @@
 
 // #define NDEBUG
 
-#include "glm/fwd.hpp"
+#include <iostream>
+
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <iostream>
+#include <filesystem>
 #include <map>
 #include <stdexcept>
-#include <type_traits>
 #include <variant>
 
 #include <glm/glm.hpp>
@@ -35,6 +35,9 @@
 #define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
 #define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.02f
 
+// 仅用于该文件内的调试
+static void BK(int n) { printf("break %d\n", n); }
+
 namespace {
 using namespace std;
 
@@ -43,10 +46,12 @@ using glm::quat;
 using glm::vec3;
 using glm::vec4;
 
-template <class... Ts> struct overloads : Ts... {
-  using Ts::operator()...;
-};
-template <class... Ts> overloads(Ts...) -> overloads<Ts...>;
+namespace fs = filesystem;
+
+// template <class... Ts> struct overloads : Ts... {
+//   using Ts::operator()...;
+// };
+// template <class... Ts> overloads(Ts...) -> overloads<Ts...>;
 
 void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 
@@ -60,6 +65,34 @@ public:
   Light() = default;
   Light(vec3 position, vec3 color) : position(position), color(color) {}
 };
+
+// class Texture {
+// private:
+//   map<string, GLuint> textures;
+
+// public:
+//   Texture() {
+//     // 加载assets/texures下所有图片，绑定纹理
+//     fs::path texture_dir = "assets/textures";
+//     for (auto &file : fs::directory_iterator(texture_dir)) {
+//       if (file.is_regular_file()) {
+//         // 加载纹理
+//         string fname = file.path().filename().string();
+//         cout << "检测到文件：" << fname << endl;
+//       }
+//     }
+//   }
+
+//   GLuint getTexture(const string &name) const {
+//     auto t = this->textures.find(name);
+//     if (t == this->textures.end()) {
+//       string msg = "unknown texture name!";
+//       cerr << msg << endl;
+//       throw runtime_error(msg);
+//     }
+//     return t->second;
+//   }
+// };
 
 class GeometryRenderObject {
 private:
@@ -94,30 +127,31 @@ private:
                  this->geometry->surfaces.size() * sizeof(Surface),
                  this->geometry->surfaces.data(), GL_STATIC_DRAW);
 
-    // 绑定纹理(根据子类型)
-    Plane *pln = dynamic_cast<Plane *>(this->geometry);
-    if (pln != nullptr) {
-      // 目前仅考虑为子类型为Plane的Geometry绑定纹理，其他不做处理
-      glGenTextures(1, &this->texture);
-      glBindTexture(GL_TEXTURE_2D, this->texture);
+    // // 绑定纹理(根据子类型)
+    // Plane *pln = dynamic_cast<Plane *>(this->geometry);
+    // if (pln != nullptr) {
+    //   // 目前仅考虑为子类型为Plane的Geometry绑定纹理，其他不做处理
+    //   glGenTextures(1, &this->texture);
+    //   glBindTexture(GL_TEXTURE_2D, this->texture);
 
-      glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-      glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-      glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-      glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    //   glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    //   glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    //   glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    //   glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-      int width, height, nChannels;
-      uint8_t *data = stbi_load("assets/textures/fabric.jpg", &width, &height,
-                                &nChannels, 0);
-      if (data == nullptr) {
-        string msg = "load texture \"assets/textures/fabric.jpg\" failed!";
-        cerr << msg << endl;
-        throw runtime_error(msg);
-      }
-      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB,
-                   GL_UNSIGNED_BYTE, data);
-      glGenerateMipmap(GL_TEXTURE_2D);
-    }
+    //   int width, height, nChannels;
+    //   uint8_t *data = stbi_load("assets/textures/fabric.jpg", &width,
+    //   &height,
+    //                             &nChannels, 0);
+    //   if (data == nullptr) {
+    //     string msg = "load texture \"assets/textures/fabric.jpg\" failed!";
+    //     cerr << msg << endl;
+    //     throw runtime_error(msg);
+    //   }
+    //   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB,
+    //                GL_UNSIGNED_BYTE, data);
+    //   glGenerateMipmap(GL_TEXTURE_2D);
+    // }
 
     glBindVertexArray(0);
   }
@@ -215,10 +249,16 @@ public:
     size_t stride = sizeof(Vertex);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride,
                           (void *)0); // 位置
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride,
+                          (void *)(3 * sizeof(float))); // 法向量
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride,
                           (void *)(6 * sizeof(float))); // 颜色
+    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, stride,
+                          (void *)(9 * sizeof(float))); // 纹理坐标
     glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
     glEnableVertexAttribArray(2);
+    glEnableVertexAttribArray(3);
 
     glGenBuffers(1, &this->ebo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
@@ -281,6 +321,7 @@ public:
   const int height = 1200;
 
   map<string, Shader *> shaders;
+  map<string, GLuint> textures;
   map<string, GeometryRenderObject> objs;
   map<string, AuxiliaryRenderObject> aux;
 
@@ -321,6 +362,7 @@ public:
     glfwSetErrorCallback(errorCallback);
 
     load_all_shader();
+    load_all_texture();
 
     init_ubo();
 
@@ -351,40 +393,26 @@ public:
   }
 
   void init_axis_display() {
-    Arrow axis_x(0.05f, 1.0f);
-    axis_x.setColor(1.0f, 0.0f, 0.0f);
-    axis_x.rotate(glm::radians(-90.0f), {0.0f, 0.0f, 1.0f});
-
-    Arrow axis_y(0.05f, 1.0f);
-    axis_y.setColor(0.0f, 1.0f, 0.0f);
-    // axis_y.rotate(glm::radians(90.0f), {-1.0f, 0.0f, 0.0f});
-
-    Arrow axis_z(0.05f, 1.0f);
-    axis_z.setColor(0.0f, 0.0f, 1.0f);
-    axis_z.rotate(glm::radians(90.0f), {1.0f, 0.0f, 0.0f});
-
-    vector<string> names = {"axis_x", "axis_y", "axis_z"};
-    vector<Arrow *> buf{&axis_x, &axis_y, &axis_z};
-    for (int i = 0; i < 3; i++) {
-      this->aux[names[i]] = std::move(AuxiliaryRenderObject(*buf[i]));
-    }
+    CoordinaryAxis axis;
+    this->add("global_axis", axis);
   }
 
   void init_light_display() {
-    Sphere lightBall(0.2f, 36, 72);
+    Sphere lightBall(0.1f, 36, 72);
     lightBall.setColor(1.0f, 1.0f, 1.0f);
-    this->aux["light"] = std::move(AuxiliaryRenderObject(lightBall));
+    // this->aux["light"] = std::move(AuxiliaryRenderObject(lightBall));
+    this->add("light", AuxiliaryObject::from_geometry(lightBall));
   }
 
-  void add(const string &name, AuxiliaryRenderObject &&obj) {
+  void add(const string &name, const AuxiliaryObject &auxObj,
+           Transform transform) {
     if (this->aux.find(name) != this->aux.end())
       throw runtime_error("scene cannot add object with an existed name!");
-    this->aux[name] = std::move(obj);
-    // obj.ebo = 0;
-    // obj.vbo = 0;
-    // obj.vao = 0;
-    // obj.v_size = 0;
-    cout << "加入 " << name << endl;
+    AuxiliaryRenderObject robj(auxObj, transform);
+    this->aux[name] = std::move(robj);
+  }
+  void add(const string &name, const AuxiliaryObject &auxObj) {
+    this->add(name, auxObj, Transform());
   }
 
   void imgui_menu() {
@@ -477,8 +505,12 @@ public:
       ImGui::TreePop();
     }
 
-    // GeometryRenderObject *cur_obj = &this->objs.begin()->second;
-    static GeometryRenderObject *cur_obj{&this->objs.begin()->second};
+    if (this->objs.empty()) {
+      ImGui::End();
+      return;
+    }
+
+    static GeometryRenderObject *cur_obj{nullptr};
     if (ImGui::TreeNodeEx(u8"几何管理", ImGuiTreeNodeFlags_DefaultOpen)) {
       bool is_hightlight = true;
       vector<string> items;
@@ -511,9 +543,9 @@ public:
       // 显示参数
       ImGui::Text(u8"形体参数");
       if (cur_obj == nullptr) {
-        string msg = "cur_obj 为 nullptr";
-        cerr << msg << endl;
-        throw runtime_error(msg);
+        ImGui::TreePop();
+        ImGui::End();
+        return; // 直接返回
       }
       struct visitor {
         string pname;
@@ -581,6 +613,48 @@ public:
     shaders["default"] = new Shader("default.vert", "default.frag");
     shaders["normal"] = new Shader("normal.vert", "normal.geo", "normal.frag");
     shaders["auxiliary"] = new Shader("auxiliary.vert", "auxiliary.frag");
+  }
+
+  void load_all_texture() {
+    fs::path texture_dir = "assets/textures";
+    for (auto &file : fs::directory_iterator(texture_dir)) {
+      if (file.is_regular_file()) {
+        // 加载纹理
+        string fname = file.path().string();
+        // 读取图片文件
+        int img_width, img_height, img_chn;
+        void *img_data =
+            stbi_load(fname.c_str(), &img_width, &img_height, &img_chn, 0);
+        if (img_data == nullptr) {
+          string msg = "load texture image \"" + fname + "\" failed!";
+          cerr << msg << endl;
+          throw runtime_error(msg);
+        }
+
+        // 创建纹理缓冲
+        GLuint new_texture;
+        glGenTextures(1, &new_texture);
+        glBindTexture(GL_TEXTURE_2D, new_texture);
+
+        glTextureParameteri(new_texture, GL_TEXTURE_WRAP_S, GL_REPEAT);
+        glTextureParameteri(new_texture, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTextureParameteri(new_texture, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTextureParameteri(new_texture, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img_width, img_height, 0, GL_RGB,
+                     GL_UNSIGNED_BYTE, img_data);
+        glGenerateTextureMipmap(GL_TEXTURE_2D);
+        glBindTexture(GL_TEXTURE_2D, 0);
+
+        this->textures[file.path().filename().stem().string()] = new_texture;
+
+        // cout << "aaaa : " << file.path().filename().stem().string() << "   "
+        //      << new_texture << endl;
+
+        cout << "load texture: \"" << file.path().filename().string() << "\""
+             << endl;
+      }
+    }
   }
 
   void add(const string &name, Geometry *geo, Transform trans) {
@@ -685,73 +759,65 @@ public:
       this->camera.apply_view_done();
     }
 
-    for (auto &pair_obj : this->objs) {
+    Shader *cur_shader = this->shaders["default"];
+    cur_shader->use();
+    cur_shader->set("lightPos", this->light.position);
+    cur_shader->set("lightColor", this->light.color);
+    cur_shader->set("eyePos", this->camera.position_s);
+    cur_shader->set("ambientStrength", 0.2f);
+    cur_shader->set("diffuseStrength", 1.0f);
+    cur_shader->set("specularStrength", 1.0f);
+    // cur_shader->set("useTexture", false);
+    // cur_shader->set("useLight", false);
+    for (auto &[name, cur_obj] : this->objs) {
       // 计算pvm矩阵
-      GeometryRenderObject *cur_obj = &pair_obj.second;
-      mat4 model = cur_obj->transform.getModel();
+      // GeometryRenderObject *cur_obj = &pair_obj.second;
+      mat4 model = cur_obj.transform.getModel();
 
-      // 1. 渲染本体
-      Shader *cur_shader = this->shaders["default"];
-      cur_shader->use();
-
-      // 1.1 传入model矩阵
       cur_shader->set("model", model);
 
-      // 1.2 传入灯光属性
-      cur_shader->set("lightPos", this->light.position);
-      cur_shader->set("lightColor", this->light.color);
-      // cur_shader->set("lightIntensity", this->light.intensity);
+      // 启用材质，设置材质属性
+      glBindTexture(GL_TEXTURE_2D, cur_obj.texture);
+      cur_shader->set("useTexture", (cur_obj.texture != 0) ? true : false);
+      cur_shader->set("useLight", true);
 
-      // 1.3 传入相机位置
-      cur_shader->set("eyePos", this->camera.position_s);
-
-      // 1.4 启用材质，设置材质属性
-      glBindTexture(GL_TEXTURE_2D, cur_obj->texture);
-      cur_shader->set("useTexture", (cur_obj->texture != 0) ? true : false);
-      cur_shader->set("ambientStrength", 0.2f);
-      cur_shader->set("diffuseStrength", 1.0f);
-      cur_shader->set("specularStrength", 1.0f);
-
-      // 1.5 绘制
-      glBindVertexArray(cur_obj->vao);
-      glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3,
+      // 绘制
+      glBindVertexArray(cur_obj.vao);
+      glDrawElements(GL_TRIANGLES, cur_obj.geometry->surfaces.size() * 3,
                      GL_UNSIGNED_INT, (void *)0);
+    }
+
+    if (this->isShowAuxiliary) {
+      for (auto &[name, obj] : this->aux) {
+        cur_shader->set("model", obj.transform.getModel());
+        if (name == "Ground") {
+          // BK(1);
+          cur_shader->set("useTexture", true);
+          cur_shader->set("useLight", true);
+          glBindTexture(GL_TEXTURE_2D, this->textures["fabric"]);
+        } else {
+          cur_shader->set("useTexture", false);
+          cur_shader->set("useLight", false);
+        }
+        glBindVertexArray(obj.vao);
+        glDrawElements(GL_TRIANGLES, obj.v_size, GL_UNSIGNED_INT, nullptr);
+        glBindVertexArray(0);
+        glBindTexture(GL_TEXTURE_2D, 0);
+      }
     }
 #ifdef ENABLE_NORMAL_VISUALIZATION
     // 2. 渲染法向量
-    for (auto &pair_obj : this->objs) {
-      GeometryRenderObject *cur_obj = &pair_obj.second;
-      if (cur_obj->isSelected) {
+    for (auto &[name, cur_obj] : this->objs) {
+      if (cur_obj.isSelected) {
         cur_shader = this->shaders["normal"];
         cur_shader->use();
         cur_shader->set("model", model);
 
-        glBindVertexArray(cur_obj->vao);
-        glDrawArrays(GL_POINTS, 0, cur_obj->geometry->vertices.size());
+        glBindVertexArray(cur_obj.vao);
+        glDrawArrays(GL_POINTS, 0, cur_obj.geometry->vertices.size());
       }
     }
 #endif
-    // 3. 渲染场景辅助元素
-    if (this->isShowAuxiliary) {
-      Shader *cur_shader = this->shaders["auxiliary"];
-      cur_shader->use();
-
-      // vector<string> names = {"axis_x", "axis_y", "axis_z", "light"};
-      // for (auto &name : names) {
-      for (auto &[name, obj] : this->aux) {
-        // AuxiliaryRenderObject &obj = this->aux[name];
-        cur_shader->set("model", obj.transform.getModel());
-        glBindVertexArray(obj.vao);
-        glDrawElements(GL_TRIANGLES, obj.v_size, GL_UNSIGNED_INT, nullptr);
-      }
-    } else {
-      Shader *cur_shader = this->shaders["auxiliary"];
-      cur_shader->use();
-      AuxiliaryRenderObject &obj = this->aux["axis1"];
-      cur_shader->set("model", obj.transform.getModel());
-      glBindVertexArray(obj.vao);
-      glDrawElements(GL_TRIANGLES, obj.v_size, GL_UNSIGNED_INT, nullptr);
-    }
   }
 
   void mainloop() {

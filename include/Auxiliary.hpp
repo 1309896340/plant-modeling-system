@@ -13,7 +13,21 @@ using glm::mat3;
 using glm::mat4;
 using glm::vec3;
 
-class CoordinaryAxis : public FixedGeometry {
+class AuxiliaryObject : public FixedGeometry {
+public:
+  AuxiliaryObject() = default;
+
+  static AuxiliaryObject from_geometry(const Geometry &geometry) {
+    AuxiliaryObject auxObj;
+    auxObj.vertices = geometry.vertices;
+    auxObj.surfaces = geometry.surfaces;
+    return auxObj;
+  }
+
+  // virtual void update() {};
+};
+
+class CoordinaryAxis : public AuxiliaryObject {
 public:
   CoordinaryAxis() {
 
@@ -31,6 +45,15 @@ public:
     FixedGeometry &&res = FixedGeometry(a_x) + a_y + a_z;
     this->vertices = res.vertices;
     this->surfaces = res.surfaces;
+  }
+};
+
+class Ground : public AuxiliaryObject {
+public:
+  Ground() {
+    Plane ground(10.0f,10.0f);
+    this->vertices = ground.vertices;
+    this->surfaces = ground.surfaces;
   }
 };
 
