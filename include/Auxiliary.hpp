@@ -13,24 +13,9 @@ using glm::mat3;
 using glm::mat4;
 using glm::vec3;
 
-class AuxiliaryObject : public FixedGeometry {
+class CoordinaryAxis : public FixedGeometry {
 public:
-  AuxiliaryObject() = default;
-
-  static AuxiliaryObject from_geometry(const Geometry &geometry) {
-    AuxiliaryObject auxObj;
-    auxObj.vertices = geometry.vertices;
-    auxObj.surfaces = geometry.surfaces;
-    return auxObj;
-  }
-
-  // virtual void update() {};
-};
-
-class CoordinaryAxis : public AuxiliaryObject {
-public:
-  CoordinaryAxis() {
-
+  CoordinaryAxis(){
     Arrow a_x(0.06f, 1.0f);
     Arrow a_y(0.06f, 1.0f);
     Arrow a_z(0.06f, 1.0f);
@@ -46,15 +31,38 @@ public:
     this->vertices = res.vertices;
     this->surfaces = res.surfaces;
   }
+
 };
 
-class Ground : public AuxiliaryObject {
+// class CoordinaryAxis : public AuxiliaryObject {
+// public:
+//   CoordinaryAxis() {
+
+//     Arrow a_x(0.06f, 1.0f);
+//     Arrow a_y(0.06f, 1.0f);
+//     Arrow a_z(0.06f, 1.0f);
+
+//     a_x.rotate(glm::radians(90.0f), _front);
+//     a_z.rotate(glm::radians(90.0f), _right);
+
+//     a_x.setColor(1.0f, 0.0f, 0.0f);
+//     a_y.setColor(0.0f, 1.0f, 0.0f);
+//     a_z.setColor(0.0f, 0.0f, 1.0f);
+
+//     FixedGeometry &&res = FixedGeometry(a_x) + a_y + a_z;
+//     this->vertices = res.vertices;
+//     this->surfaces = res.surfaces;
+//   }
+// };
+
+class Ground : public FixedGeometry {
 public:
-  Ground() {
-    Plane ground(10.0f,10.0f);
+  Ground(float width, float height) {
+    Plane ground(width, height);
     this->vertices = ground.vertices;
     this->surfaces = ground.surfaces;
   }
+  Ground() : Ground(20.0f, 20.0f) {}
 };
 
 } // namespace

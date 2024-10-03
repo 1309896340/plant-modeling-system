@@ -9,7 +9,9 @@
 #include <cstdint>
 #include <filesystem>
 #include <map>
+#include <memory>
 #include <stdexcept>
+#include <utility>
 #include <variant>
 
 #include <glm/glm.hpp>
@@ -48,11 +50,6 @@ using glm::vec4;
 
 namespace fs = filesystem;
 
-// template <class... Ts> struct overloads : Ts... {
-//   using Ts::operator()...;
-// };
-// template <class... Ts> overloads(Ts...) -> overloads<Ts...>;
-
 void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 
 class Light {
@@ -66,38 +63,23 @@ public:
   Light(vec3 position, vec3 color) : position(position), color(color) {}
 };
 
-// class Texture {
-// private:
-//   map<string, GLuint> textures;
-
-// public:
-//   Texture() {
-//     // 加载assets/texures下所有图片，绑定纹理
-//     fs::path texture_dir = "assets/textures";
-//     for (auto &file : fs::directory_iterator(texture_dir)) {
-//       if (file.is_regular_file()) {
-//         // 加载纹理
-//         string fname = file.path().filename().string();
-//         cout << "检测到文件：" << fname << endl;
-//       }
-//     }
-//   }
-
-//   GLuint getTexture(const string &name) const {
-//     auto t = this->textures.find(name);
-//     if (t == this->textures.end()) {
-//       string msg = "unknown texture name!";
-//       cerr << msg << endl;
-//       throw runtime_error(msg);
-//     }
-//     return t->second;
-//   }
-// };
-
 class GeometryRenderObject {
 private:
-  void init_vbo() {
+public:
+  shared_ptr<Geometry> geometry;
+  Transform transform;
 
+  GLuint vao{0};
+  GLuint vbo{0};
+  GLuint ebo{0};
+  GLuint texture{0};
+
+  bool isSelected{false};
+  bool visible{true};
+
+  GeometryRenderObject() = default;
+  GeometryRenderObject(const shared_ptr<Geometry> &geo, Transform trans)
+      : geometry(geo), transform(trans) {
     glGenVertexArrays(1, &this->vao);
     glBindVertexArray(this->vao);
 
@@ -127,51 +109,9 @@ private:
                  this->geometry->surfaces.size() * sizeof(Surface),
                  this->geometry->surfaces.data(), GL_STATIC_DRAW);
 
-    // // 绑定纹理(根据子类型)
-    // Plane *pln = dynamic_cast<Plane *>(this->geometry);
-    // if (pln != nullptr) {
-    //   // 目前仅考虑为子类型为Plane的Geometry绑定纹理，其他不做处理
-    //   glGenTextures(1, &this->texture);
-    //   glBindTexture(GL_TEXTURE_2D, this->texture);
-
-    //   glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    //   glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    //   glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    //   glTextureParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
-    //   int width, height, nChannels;
-    //   uint8_t *data = stbi_load("assets/textures/fabric.jpg", &width,
-    //   &height,
-    //                             &nChannels, 0);
-    //   if (data == nullptr) {
-    //     string msg = "load texture \"assets/textures/fabric.jpg\" failed!";
-    //     cerr << msg << endl;
-    //     throw runtime_error(msg);
-    //   }
-    //   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB,
-    //                GL_UNSIGNED_BYTE, data);
-    //   glGenerateMipmap(GL_TEXTURE_2D);
-    // }
-
     glBindVertexArray(0);
   }
-
-public:
-  Geometry *geometry{nullptr};
-  Transform transform;
-
-  GLuint vao{0};
-  GLuint vbo{0};
-  GLuint ebo{0};
-  GLuint texture{0};
-
-  bool isSelected{false};
-
-  GeometryRenderObject() = default;
-  GeometryRenderObject(Geometry *geo, Transform trans)
-      : geometry(geo), transform(trans) {
-    init_vbo();
-  }
+  GeometryRenderObject(const shared_ptr<Geometry> &geo):GeometryRenderObject(geo,Transform()){}
 
   GeometryRenderObject(GeometryRenderObject &&geo) noexcept { // 实现移动语义
     this->transform = geo.transform;
@@ -185,7 +125,6 @@ public:
     geo.ebo = 0;
     geo.geometry = nullptr;
   }
-
   GeometryRenderObject &operator=(GeometryRenderObject &&geo) noexcept {
     this->transform = geo.transform;
     this->vao = geo.vao;
@@ -200,10 +139,6 @@ public:
     return *this;
   }
 
-  // 需要区分是否是顶点数量进行变化
-  // 1. 顶点数量不变：只通过glBufferSubData进行更新
-  // 2. 顶点数量改变：需要glBufferData进行空间的重分配
-  // 先统一用glBufferData做更新
   void updateVBO() {
     glBindVertexArray(this->vao);
     glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
@@ -223,84 +158,6 @@ public:
   }
 };
 
-class AuxiliaryRenderObject {
-  // 使用 auxiliary 着色器程序渲染
-  // 只有位置、颜色
-private:
-public:
-  Transform transform;
-
-  GLuint vao{0};
-  GLuint vbo{0};
-  GLuint ebo{0};
-
-  uint32_t v_size{0};
-  AuxiliaryRenderObject() = default;
-  AuxiliaryRenderObject(const Geometry &geometry, Transform transform)
-      : transform(transform), v_size(geometry.surfaces.size() * 3) {
-    glGenVertexArrays(1, &this->vao);
-    glBindVertexArray(this->vao);
-
-    glGenBuffers(1, &this->vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
-    glBufferData(GL_ARRAY_BUFFER, geometry.vertices.size() * sizeof(Vertex),
-                 geometry.vertices.data(), GL_STATIC_DRAW);
-
-    size_t stride = sizeof(Vertex);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride,
-                          (void *)0); // 位置
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride,
-                          (void *)(3 * sizeof(float))); // 法向量
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, stride,
-                          (void *)(6 * sizeof(float))); // 颜色
-    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, stride,
-                          (void *)(9 * sizeof(float))); // 纹理坐标
-    glEnableVertexAttribArray(0);
-    glEnableVertexAttribArray(1);
-    glEnableVertexAttribArray(2);
-    glEnableVertexAttribArray(3);
-
-    glGenBuffers(1, &this->ebo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                 geometry.surfaces.size() * sizeof(Surface),
-                 geometry.surfaces.data(), GL_STATIC_DRAW);
-
-    glBindVertexArray(0);
-  }
-  AuxiliaryRenderObject(const Geometry &geometry)
-      : AuxiliaryRenderObject(geometry, Transform()) {}
-
-  AuxiliaryRenderObject(AuxiliaryRenderObject &&ax) noexcept {
-    this->transform = ax.transform;
-    this->vao = ax.vao;
-    this->vbo = ax.vbo;
-    this->ebo = ax.ebo;
-    this->v_size = ax.v_size;
-    ax.vao = 0;
-    ax.vbo = 0;
-    ax.ebo = 0;
-    ax.v_size = 0;
-  }
-  AuxiliaryRenderObject &operator=(AuxiliaryRenderObject &&ax) noexcept {
-    this->transform = ax.transform;
-    this->vao = ax.vao;
-    this->vbo = ax.vbo;
-    this->ebo = ax.ebo;
-    this->v_size = ax.v_size;
-    ax.v_size = 0;
-    ax.vao = 0;
-    ax.vbo = 0;
-    ax.ebo = 0;
-    return *this;
-  }
-  ~AuxiliaryRenderObject() {
-    glDeleteBuffers(1, &this->vbo);
-    glDeleteBuffers(1, &this->ebo);
-    glDeleteVertexArrays(1, &this->vao);
-  }
-};
-
 void errorCallback(int code, const char *msg) {
   cerr << "errors occured! error code: " << code << endl;
   cout << msg << endl;
@@ -314,7 +171,9 @@ private:
   GLuint ubo{0};
   const GLuint PVM_binding_point = 0;
 
-  bool isShowAuxiliary{false};
+  bool isShowGround{true};
+  bool isShowAxis{true};
+  bool isShowLight{true};
 
 public:
   const int width = 1600;
@@ -323,7 +182,8 @@ public:
   map<string, Shader *> shaders;
   map<string, GLuint> textures;
   map<string, GeometryRenderObject> objs;
-  map<string, AuxiliaryRenderObject> aux;
+
+  map<string, GeometryRenderObject> aux;
 
   Light light;
   Camera camera{vec3(0.0f, 0.0f, 20.0f), vec3{0.0f, 0.0f, 0.0f},
@@ -366,8 +226,7 @@ public:
 
     init_ubo();
 
-    init_axis_display();
-    init_light_display();
+    init_scene_obj();
   }
   Scene(const Scene &sc) = delete;
   ~Scene() {
@@ -392,28 +251,39 @@ public:
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
   }
 
-  void init_axis_display() {
-    CoordinaryAxis axis;
-    this->add("global_axis", axis);
+  void init_scene_obj() {
+    // 光源
+    shared_ptr<Geometry> lightBall = make_shared<Sphere>(0.07f, 36, 72);
+    GeometryRenderObject obj1(lightBall);
+    this->addSceneObject("Light", std::move(obj1));
+
+    // 坐标轴
+    shared_ptr<Geometry> axis = make_shared<CoordinaryAxis>();
+    GeometryRenderObject obj2(axis);
+    this->addSceneObject("Axis", std::move(obj2));
+
+    // 地面
+    shared_ptr<Geometry> ground = make_shared<Ground>(20.0f, 20.0f);
+    GeometryRenderObject obj3(ground);
+    obj3.texture = this->textures["fabric"];
+    this->addSceneObject("Ground", std::move(obj3));
   }
 
-  void init_light_display() {
-    Sphere lightBall(0.1f, 36, 72);
-    lightBall.setColor(1.0f, 1.0f, 1.0f);
-    // this->aux["light"] = std::move(AuxiliaryRenderObject(lightBall));
-    this->add("light", AuxiliaryObject::from_geometry(lightBall));
-  }
+  void showAxis() { this->aux["Axis"].visible = true; }
+  void hideAxis() { this->aux["Axis"].visible = false; }
+  void showGround() { this->aux["Ground"].visible = true; }
+  void hideGround() { this->aux["Ground"].visible = false; }
 
-  void add(const string &name, const AuxiliaryObject &auxObj,
-           Transform transform) {
-    if (this->aux.find(name) != this->aux.end())
-      throw runtime_error("scene cannot add object with an existed name!");
-    AuxiliaryRenderObject robj(auxObj, transform);
-    this->aux[name] = std::move(robj);
-  }
-  void add(const string &name, const AuxiliaryObject &auxObj) {
-    this->add(name, auxObj, Transform());
-  }
+  // void add(const string &name, const AuxiliaryObject &auxObj,
+  //          Transform transform) {
+  //   if (this->aux.find(name) != this->aux.end())
+  //     throw runtime_error("scene cannot add object with an existed name!");
+  //   AuxiliaryRenderObject robj(auxObj, transform);
+  //   this->aux[name] = std::move(robj);
+  // }
+  // void add(const string &name, const AuxiliaryObject &auxObj) {
+  //   this->add(name, auxObj, Transform());
+  // }
 
   void imgui_menu() {
 
@@ -501,7 +371,7 @@ public:
       ImGui::SliderFloat3(u8"位置", glm::value_ptr(this->light.position),
                           -20.0f, 20.f);
       // 暂时这么写
-      this->aux["light"].transform.setPosition(light.position);
+      this->aux["Light"].transform.setPosition(light.position);
       ImGui::TreePop();
     }
 
@@ -612,7 +482,7 @@ public:
   void load_all_shader() {
     shaders["default"] = new Shader("default.vert", "default.frag");
     shaders["normal"] = new Shader("normal.vert", "normal.geo", "normal.frag");
-    shaders["auxiliary"] = new Shader("auxiliary.vert", "auxiliary.frag");
+    // shaders["auxiliary"] = new Shader("auxiliary.vert", "auxiliary.frag");
   }
 
   void load_all_texture() {
@@ -648,43 +518,38 @@ public:
 
         this->textures[file.path().filename().stem().string()] = new_texture;
 
-        // cout << "aaaa : " << file.path().filename().stem().string() << "   "
-        //      << new_texture << endl;
-
         cout << "load texture: \"" << file.path().filename().string() << "\""
              << endl;
       }
     }
   }
 
-  void add(const string &name, Geometry *geo, Transform trans) {
+  void addSceneObject(const string &name, GeometryRenderObject &&obj) {
+
+    if (this->aux.find(name) != this->aux.end()) {
+      cout << "scene cannot add object with an existed name!" << endl;
+      return;
+    }
+    this->aux[name] = std::move(obj);
+  }
+  // void addSceneObject(const string &name,
+  //                     const shared_ptr<Geometry> &geometry) {
+  //   this->addSceneObject(name, geometry, Transform());
+  // }
+
+  void add(const string &name, const shared_ptr<Geometry> &geometry,
+           Transform transform) {
     if (this->objs.find(name) != this->objs.end()) {
       cout << "scene cannot add object with an existed name!" << endl;
       return;
     }
-    GeometryRenderObject obj(geo, trans);
+    GeometryRenderObject obj(geometry, transform);
     this->objs[name] = std::move(obj);
   }
 
-  void add(const string &name, Geometry *geo, vec3 position) {
-    add(name, geo, Transform(position, glm::identity<glm::quat>()));
+  void add(const string &name, const shared_ptr<Geometry> &geometry) {
+    this->add(name, geometry, Transform());
   }
-  void add(const string &name, Geometry *geo, vec3 position, vec3 rot_axis,
-           float rot_angle) {
-    add(name, geo, Transform(position, glm::normalize(rot_axis), rot_angle));
-  }
-
-  void add(const string &name, Geometry *geo) { add(name, geo, Transform()); }
-
-  // void add(const string &name, Geometry &&geometry, Transform transform){
-
-  //   if (this->objs.find(name) != this->objs.end()) {
-  //     cout << "scene cannot add object with an existed name!" << endl;
-  //     return;
-  //   }
-  //   GeometryRenderObject obj(geometry, transform);
-  //   this->objs[name] = std::move(obj);
-  // }
 
   void imgui_docking_render(bool *p_open = nullptr) {
     // Variables to configure the Dockspace example.
@@ -767,8 +632,7 @@ public:
     cur_shader->set("ambientStrength", 0.2f);
     cur_shader->set("diffuseStrength", 1.0f);
     cur_shader->set("specularStrength", 1.0f);
-    // cur_shader->set("useTexture", false);
-    // cur_shader->set("useLight", false);
+    // 正常显示的物体
     for (auto &[name, cur_obj] : this->objs) {
       // 计算pvm矩阵
       // GeometryRenderObject *cur_obj = &pair_obj.second;
@@ -786,25 +650,24 @@ public:
       glDrawElements(GL_TRIANGLES, cur_obj.geometry->surfaces.size() * 3,
                      GL_UNSIGNED_INT, (void *)0);
     }
-
-    if (this->isShowAuxiliary) {
-      for (auto &[name, obj] : this->aux) {
-        cur_shader->set("model", obj.transform.getModel());
-        if (name == "Ground") {
-          // BK(1);
-          cur_shader->set("useTexture", true);
-          cur_shader->set("useLight", true);
-          glBindTexture(GL_TEXTURE_2D, this->textures["fabric"]);
-        } else {
-          cur_shader->set("useTexture", false);
-          cur_shader->set("useLight", false);
-        }
-        glBindVertexArray(obj.vao);
-        glDrawElements(GL_TRIANGLES, obj.v_size, GL_UNSIGNED_INT, nullptr);
-        glBindVertexArray(0);
-        glBindTexture(GL_TEXTURE_2D, 0);
+    // 场景辅助元素
+    for (auto &[name, obj] : this->aux) {
+      cur_shader->set("model", obj.transform.getModel());
+      if(obj.texture!=0){
+        cur_shader->set("useTexture", true);
+        cur_shader->set("useLight", true);
+      }else{
+        cur_shader->set("useTexture", false);
+        cur_shader->set("useLight", false);
       }
+      glBindTexture(GL_TEXTURE_2D, obj.texture);
+      glBindVertexArray(obj.vao);
+      glDrawElements(GL_TRIANGLES, obj.geometry->surfaces.size() * 3,
+                     GL_UNSIGNED_INT, nullptr);
+      glBindVertexArray(0);
+      glBindTexture(GL_TEXTURE_2D, 0);
     }
+
 #ifdef ENABLE_NORMAL_VISUALIZATION
     // 2. 渲染法向量
     for (auto &[name, cur_obj] : this->objs) {
@@ -855,7 +718,7 @@ public:
     glfwTerminate();
   }
 
-  void showAuxiliary() { this->isShowAuxiliary = true; }
+  // void showSceneObject() { this->isShowSceneObject = true; }
 };
 
 void framebufferResizeCallback(GLFWwindow *window, int width, int height) {
