@@ -18,7 +18,7 @@ private:
 
   float fov{glm::radians(35.0f)};
   float near{0.1f};
-  float far{100.0f};
+  float far{200.0f};
   float aspect{1.0f};
 
   // 天顶角，范围[0,pi]

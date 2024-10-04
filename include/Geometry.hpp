@@ -51,9 +51,9 @@ struct Vertex {
       float v;
     };
   };
-  Vertex()
-      : position{0.0f, 0.0f, 0.0f}, normal{0.0f, 0.0f, 0.0f},
-        color{0.0f, 0.0f, 0.0f}, uv{0u, 0u} {}
+  // Vertex()
+  //     : position{0.0f, 0.0f, 0.0f}, normal{0.0f, 0.0f, 0.0f},
+  //       color{0.0f, 0.0f, 0.0f}, uv{0u, 0u} {}
 };
 
 struct Edge {

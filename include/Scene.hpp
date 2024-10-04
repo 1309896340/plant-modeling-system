@@ -17,7 +17,6 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
-// #include <glm/gtx/string_cast.hpp>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -65,21 +64,7 @@ public:
 
 class GeometryRenderObject {
 private:
-public:
-  shared_ptr<Geometry> geometry;
-  Transform transform;
-
-  GLuint vao{0};
-  GLuint vbo{0};
-  GLuint ebo{0};
-  GLuint texture{0};
-
-  bool isSelected{false};
-  bool visible{true};
-
-  GeometryRenderObject() = default;
-  GeometryRenderObject(const shared_ptr<Geometry> &geo, Transform trans)
-      : geometry(geo), transform(trans) {
+  void initVBO() {
     glGenVertexArrays(1, &this->vao);
     glBindVertexArray(this->vao);
 
@@ -111,31 +96,62 @@ public:
 
     glBindVertexArray(0);
   }
-  GeometryRenderObject(const shared_ptr<Geometry> &geo):GeometryRenderObject(geo,Transform()){}
 
-  GeometryRenderObject(GeometryRenderObject &&geo) noexcept { // 实现移动语义
-    this->transform = geo.transform;
-    this->vao = geo.vao;
-    this->vbo = geo.vbo;
-    this->ebo = geo.ebo;
-    this->texture = geo.texture;
-    this->geometry = geo.geometry;
-    geo.vao = 0;
-    geo.vbo = 0;
-    geo.ebo = 0;
-    geo.geometry = nullptr;
+public:
+  shared_ptr<Geometry> geometry;
+  Transform transform;
+
+  GLuint vao{0};
+  GLuint vbo{0};
+  GLuint ebo{0};
+  GLuint texture{0};
+
+  bool isSelected{false};
+  bool visible{true};
+
+  GeometryRenderObject() = default;
+  GeometryRenderObject(const shared_ptr<Geometry> &geometry,
+                       Transform transform)
+      : geometry(geometry), transform(transform) {
+    initVBO();
   }
-  GeometryRenderObject &operator=(GeometryRenderObject &&geo) noexcept {
-    this->transform = geo.transform;
-    this->vao = geo.vao;
-    this->vbo = geo.vbo;
-    this->ebo = geo.ebo;
-    this->texture = geo.texture;
-    this->geometry = geo.geometry;
-    geo.vao = 0;
-    geo.vbo = 0;
-    geo.ebo = 0;
-    geo.geometry = nullptr;
+  GeometryRenderObject(const shared_ptr<Geometry> &geometry)
+      : GeometryRenderObject(geometry, Transform()) {}
+
+  GeometryRenderObject(const vector<Vertex> &vertices,
+                       const vector<Surface> &surfaces, Transform transform)
+      : transform(transform) {
+    this->geometry = make_shared<FixedGeometry>(vertices, surfaces);
+    initVBO();
+  }
+
+  GeometryRenderObject(const vector<Vertex> &vertices,
+                       const vector<Surface> &surfaces)
+      : GeometryRenderObject(vertices, surfaces, Transform()) {}
+
+  GeometryRenderObject(GeometryRenderObject &&obj) noexcept { // 实现移动语义
+    this->transform = obj.transform;
+    this->vao = obj.vao;
+    this->vbo = obj.vbo;
+    this->ebo = obj.ebo;
+    this->texture = obj.texture;
+    this->geometry = obj.geometry;
+    obj.vao = 0;
+    obj.vbo = 0;
+    obj.ebo = 0;
+    obj.geometry = nullptr;
+  }
+  GeometryRenderObject &operator=(GeometryRenderObject &&obj) noexcept {
+    this->transform = obj.transform;
+    this->vao = obj.vao;
+    this->vbo = obj.vbo;
+    this->ebo = obj.ebo;
+    this->texture = obj.texture;
+    this->geometry = obj.geometry;
+    obj.vao = 0;
+    obj.vbo = 0;
+    obj.ebo = 0;
+    obj.geometry = nullptr;
     return *this;
   }
 
@@ -170,6 +186,13 @@ private:
 
   GLuint ubo{0};
   const GLuint PVM_binding_point = 0;
+
+  struct {
+    GLuint vao{0};
+    GLuint vbo{0};
+    GLuint ebo{0};
+    GLuint texture{0};
+  } skybox_obj;
 
   bool isShowGround{true};
   bool isShowAxis{true};
@@ -227,6 +250,7 @@ public:
     init_ubo();
 
     init_scene_obj();
+    init_skybox();
   }
   Scene(const Scene &sc) = delete;
   ~Scene() {
@@ -255,6 +279,8 @@ public:
     // 光源
     shared_ptr<Geometry> lightBall = make_shared<Sphere>(0.07f, 36, 72);
     GeometryRenderObject obj1(lightBall);
+    obj1.geometry->setColor(1.0f, 1.0f, 1.0f);
+    obj1.updateVBO();
     this->addSceneObject("Light", std::move(obj1));
 
     // 坐标轴
@@ -267,6 +293,61 @@ public:
     GeometryRenderObject obj3(ground);
     obj3.texture = this->textures["fabric"];
     this->addSceneObject("Ground", std::move(obj3));
+  }
+
+  void init_skybox() {
+    // 与前面的GL_TEXTURE_2D纹理目标不同，天空盒使用GL_TEXTURE_CUBE_MAP_XXX作为纹理目标
+
+    // 1. 加载VBO
+    vector<vec3> vertices = {
+        {-1.0, -1.0, -1.0}, {-1.0, -1.0, 1.0}, {-1.0, 1.0, -1.0},
+        {-1.0, 1.0, 1.0},   {1.0, -1.0, -1.0}, {1.0, -1.0, 1.0},
+        {1.0, 1.0, -1.0},   {1.0, 1.0, 1.0},
+    };
+    vector<uint32_t> surfaces = {1, 7, 5, 1, 3, 7, 0, 6, 2, 0, 4, 6,
+                                 5, 6, 4, 5, 7, 6, 0, 3, 1, 0, 2, 3,
+                                 4, 1, 5, 4, 0, 1, 3, 6, 7, 3, 2, 6};
+    glGenVertexArrays(1, &this->skybox_obj.vao);
+    glBindVertexArray(this->skybox_obj.vao);
+
+    glGenBuffers(1, &this->skybox_obj.vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, this->skybox_obj.vbo);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vec3),
+                 vertices.data(), GL_STATIC_DRAW);
+
+    glGenBuffers(1, &this->skybox_obj.ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->skybox_obj.ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, surfaces.size() * sizeof(GLuint),
+                 surfaces.data(), GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glEnableVertexAttribArray(0);
+
+    // 2. 加载纹理
+    glGenTextures(1, &this->skybox_obj.texture);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, this->skybox_obj.texture);
+
+    vector<string> skybox_texture_names = {"px", "nx", "py", "ny", "pz", "nz"};
+    for (int i = 0; i < skybox_texture_names.size(); i++) {
+      string fname =
+          "assets/textures/skybox/" + skybox_texture_names[i] + ".png";
+      int width, height, channel;
+      void *data = stbi_load(fname.c_str(), &width, &height, &channel, 0);
+      if (data == 0) {
+        cerr << "load skybox texture failed: \"" << fname << "\"" << endl;
+        continue;
+      }
+
+      glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, width,
+                   height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+      stbi_image_free(data);
+    }
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
   }
 
   void showAxis() { this->aux["Axis"].visible = true; }
@@ -483,6 +564,7 @@ public:
     shaders["default"] = new Shader("default.vert", "default.frag");
     shaders["normal"] = new Shader("normal.vert", "normal.geo", "normal.frag");
     // shaders["auxiliary"] = new Shader("auxiliary.vert", "auxiliary.frag");
+    shaders["skybox"] = new Shader("skybox.vert", "skybox.frag");
   }
 
   void load_all_texture() {
@@ -517,6 +599,7 @@ public:
         glBindTexture(GL_TEXTURE_2D, 0);
 
         this->textures[file.path().filename().stem().string()] = new_texture;
+        stbi_image_free(img_data);
 
         cout << "load texture: \"" << file.path().filename().string() << "\""
              << endl;
@@ -624,7 +707,19 @@ public:
       this->camera.apply_view_done();
     }
 
-    Shader *cur_shader = this->shaders["default"];
+    Shader *cur_shader{nullptr};
+
+    // 场景辅助元素（天空盒）
+    glDepthMask(GL_FALSE);
+    cur_shader = this->shaders["skybox"];
+    cur_shader->use();
+    glBindTexture(GL_TEXTURE_CUBE_MAP, this->skybox_obj.texture);
+    glBindVertexArray(this->skybox_obj.vao);
+    glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr);
+    glDepthMask(GL_TRUE);
+
+    // 1. 常规物体渲染
+    cur_shader = this->shaders["default"];
     cur_shader->use();
     cur_shader->set("lightPos", this->light.position);
     cur_shader->set("lightColor", this->light.color);
@@ -632,31 +727,27 @@ public:
     cur_shader->set("ambientStrength", 0.2f);
     cur_shader->set("diffuseStrength", 1.0f);
     cur_shader->set("specularStrength", 1.0f);
-    // 正常显示的物体
     for (auto &[name, cur_obj] : this->objs) {
-      // 计算pvm矩阵
-      // GeometryRenderObject *cur_obj = &pair_obj.second;
       mat4 model = cur_obj.transform.getModel();
-
       cur_shader->set("model", model);
-
       // 启用材质，设置材质属性
       glBindTexture(GL_TEXTURE_2D, cur_obj.texture);
       cur_shader->set("useTexture", (cur_obj.texture != 0) ? true : false);
       cur_shader->set("useLight", true);
-
       // 绘制
       glBindVertexArray(cur_obj.vao);
       glDrawElements(GL_TRIANGLES, cur_obj.geometry->surfaces.size() * 3,
                      GL_UNSIGNED_INT, (void *)0);
     }
-    // 场景辅助元素
+    // 2. 场景辅助元素
     for (auto &[name, obj] : this->aux) {
+      if (!obj.visible)
+        continue;
       cur_shader->set("model", obj.transform.getModel());
-      if(obj.texture!=0){
+      if (obj.texture != 0) {
         cur_shader->set("useTexture", true);
         cur_shader->set("useLight", true);
-      }else{
+      } else {
         cur_shader->set("useTexture", false);
         cur_shader->set("useLight", false);
       }
