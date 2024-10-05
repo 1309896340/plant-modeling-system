@@ -29,7 +29,6 @@ private:
   bool view_is_changed{true};
   bool project_is_changed{true};
 
-
   void updateAttitude() {
     // 更新姿态属性 theta 和 phi，务必在每次实际旋转的操作后调用
     float cos_theta = glm::dot(this->toward, this->upDir);
@@ -56,7 +55,6 @@ public:
   float theta_s{0.0f}; // 角度制
   float phi_s{0.0f};
   vec3 position_s{0.0f, 0.0f, 0.0f};
-
 
   Camera() { updateAttitude(); };
   Camera(vec3 position, vec3 target, float aspect)
@@ -137,23 +135,19 @@ public:
                        this->upDir);
   }
 
-  void apply_view_done(){
-    this->view_is_changed = false;
-  }
-  void apply_projection_done(){
-    this->project_is_changed = false;
-  }
+  vec3 getToward() const { return this->toward; }
 
-  void setAspect(float aspect){
+  vec3 getPosition() const { return position; }
+
+  void apply_view_done() { this->view_is_changed = false; }
+  void apply_projection_done() { this->project_is_changed = false; }
+
+  void setAspect(float aspect) {
     this->aspect = aspect;
     this->project_is_changed = true;
   }
 
-  bool isProjectionChanged()const{
-    return this->project_is_changed;
-  }
-  bool isViewChanged()const{
-    return this->view_is_changed;
-  }
+  bool isProjectionChanged() const { return this->project_is_changed; }
+  bool isViewChanged() const { return this->view_is_changed; }
 };
 } // namespace

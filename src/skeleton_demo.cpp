@@ -46,6 +46,7 @@ int main(void) {
     scene.add("Axis3", make_shared<CoordinateAxis>(), n3->getAbsTransform());
     scene.add("Axis4", make_shared<CoordinateAxis>(), n4->getAbsTransform());
 
+
     scene.mainloop();
 
   } catch (exception e) {

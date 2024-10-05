@@ -2,6 +2,9 @@
 
 // #define NDEBUG
 
+#include "constants.h"
+#include "glm/ext/matrix_clip_space.hpp"
+#include "glm/ext/matrix_transform.hpp"
 #include <iostream>
 
 #include <cassert>
@@ -62,6 +65,13 @@ public:
 
   Light() = default;
   Light(vec3 position, vec3 color) : position(position), color(color) {}
+};
+
+class ParallelLight {
+public:
+  vec3 position{0.0f, 0.0f, 0.0f};
+  vec3 direction{0.0f, 0.0f, -1.0f};
+  vec3 color{1.0f, 1.0f, 1.0f};
 };
 
 class GeometryRenderObject {
@@ -196,6 +206,17 @@ private:
     GLuint texture{0};
   } skybox_obj;
 
+  struct {
+    float left{-10.0f};
+    float right{10.0f};
+    float bottom{-10.0f};
+    float top{10.0f};
+    float near{0.0f};
+    float far{200.0f};
+    GLuint texture{0};
+    GLuint fbo{0};
+  } depthmap;
+
   bool isShowGround{true};
   bool isShowAxis{true};
   bool isShowLight{true};
@@ -210,7 +231,7 @@ public:
 
   map<string, GeometryRenderObject> aux;
 
-  Light light;
+  ParallelLight light;
   Camera camera{vec3(0.0f, 0.0f, 20.0f), vec3{0.0f, 0.0f, 0.0f},
                 static_cast<float>(width) / static_cast<float>(height)};
   Scene() {
@@ -236,25 +257,25 @@ public:
     glEnable(GL_MULTISAMPLE); // 开启MSAA抗锯齿
     glEnable(GL_DEPTH_TEST);  // 开启深度测试
     glEnable(GL_CULL_FACE);   // 开启面剔除
-    glFrontFace(GL_CCW);
-
+    glFrontFace(GL_CCW);      // 逆时针索引顺序为正面
 #ifdef ENBALE_POLYGON_VISUALIZATION
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 #endif
 
-    loadIcon();
-    initImgui();
-
     glfwSetFramebufferSizeCallback(this->window, framebufferResizeCallback);
     glfwSetErrorCallback(errorCallback);
+
+    loadIcon();
+    initImgui();
 
     load_all_shader();
     load_all_texture();
 
     init_ubo();
-
     init_scene_obj();
     init_skybox();
+
+    init_depthmap();
   }
   Scene(const Scene &sc) = delete;
   ~Scene() {
@@ -352,6 +373,25 @@ public:
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+  }
+
+  void init_depthmap() {
+    glGenTextures(1, &this->depthmap.texture);
+    glBindTexture(GL_TEXTURE_2D, this->depthmap.texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, width, height, 0,
+                 GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    glGenFramebuffers(1, &this->depthmap.fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, this->depthmap.fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D,
+                           this->depthmap.texture, 0);
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
   }
 
   void showAxis() { this->aux["Axis"].visible = true; }
@@ -568,6 +608,7 @@ public:
     shaders["normal"] = new Shader("normal.vert", "normal.geo", "normal.frag");
     // shaders["auxiliary"] = new Shader("auxiliary.vert", "auxiliary.frag");
     shaders["skybox"] = new Shader("skybox.vert", "skybox.frag");
+    shaders["lightDepth"] = new Shader("lightDepth.vert", "lightDepth.frag");
   }
 
   void load_all_texture() {
@@ -761,9 +802,28 @@ public:
       glBindVertexArray(0);
       glBindTexture(GL_TEXTURE_2D, 0);
     }
+    // 3. 从有向光视角生成深度缓存
+    cur_shader = this->shaders["lightDepth"];
+    cur_shader->use();
+    cur_shader->set("projection",
+                    glm::ortho(this->depthmap.left, this->depthmap.right,
+                               this->depthmap.bottom, this->depthmap.top,
+                               this->depthmap.near, this->depthmap.far));
+    cur_shader->set("view", glm::lookAt(this->camera.getPosition(),
+                                        this->camera.getToward(), _up));
+    glViewport(0, 0, width, height);
+    glBindFramebuffer(GL_FRAMEBUFFER, this->depthmap.fbo);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    for (auto &[name, obj] : this->objs) {
+      cur_shader->set("model", obj.transform.getModel());
+      glBindVertexArray(obj.vao);
+      glDrawElements(GL_TRIANGLES, obj.geometry->surfaces.size() * 3,
+                     GL_UNSIGNED_INT, nullptr);
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 #ifdef ENABLE_NORMAL_VISUALIZATION
-    // 2. 渲染法向量
+    // 4. 渲染法向量
     for (auto &[name, cur_obj] : this->objs) {
       if (cur_obj.isSelected) {
         cur_shader = this->shaders["normal"];
