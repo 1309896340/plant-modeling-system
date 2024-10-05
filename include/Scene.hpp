@@ -49,6 +49,8 @@ using glm::vec4;
 
 namespace fs = filesystem;
 
+const static vec3 anchor = {0.0f, 0.0f, 0.0f};
+
 void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 
 class Light {
@@ -222,6 +224,7 @@ public:
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_SAMPLES, 4);
     this->window = glfwCreateWindow(width, height, "demo", 0, 0);
     glfwMakeContextCurrent(this->window);
     glfwSetWindowUserPointer(window, this);
@@ -230,8 +233,9 @@ public:
       cerr << msg << endl;
       throw runtime_error(msg);
     }
-    glEnable(GL_DEPTH_TEST); // 开启深度测试
-    glEnable(GL_CULL_FACE);  // 开启面剔除
+    glEnable(GL_MULTISAMPLE); // 开启MSAA抗锯齿
+    glEnable(GL_DEPTH_TEST);  // 开启深度测试
+    glEnable(GL_CULL_FACE);   // 开启面剔除
     glFrontFace(GL_CCW);
 
 #ifdef ENBALE_POLYGON_VISUALIZATION
@@ -284,7 +288,7 @@ public:
     this->addSceneObject("Light", std::move(obj1));
 
     // 坐标轴
-    shared_ptr<Geometry> axis = make_shared<CoordinaryAxis>();
+    shared_ptr<Geometry> axis = make_shared<CoordinateAxis>();
     GeometryRenderObject obj2(axis);
     this->addSceneObject("Axis", std::move(obj2));
 
@@ -387,7 +391,6 @@ public:
       }
 
       // 鼠标交互动作
-      static vec3 anchor = {0.0f, 1.0f, 0.0f};
       // 记录下“相机环绕”时的相机极坐标
       static float theta_c = 0.0f;
       static float phi_c = 0.0f;
@@ -414,7 +417,7 @@ public:
             new_pos.y = dist * cos(theta_c);
             new_pos.z = dist * sin(theta_c) * sin(phi_c);
             this->camera.setPosition(new_pos + anchor);
-            this->camera.lookAt({0.0f, 4.0f, 0.0f});
+            this->camera.lookAt(anchor);
           } else {
             // 以相机为中心旋转
             this->camera.rotate(
@@ -492,12 +495,12 @@ public:
       }
 
       // 显示参数
-      ImGui::Text(u8"形体参数");
-      if (cur_obj == nullptr) {
+      if (cur_obj->geometry->parameters.empty()) {
         ImGui::TreePop();
         ImGui::End();
         return; // 直接返回
       }
+      ImGui::Text(u8"形体参数");
       struct visitor {
         string pname;
         visitor(string name) : pname(name) {}

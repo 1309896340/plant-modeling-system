@@ -13,12 +13,12 @@ using glm::mat3;
 using glm::mat4;
 using glm::vec3;
 
-class CoordinaryAxis : public FixedGeometry {
+class CoordinateAxis : public FixedGeometry {
 public:
-  CoordinaryAxis(){
-    Arrow a_x(0.06f, 1.0f);
-    Arrow a_y(0.06f, 1.0f);
-    Arrow a_z(0.06f, 1.0f);
+  CoordinateAxis(float radius, float length){
+    Arrow a_x(radius, length);
+    Arrow a_y(radius, length);
+    Arrow a_z(radius, length);
 
     a_x.rotate(glm::radians(90.0f), _front);
     a_z.rotate(glm::radians(90.0f), _right);
@@ -31,6 +31,7 @@ public:
     this->vertices = res.vertices;
     this->surfaces = res.surfaces;
   }
+  CoordinateAxis():CoordinateAxis(0.06f,1.0f){}
 
 };
 

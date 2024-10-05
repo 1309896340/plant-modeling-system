@@ -37,3 +37,7 @@
 1. 声明一个`MultiMeshGeometry`类，继承自`Geometry`类，其具有一个`vector<Mesh> meshes`成员
 2. 重载`Mesh`的`*`运算符，与`+`不同，该运算符生成`MultiMeshGeometry`，将参与运算的`Mesh`加入到`meshes`中
 3. 实现`Geometry`的虚函数`update()`，遍历`meshes`并更新所有网格，最后将它们全部拼接，来更新自己的`vertices`和`surfaces`
+
+
+10月5日：
+1. 实现骨架中对每个骨骼节点姿态位置的更新计算

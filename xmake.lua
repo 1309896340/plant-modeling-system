@@ -16,10 +16,10 @@ set_languages("c++17")
 --         end
 --     )
 
-target("test")
+target("skeleton_demo")
     set_kind("binary")
     add_includedirs("include")
-    add_files("src/test.cpp")
+    add_files("src/skeleton_demo.cpp")
     add_packages("glm","glfw","glad","glm","imgui","stb")
     after_build(
         function (target)
