@@ -101,8 +101,11 @@ private:
     glBufferData(GL_ELEMENT_ARRAY_BUFFER,
                  this->geometry->surfaces.size() * sizeof(Surface),
                  this->geometry->surfaces.data(), GL_STATIC_DRAW);
-
     glBindVertexArray(0);
+  }
+
+  void initComputeShaderTexture(){
+
   }
 
 public:
@@ -114,6 +117,13 @@ public:
   GLuint ebo{0};
   GLuint texture{0};
 
+  // 与计算着色器之间数据交换的上下文信息
+  struct {
+    GLuint position_texture; // geometry中所有顶点位置
+    GLuint index_texture;    // geometry中所有三角索引
+    GLuint output_texture;   // 计算着色器输出结果
+  } ctx;
+
   bool isSelected{false};
   bool visible{true};
 
@@ -122,6 +132,7 @@ public:
                        Transform transform)
       : geometry(geometry), transform(transform) {
     initVBO();
+    initComputeShaderTexture();
   }
   GeometryRenderObject(const shared_ptr<Geometry> &geometry)
       : GeometryRenderObject(geometry, Transform()) {}
@@ -131,6 +142,7 @@ public:
       : transform(transform) {
     this->geometry = make_shared<FixedGeometry>(vertices, surfaces);
     initVBO();
+    initComputeShaderTexture();
   }
 
   GeometryRenderObject(const vector<Vertex> &vertices,
@@ -221,12 +233,15 @@ private:
   bool isShowLight{true};
 
   // imgui的状态变量
-  GeometryRenderObject *cur_obj{nullptr};
-  int selected_idx = 0;
-  int highlighted_idx = 0;
-  float theta_c = 0.0f;
-  float phi_c = 0.0f;
-  float dist = 0.0f;
+
+  struct {
+    GeometryRenderObject *cur_obj{nullptr};
+    int selected_idx = 0;
+    int highlighted_idx = 0;
+    float theta_c = 0.0f;
+    float phi_c = 0.0f;
+    float dist = 0.0f;
+  } imgui;
 
 public:
   map<string, Shader *> shaders;
@@ -405,12 +420,11 @@ public:
   void showGround() { this->aux["Ground"].visible = true; }
   void hideGround() { this->aux["Ground"].visible = false; }
 
-
   void show_info() {
     const GLubyte *vendor = glGetString(GL_VENDOR);
     const GLubyte *renderer = glGetString(GL_RENDERER);
-    cout << "Vendor: "<<vendor << endl;
-    cout <<"Graphics Device: " << renderer << endl;
+    cout << "Vendor: " << vendor << endl;
+    cout << "Graphics Device: " << renderer << endl;
   }
 
   void imgui_menu() {
@@ -438,10 +452,10 @@ public:
       if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         if (ImGui::IsKeyDown(ImGuiKey_ModShift)) {
           vec3 dist_v = this->camera.position_s - anchor;
-          dist = glm::length(dist_v);
-          theta_c =
+          imgui.dist = glm::length(dist_v);
+          imgui.theta_c =
               acos(glm::dot(glm::normalize(dist_v), vec3(0.0f, 1.0f, 0.0f)));
-          phi_c = atan2(dist_v.z, dist_v.x);
+          imgui.phi_c = atan2(dist_v.z, dist_v.x);
         }
       }
 
@@ -449,13 +463,15 @@ public:
         if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
           if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
             // 以世界坐标锚点为中心做旋转
-            phi_c += MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x;
-            theta_c -= MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y;
+            imgui.phi_c +=
+                MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x;
+            imgui.theta_c -=
+                MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y;
 
             vec3 new_pos;
-            new_pos.x = dist * sin(theta_c) * cos(phi_c);
-            new_pos.y = dist * cos(theta_c);
-            new_pos.z = dist * sin(theta_c) * sin(phi_c);
+            new_pos.x = imgui.dist * sin(imgui.theta_c) * cos(imgui.phi_c);
+            new_pos.y = imgui.dist * cos(imgui.theta_c);
+            new_pos.z = imgui.dist * sin(imgui.theta_c) * sin(imgui.phi_c);
             this->camera.setPosition(new_pos + anchor);
             this->camera.lookAt(anchor);
           } else {
@@ -512,27 +528,28 @@ public:
       }
       if (ImGui::BeginListBox(u8"物体")) {
         for (int i = 0; i < items.size(); i++) {
-          const bool is_selected = (selected_idx == i);
+          const bool is_selected = (imgui.selected_idx == i);
           if (ImGui::Selectable(items[i].c_str(), is_selected))
-            selected_idx = i;
+            imgui.selected_idx = i;
           if (is_hightlight && ImGui::IsItemHovered())
-            highlighted_idx = i;
+            imgui.highlighted_idx = i;
           if (is_selected) {
-            cur_obj = &this->objs[items[i]];
+            imgui.cur_obj = &this->objs[items[i]];
             ImGui::SetItemDefaultFocus();
           }
         }
         // 回传选中状态
         for (int i = 0; i < items.size(); i++) {
           this->objs[items[i]].isSelected = false;
-          if (selected_idx == i)
+          if (imgui.selected_idx == i)
             this->objs[items[i]].isSelected = true;
         }
         ImGui::EndListBox();
       }
 
       // 显示参数
-      if (cur_obj == nullptr || cur_obj->geometry->parameters.empty()) {
+      if (imgui.cur_obj == nullptr ||
+          imgui.cur_obj->geometry->parameters.empty()) {
         ImGui::TreePop();
         ImGui::End();
         return; // 直接返回
@@ -544,22 +561,22 @@ public:
         visitor(string name, Scene *context) : pname(name), context(context) {}
         void operator()(float &arg) {
           if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
-            context->cur_obj->geometry->update();
-            context->cur_obj->updateVBO();
+            context->imgui.cur_obj->geometry->update();
+            context->imgui.cur_obj->updateVBO();
           }
         }
         void operator()(uint32_t &arg) {
           if (ImGui::SliderInt(this->pname.c_str(),
                                reinterpret_cast<int *>(&arg), 2, 50)) {
-            context->cur_obj->geometry->update();
-            context->cur_obj->updateVBO();
+            context->imgui.cur_obj->geometry->update();
+            context->imgui.cur_obj->updateVBO();
           }
         }
         void operator()(bool &arg) {}
         void operator()(int &arg) {}
         void operator()(vec3 &arg) {}
       };
-      for (auto &[name, arg_val] : cur_obj->geometry->parameters)
+      for (auto &[name, arg_val] : imgui.cur_obj->geometry->parameters)
         std::visit(visitor(name, this), arg_val);
 
       ImGui::TreePop();
@@ -815,8 +832,8 @@ public:
                     glm::ortho(this->depthmap.left, this->depthmap.right,
                                this->depthmap.bottom, this->depthmap.top,
                                this->depthmap.near, this->depthmap.far));
-    cur_shader->set("view", glm::lookAt(this->camera.getPosition(),
-                                        this->camera.getToward(), _up));
+    cur_shader->set("view",
+                    glm::lookAt(this->light.position, {0.0f, 0.0f, 0.0f}, _up));
     // glViewport(0, 0, width, height);
     glBindFramebuffer(GL_FRAMEBUFFER, this->depthmap.fbo);
     glClear(GL_DEPTH_BUFFER_BIT);
