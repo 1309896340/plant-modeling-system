@@ -4,19 +4,19 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 #include <string>
-#include <map>
+
+#include "proj.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include "proj.h"
 
 namespace {
 using namespace std;
 namespace fs = std::filesystem;
-
 
 class Shader {
   // 加载当前目录下的"shaders/"子目录的glsl文件，封装为Shader Program
@@ -25,7 +25,7 @@ private:
 
   // 缓存uniform变量名与location
   map<string, GLuint> locations;
-  
+
   const string prefix = "assets\\shaders\\";
 
   void readFile(string &dst, const string &filename) {
@@ -89,10 +89,12 @@ private:
       shader = createShader(GL_VERTEX_SHADER, source);
     } else if (ext == ".frag") {
       shader = createShader(GL_FRAGMENT_SHADER, source);
-    } else if (ext == ".geo") {
+    } else if (ext == ".geom") {
       shader = createShader(GL_GEOMETRY_SHADER, source);
+    } else if (ext == ".comp") {
+      shader = createShader(GL_COMPUTE_SHADER, source);
     } else {
-      string msg = "unknown glsl extension!";
+      string msg = "unknown glsl extension \"" + ext + "\"";
       cerr << msg << endl;
       throw runtime_error(msg);
     }
@@ -101,6 +103,27 @@ private:
   }
 
 public:
+  Shader(const string &compute_filename) {
+    GLuint cshader = createShader(prefix + compute_filename);
+
+    this->program_id = glCreateProgram();
+    glAttachShader(this->program_id, cshader);
+    glLinkProgram(this->program_id);
+
+    GLint success;
+    glGetProgramiv(this->program_id, GL_LINK_STATUS, &success);
+    if (!success) {
+      cout << "failed to link shader program!" << endl;
+#ifndef NDEBUG
+      char log[200];
+      int log_num;
+      glGetProgramInfoLog(this->program_id, 200, &log_num, log);
+      cout << log << endl;
+#endif
+    }
+    glDeleteShader(cshader);
+  }
+
   Shader(const string &vertex_filename, const string &geometry_filename,
          const string &fragment_filename) {
     GLuint vshader = createShader(prefix + vertex_filename);
@@ -156,14 +179,13 @@ public:
   Shader(const Shader &sd) = delete;
   ~Shader() { glDeleteProgram(this->program_id); }
 
-
-  bool has_uniform(const string& name)const{
+  bool has_uniform(const string &name) const {
     return this->locations.find(name) != this->locations.end();
   }
 
-  void register_location(const string& name){
+  void register_location(const string &name) {
     GLuint loc = glGetUniformLocation(this->program_id, name.c_str());
-    if(loc==-1){
+    if (loc == -1) {
       string msg = "unknown uniform name: \"" + name + "\"";
       cerr << msg << endl;
       throw runtime_error(msg);
@@ -171,45 +193,47 @@ public:
     this->locations[name] = loc;
   }
 
-  void set(const string &name, bool bool_val){
-    if(!this->has_uniform(name))
+  void set(const string &name, bool bool_val) {
+    if (!this->has_uniform(name))
       register_location(name);
     glUniform1ui(this->locations[name], bool_val);
   }
-  void set(const string &name, unsigned int uint_val){
-    if(!this->has_uniform(name))
+  void set(const string &name, unsigned int uint_val) {
+    if (!this->has_uniform(name))
       register_location(name);
     glUniform1ui(this->locations[name], uint_val);
   }
-  void set(const string &name,int int_val){
-    if(!this->has_uniform(name))
+  void set(const string &name, int int_val) {
+    if (!this->has_uniform(name))
       register_location(name);
     glUniform1i(this->locations[name], int_val);
   }
-  void set(const string &name, float float_val){
-    if(!this->has_uniform(name))
+  void set(const string &name, float float_val) {
+    if (!this->has_uniform(name))
       register_location(name);
     glUniform1f(this->locations[name], float_val);
   }
-  void set(const string &name, const glm::vec3 &vec3_val){
-    if(!this->has_uniform(name))
+  void set(const string &name, const glm::vec3 &vec3_val) {
+    if (!this->has_uniform(name))
       register_location(name);
     glUniform3fv(this->locations[name], 1, glm::value_ptr(vec3_val));
   }
-  void set(const string &name, const glm::vec4 &vec4_val){
-    if(!this->has_uniform(name))
+  void set(const string &name, const glm::vec4 &vec4_val) {
+    if (!this->has_uniform(name))
       register_location(name);
     glUniform4fv(this->locations[name], 1, glm::value_ptr(vec4_val));
   }
-  void set(const string &name, const glm::mat3 &mat3_val){
-    if(!this->has_uniform(name))
+  void set(const string &name, const glm::mat3 &mat3_val) {
+    if (!this->has_uniform(name))
       register_location(name);
-    glUniformMatrix3fv(this->locations[name], 1,GL_FALSE, glm::value_ptr(mat3_val));
+    glUniformMatrix3fv(this->locations[name], 1, GL_FALSE,
+                       glm::value_ptr(mat3_val));
   }
-  void set(const string &name, const glm::mat4 &mat4_val){
-    if(!this->has_uniform(name))
+  void set(const string &name, const glm::mat4 &mat4_val) {
+    if (!this->has_uniform(name))
       register_location(name);
-    glUniformMatrix4fv(this->locations[name], 1,GL_FALSE, glm::value_ptr(mat4_val));
+    glUniformMatrix4fv(this->locations[name], 1, GL_FALSE,
+                       glm::value_ptr(mat4_val));
   }
 
   void use() { glUseProgram(this->program_id); }

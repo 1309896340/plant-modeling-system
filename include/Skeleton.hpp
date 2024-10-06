@@ -1,11 +1,10 @@
 ﻿#pragma once
 
 #include <deque>
-#include <iostream>
+// #include <iostream>
 #include <stdexcept>
 #include <vector>
 
-#include "glm/ext/quaternion_trigonometric.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 

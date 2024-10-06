@@ -3,18 +3,14 @@
 // #define NDEBUG
 
 #include "constants.h"
-#include "glm/ext/matrix_clip_space.hpp"
-#include "glm/ext/matrix_transform.hpp"
 #include <iostream>
 
 #include <cassert>
-#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <map>
 #include <memory>
 #include <stdexcept>
-#include <utility>
 #include <variant>
 
 #include <glm/glm.hpp>
@@ -193,6 +189,9 @@ void errorCallback(int code, const char *msg) {
 
 class Scene {
 private:
+  int width = 1600;
+  int height = 1200;
+
   GLFWwindow *window{nullptr};
   ImGuiIO *io{nullptr};
 
@@ -221,10 +220,15 @@ private:
   bool isShowAxis{true};
   bool isShowLight{true};
 
-public:
-  const int width = 1600;
-  const int height = 1200;
+  // imgui的状态变量
+  GeometryRenderObject *cur_obj{nullptr};
+  int selected_idx = 0;
+  int highlighted_idx = 0;
+  float theta_c = 0.0f;
+  float phi_c = 0.0f;
+  float dist = 0.0f;
 
+public:
   map<string, Shader *> shaders;
   map<string, GLuint> textures;
   map<string, GeometryRenderObject> objs;
@@ -264,6 +268,8 @@ public:
 
     glfwSetFramebufferSizeCallback(this->window, framebufferResizeCallback);
     glfwSetErrorCallback(errorCallback);
+
+    show_info();
 
     loadIcon();
     initImgui();
@@ -399,16 +405,13 @@ public:
   void showGround() { this->aux["Ground"].visible = true; }
   void hideGround() { this->aux["Ground"].visible = false; }
 
-  // void add(const string &name, const AuxiliaryObject &auxObj,
-  //          Transform transform) {
-  //   if (this->aux.find(name) != this->aux.end())
-  //     throw runtime_error("scene cannot add object with an existed name!");
-  //   AuxiliaryRenderObject robj(auxObj, transform);
-  //   this->aux[name] = std::move(robj);
-  // }
-  // void add(const string &name, const AuxiliaryObject &auxObj) {
-  //   this->add(name, auxObj, Transform());
-  // }
+
+  void show_info() {
+    const GLubyte *vendor = glGetString(GL_VENDOR);
+    const GLubyte *renderer = glGetString(GL_RENDERER);
+    cout << "Vendor: "<<vendor << endl;
+    cout <<"Graphics Device: " << renderer << endl;
+  }
 
   void imgui_menu() {
 
@@ -431,10 +434,7 @@ public:
       }
 
       // 鼠标交互动作
-      // 记录下“相机环绕”时的相机极坐标
-      static float theta_c = 0.0f;
-      static float phi_c = 0.0f;
-      static float dist = 0.0f;
+      // 记录下“相机环绕”时的相机球坐标
       if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         if (ImGui::IsKeyDown(ImGuiKey_ModShift)) {
           vec3 dist_v = this->camera.position_s - anchor;
@@ -504,12 +504,9 @@ public:
       return;
     }
 
-    static GeometryRenderObject *cur_obj{nullptr};
     if (ImGui::TreeNodeEx(u8"几何管理", ImGuiTreeNodeFlags_DefaultOpen)) {
       bool is_hightlight = true;
       vector<string> items;
-      static int selected_idx = 0;
-      static int highlighted_idx = 0;
       for (auto &obj : this->objs) {
         items.push_back(obj.first);
       }
@@ -535,7 +532,7 @@ public:
       }
 
       // 显示参数
-      if (cur_obj->geometry->parameters.empty()) {
+      if (cur_obj == nullptr || cur_obj->geometry->parameters.empty()) {
         ImGui::TreePop();
         ImGui::End();
         return; // 直接返回
@@ -543,18 +540,19 @@ public:
       ImGui::Text(u8"形体参数");
       struct visitor {
         string pname;
-        visitor(string name) : pname(name) {}
+        Scene *context{nullptr};
+        visitor(string name, Scene *context) : pname(name), context(context) {}
         void operator()(float &arg) {
           if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
-            cur_obj->geometry->update();
-            cur_obj->updateVBO();
+            context->cur_obj->geometry->update();
+            context->cur_obj->updateVBO();
           }
         }
         void operator()(uint32_t &arg) {
           if (ImGui::SliderInt(this->pname.c_str(),
                                reinterpret_cast<int *>(&arg), 2, 50)) {
-            cur_obj->geometry->update();
-            cur_obj->updateVBO();
+            context->cur_obj->geometry->update();
+            context->cur_obj->updateVBO();
           }
         }
         void operator()(bool &arg) {}
@@ -562,7 +560,7 @@ public:
         void operator()(vec3 &arg) {}
       };
       for (auto &[name, arg_val] : cur_obj->geometry->parameters)
-        std::visit(visitor(name), arg_val);
+        std::visit(visitor(name, this), arg_val);
 
       ImGui::TreePop();
     }
@@ -605,10 +603,11 @@ public:
   }
   void load_all_shader() {
     shaders["default"] = new Shader("default.vert", "default.frag");
-    shaders["normal"] = new Shader("normal.vert", "normal.geo", "normal.frag");
+    shaders["normal"] = new Shader("normal.vert", "normal.geom", "normal.frag");
     // shaders["auxiliary"] = new Shader("auxiliary.vert", "auxiliary.frag");
     shaders["skybox"] = new Shader("skybox.vert", "skybox.frag");
     shaders["lightDepth"] = new Shader("lightDepth.vert", "lightDepth.frag");
+    // shaders["compute"] = new Shader("compute.comp");
   }
 
   void load_all_texture() {
@@ -676,6 +675,11 @@ public:
 
   void add(const string &name, const shared_ptr<Geometry> &geometry) {
     this->add(name, geometry, Transform());
+  }
+
+  void add(const string &name, const shared_ptr<Geometry> &geometry,
+           vec3 position) {
+    this->add(name, geometry, Transform(position));
   }
 
   void imgui_docking_render(bool *p_open = nullptr) {
@@ -753,6 +757,8 @@ public:
 
     Shader *cur_shader{nullptr};
 
+    glViewport(0, 0, width, height);
+
     // 场景辅助元素（天空盒）
     glDepthMask(GL_FALSE);
     cur_shader = this->shaders["skybox"];
@@ -811,7 +817,7 @@ public:
                                this->depthmap.near, this->depthmap.far));
     cur_shader->set("view", glm::lookAt(this->camera.getPosition(),
                                         this->camera.getToward(), _up));
-    glViewport(0, 0, width, height);
+    // glViewport(0, 0, width, height);
     glBindFramebuffer(GL_FRAMEBUFFER, this->depthmap.fbo);
     glClear(GL_DEPTH_BUFFER_BIT);
     for (auto &[name, obj] : this->objs) {
@@ -821,6 +827,7 @@ public:
                      GL_UNSIGNED_INT, nullptr);
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    // glViewport(0, 0, width, height);
 
 #ifdef ENABLE_NORMAL_VISUALIZATION
     // 4. 渲染法向量
@@ -835,6 +842,11 @@ public:
       }
     }
 #endif
+  }
+
+  void setWindowSize(float width, float height) {
+    this->width = width;
+    this->height = height;
   }
 
   void mainloop() {
@@ -878,6 +890,7 @@ public:
 void framebufferResizeCallback(GLFWwindow *window, int width, int height) {
   Scene *scene = (Scene *)glfwGetWindowUserPointer(window);
   assert(scene != nullptr && "scene is nullptr");
+  scene->setWindowSize(width, height);
   scene->camera.setAspect(static_cast<float>(width) / height);
   glViewport(0, 0, width, height);
 }

@@ -1,0 +1,13 @@
+#version 450 core
+layout (local_size_x=1, local_size_y=1, local_size_z=1) in;
+
+// 测试用的计算着色器demo
+
+layout(std430, binding=0) uniform databuffer{
+    float data[];
+};
+
+void main(){
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+    data[pos.y * int(gl_NumWorkGroups.x) + pos.x] *= float(pos.y);
+}

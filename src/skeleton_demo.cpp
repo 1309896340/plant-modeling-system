@@ -47,6 +47,9 @@ int main(void) {
     scene.add("Axis4", make_shared<CoordinateAxis>(), n4->getAbsTransform());
 
 
+    // scene.add("obj", make_shared<Cylinder>(0.4f, 1.0f));
+
+
     scene.mainloop();
 
   } catch (exception e) {

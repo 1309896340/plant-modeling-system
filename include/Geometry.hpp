@@ -9,11 +9,10 @@
 #include <vector>
 
 #include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "constants.h"
-#include "glm/trigonometric.hpp"
 
 namespace {
 using namespace std;
@@ -86,7 +85,7 @@ public:
   }
 
   void rotate(float angle, glm::vec3 axis) {
-    glm::mat3 rot_mat = glm::mat3(glm::rotate(glm::mat4(1.0f),angle, axis));
+    glm::mat3 rot_mat = glm::mat3(glm::rotate(glm::mat4(1.0f), angle, axis));
     for (auto &vertex : this->vertices) {
       glm::vec3 new_pos = rot_mat * glm::make_vec3(vertex.position);
       glm::vec3 new_normal = rot_mat * glm::make_vec3(vertex.normal);
@@ -169,7 +168,6 @@ public:
   }
 };
 
-
 class Mesh : public Geometry {
 private:
   function<Vertex(float, float)> meshUpdator;
@@ -232,14 +230,13 @@ public:
       }
     }
   }
-
 };
 
 class Sphere : public Mesh {
 public:
   Sphere(float radius, uint32_t uNum = 100, uint32_t vNum = 100)
       : Mesh(uNum, vNum) {
-    this->parameters["radius"] = radius; // radius为float
+    this->parameters["radius"] = radius;
     update();
   }
 
@@ -265,7 +262,7 @@ public:
       vt.v = v;
       return vt;
     });
-    
+
     this->rotate(glm::radians(-90.0f), _right);
   }
 };
@@ -290,15 +287,15 @@ public:
       vt.nz = 1.0f;
 
       vt.r = 0.0f;
-      vt.g = 1.0f;
-      vt.b = 0.0f;
+      vt.g = 0.0f;
+      vt.b = 1.0f;
 
       vt.u = u;
       vt.v = v;
 
       return vt;
     });
-    
+
     this->rotate(glm::radians(-90.0f), _right);
   }
 };
@@ -335,7 +332,7 @@ public:
 
       return vt;
     });
-    
+
     this->rotate(glm::radians(-90.0f), _right);
   }
 };
@@ -446,7 +443,7 @@ public:
 
       return vt;
     });
-    
+
     this->rotate(glm::radians(-90.0f), _right);
   }
 };
@@ -474,7 +471,6 @@ public:
     CylinderSide cs(radius, height, HNum, PNum);
     Disk ds_bottom(radius, RNum, PNum), ds_top(radius, RNum, PNum);
 
-    cs.setColor(0.0f, 0.0f, 1.0f);
     ds_bottom.rotate(glm::radians(180.0f), {1.0f, 0.0f, 0.0f});
     ds_top.translate(0.0f, height, 0.0f);
 
@@ -488,12 +484,10 @@ public:
 
 class TruncatedConeEx : public Geometry {
 private:
-
 public:
   TruncatedConeEx() : TruncatedConeEx(1.0f, 1.0f, 3.0f, 0.0f, 0.0f) {}
   TruncatedConeEx(float r1, float r2, float h, float phi, float rho,
-                  uint32_t RNum = 8, uint32_t HNum = 10, uint32_t PNum = 18)
-       {
+                  uint32_t RNum = 8, uint32_t HNum = 10, uint32_t PNum = 18) {
     this->parameters["r1"] = r1;
     this->parameters["r2"] = r2;
     this->parameters["h"] = h;
@@ -525,9 +519,9 @@ public:
 
     top.transformVertex([phi, rho](const Vertex &vt0, float u, float v) {
       Vertex vt(vt0);
-      glm::mat3 rot_mat =
-          glm::mat3(glm::rotate(glm::mat4(1.0f),rho, glm::vec3(cos(phi), 0.0f,sin(phi))));
-          
+      glm::mat3 rot_mat = glm::mat3(glm::rotate(
+          glm::mat4(1.0f), rho, glm::vec3(cos(phi), 0.0f, sin(phi))));
+
       glm::vec3 n_pos = rot_mat * glm::make_vec3(vt.position);
       glm::vec3 n_norm = rot_mat * glm::make_vec3(vt.normal);
       vt.x = n_pos.x;
@@ -540,8 +534,8 @@ public:
     });
     side.transformVertex([phi, rho](const Vertex &vt0, float u, float v) {
       Vertex vt(vt0);
-      glm::mat3 rot_mat =
-          glm::mat3(glm::rotate(glm::mat4(1.0f),u * rho, glm::vec3(cos(phi), 0.0f,sin(phi))));
+      glm::mat3 rot_mat = glm::mat3(glm::rotate(
+          glm::mat4(1.0f), u * rho, glm::vec3(cos(phi), 0.0f, sin(phi))));
       glm::vec3 n_pos = rot_mat * glm::make_vec3(vt.position);
       glm::vec3 n_norm = rot_mat * glm::make_vec3(vt.normal);
       vt.x = n_pos.x;
@@ -567,26 +561,29 @@ private:
   const float radius_ratio = 0.5f;
 
 public:
-  Arrow(float radius, float length, glm::vec3 arrow_color, glm::vec3 body_color) {
+  Arrow(float radius, float length, glm::vec3 arrow_color,
+        glm::vec3 body_color) {
     this->parameters["radius"] = radius;
     this->parameters["length"] = length;
     this->parameters["arrow_color"] = arrow_color;
     this->parameters["body_color"] = body_color;
     update();
   }
-  Arrow(float radius, float length):Arrow(radius, length, {0.0f,1.0f,1.0f}, {1.0f,0.0f,0.0f}){}
+  Arrow(float radius, float length)
+      : Arrow(radius, length, {0.0f, 1.0f, 1.0f}, {1.0f, 0.0f, 0.0f}) {}
 
-  virtual void update(){
+  virtual void update() {
     float radius = std::get<float>(this->parameters["radius"]);
     float length = std::get<float>(this->parameters["length"]);
-    glm::vec3 arrow_color = std::get<glm::vec3>(this->parameters["arrow_color"]);
+    glm::vec3 arrow_color =
+        std::get<glm::vec3>(this->parameters["arrow_color"]);
     glm::vec3 body_color = std::get<glm::vec3>(this->parameters["body_color"]);
 
     Cone arrow(radius, 1 - body_ratio);
     Cylinder body(radius_ratio * radius, body_ratio * length);
 
-    arrow.setColor(arrow_color.r,arrow_color.g,arrow_color.b);
-    body.setColor(body_color.r,body_color.g,body_color.b);
+    arrow.setColor(arrow_color.r, arrow_color.g, arrow_color.b);
+    body.setColor(body_color.r, body_color.g, body_color.b);
 
     arrow.translate(0.0f, body_ratio * length, 0.0f);
 
@@ -598,22 +595,22 @@ public:
 };
 
 class Plane : public Mesh {
-private:
-  float width{0.0f};
-  float height{0.0f};
-
 public:
-  Plane(float width, float height)
-      : Mesh(10, 10), width(width), height(height) {
+  Plane(float width, float height, uint32_t uNum = 10, uint32_t vNum = 10)
+      : Mesh(uNum, vNum) {
+    this->parameters["width"] = width;
+    this->parameters["height"] = height;
     update();
   }
 
   virtual void update() {
-    reset();
     this->updateVertex([this](float u, float v) {
+      float width = std::get<float>(this->parameters["width"]);
+      float height = std::get<float>(this->parameters["height"]);
+
       Vertex vt;
-      vt.x = (0.5f - u) * this->width;
-      vt.y = (v - 0.5f) * this->height;
+      vt.x = (0.5f - u) * width;
+      vt.y = (v - 0.5f) * height;
       vt.z = 0.0f;
 
       vt.nx = 0.0f;
@@ -632,5 +629,53 @@ public:
   }
 };
 
+class Cube : public Geometry {
+public:
+  Cube(float xWidth, float yWidth, float zWidth, uint32_t xNum = 10,
+       uint32_t yNum = 10, uint32_t zNum = 10) {
+    this->parameters["xWidth"] = xWidth;
+    this->parameters["yWidth"] = yWidth;
+    this->parameters["zWidth"] = zWidth;
+    this->parameters["xNum"] = xNum;
+    this->parameters["yNum"] = yNum;
+    this->parameters["zNum"] = zNum;
+    update();
+  }
+
+  virtual void update() {
+    float xWidth = std::get<float>(this->parameters["xWidth"]);
+    float yWidth = std::get<float>(this->parameters["yWidth"]);
+    float zWidth = std::get<float>(this->parameters["zWidth"]);
+
+    uint32_t xNum = std::get<uint32_t>(this->parameters["xNum"]);
+    uint32_t yNum = std::get<uint32_t>(this->parameters["yNum"]);
+    uint32_t zNum = std::get<uint32_t>(this->parameters["zNum"]);
+
+    Plane back(xWidth, yWidth, xNum, yNum), front(xWidth, yWidth, xNum, yNum);
+    Plane left(yWidth, zWidth, yNum, zNum), right(yWidth, zWidth, yNum, zNum);
+    Plane bottom(xWidth, zWidth, xNum, zNum), top(xWidth, zWidth, xNum, zNum);
+
+    bottom.rotate(glm::radians(180.0f), _right);
+
+    top.translate(0.0f, yWidth, 0.0f);
+
+    left.rotate(glm::radians(90.0f), -_front);
+    left.translate(-xWidth / 2.0f, yWidth / 2.0f, 0.0f);
+
+    right.rotate(glm::radians(90.0f), _front);
+    right.translate(xWidth / 2.0f, yWidth / 2.0f, 0.0f);
+
+    front.rotate(glm::radians(90.0f), _right);
+    front.translate(0.0f, yWidth / 2.0f, zWidth / 2.0f);
+
+    back.rotate(glm::radians(90.0f), -_right);
+    back.translate(0.0f, yWidth / 2.0f, -zWidth / 2.0f);
+
+    FixedGeometry &&res =
+        FixedGeometry(left) + right + top + bottom + front + back;
+    this->vertices = res.vertices;
+    this->surfaces = res.surfaces;
+  }
+};
 
 } // namespace
