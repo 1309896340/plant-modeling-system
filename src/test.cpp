@@ -5,21 +5,23 @@
 
 #include <Eigen/Dense>
 
-#include "Eigen/src/Core/Matrix.h"
 #include "Scene.hpp"
 
-uint32_t count = 0;
+// 创建层次包围盒的描述结构
+struct BoundingNode{
+  BoundingNode *parent{nullptr};
+  BoundingNode *left{nullptr}, *right{nullptr};
+  struct{
+    vec3 min_xyz {0.0f,0.0f,0.0f};
+    vec3 max_xyz {0.0f,0.0f,0.0f};
+  }cube;
+  vector<Surface> objs;
+};
+
 
 float intersect(const Eigen::Vector3f &origin, const Eigen::Vector3f &dir, const Eigen::Vector3f &p1,
                 const Eigen::Vector3f &p2, const Eigen::Vector3f &p3) {
   // 返回t值，击中点坐标为 origin + t * dir
-  // 构造eigen矩阵
-  // dir = glm::normalize(dir);
-  // Eigen::Vector3f origin_e(origin.x, origin.y, origin.z);
-  // Eigen::Vector3f dir_e(dir.x, dir.y, dir.z);
-  // Eigen::Vector3f p1_e(p1.x, p1.y, p1.z);
-  // Eigen::Vector3f p2_e(p2.x, p2.y, p2.z);
-  // Eigen::Vector3f p3_e(p3.x, p3.y, p3.z);
 
   Eigen::Vector3f ddir = dir.normalized();
 
