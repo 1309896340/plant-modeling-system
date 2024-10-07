@@ -1,15 +1,50 @@
 ﻿// #define ENABLE_NORMAL_VISUALIZATION
 // #define ENBALE_POLYGON_VISUALIZATION
-#include "Scene.hpp"
-#include "glm/ext/quaternion_geometric.hpp"
 #include <cstdint>
 #include <memory>
-#include <regex>
+
+#include <Eigen/Dense>
+
+#include "Eigen/src/Core/Matrix.h"
+#include "Scene.hpp"
 
 uint32_t count = 0;
 
+float intersect(const Eigen::Vector3f &origin, const Eigen::Vector3f &dir, const Eigen::Vector3f &p1,
+                const Eigen::Vector3f &p2, const Eigen::Vector3f &p3) {
+  // 返回t值，击中点坐标为 origin + t * dir
+  // 构造eigen矩阵
+  // dir = glm::normalize(dir);
+  // Eigen::Vector3f origin_e(origin.x, origin.y, origin.z);
+  // Eigen::Vector3f dir_e(dir.x, dir.y, dir.z);
+  // Eigen::Vector3f p1_e(p1.x, p1.y, p1.z);
+  // Eigen::Vector3f p2_e(p2.x, p2.y, p2.z);
+  // Eigen::Vector3f p3_e(p3.x, p3.y, p3.z);
+
+  Eigen::Vector3f ddir = dir.normalized();
+
+  Eigen::Matrix3f A1;
+  Eigen::Matrix3f A2;
+  Eigen::Vector3f B;
+  A1 << -ddir, p1 - p3, p2 - p3;
+  B << origin - p3;
+  A2 << B, p1 - p3, p2 - p3;
+  float tmp = A1.determinant();
+  if (abs(tmp) < 1e-6) {
+    cerr << "奇异矩阵，错误" << endl;
+    return 0;
+  }
+  float t = A2.determinant() / tmp;
+
+  return t;
+}
+
 using namespace std;
 int main(int argc, char **argv) {
+  float t = intersect({0, 0, 0}, {1, 1, 1}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1});
+  cout << "t=" << t << endl;
+
+  return 0;
 
   Scene scene;
 
@@ -42,10 +77,10 @@ int main(int argc, char **argv) {
   vec3 up = glm::cross(right, lightDir);
   for (uint32_t i = 0; i < sample_w_num; i++) {
     for (uint32_t j = 0; j < sample_h_num; j++) {
-      vec3 lightSamplePos = (-sample_width / 2.0f + dw / 2.0f + i * dw) * right +
-                          (sample_height / 2.0f - dh / 2.0f - j * dh) * up;
+      vec3 lightSamplePos =
+          (-sample_width / 2.0f + dw / 2.0f + i * dw) * right +
+          (sample_height / 2.0f - dh / 2.0f - j * dh) * up;
       // 以lightSamplePos为起点，以lightDir为方向，对几何目标进行轰击
-      
     }
   }
 
