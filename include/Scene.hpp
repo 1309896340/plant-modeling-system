@@ -2,7 +2,11 @@
 
 // #define NDEBUG
 
+#include "GLFW/glfw3.h"
 #include "constants.h"
+#include "glm/common.hpp"
+#include "glm/ext/quaternion_geometric.hpp"
+#include <algorithm>
 #include <iostream>
 
 #include <cassert>
@@ -13,9 +17,11 @@
 #include <stdexcept>
 #include <variant>
 
+#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
@@ -51,6 +57,21 @@ namespace fs = filesystem;
 const static vec3 anchor = {0.0f, 0.0f, 0.0f};
 
 void framebufferResizeCallback(GLFWwindow *window, int width, int height);
+
+bool hitBoundingBox(const vec3 &min_xyz, const vec3 &max_xyz,
+                    const vec3 &origin, const vec3 &dir) {
+  vec3 ndir = glm::normalize(dir);
+  vec3 t_min_xyz = (min_xyz - origin) / ndir;
+  vec3 t_max_xyz = (max_xyz - origin) / ndir;
+  float t_enter = glm::max(t_min_xyz.x, glm::max(t_min_xyz.y, t_min_xyz.z));
+  float t_exit = glm::min(t_max_xyz.x, glm::min(t_max_xyz.y, t_max_xyz.z));
+  cout << "t_min_xyz = " << glm::to_string(min_xyz) << endl;
+  cout << "t_max_xyz = " << glm::to_string(max_xyz) << endl;
+  printf("t_enter=%.4f   t_exit=%.4f\n", t_enter, t_exit);
+  if (t_enter < t_exit && t_exit >= 0)
+    return true;
+  return false;
+}
 
 class Light {
   // 简单封装一个点光源
@@ -104,9 +125,43 @@ private:
     glBindVertexArray(0);
   }
 
-  void initComputeShaderTexture(){
+  void initBoundingBoxVBO() {
+    updateBoundingBox();
+    vec3 max_xyz = this->box.max_bound;
+    vec3 min_xyz = this->box.min_bound;
+    vector<vec3> b_vertices = {min_xyz,
+                               {min_xyz.x, min_xyz.y, max_xyz.z},
+                               {min_xyz.x, max_xyz.y, min_xyz.z},
+                               {min_xyz.x, max_xyz.y, max_xyz.z},
+                               {max_xyz.x, min_xyz.y, min_xyz.z},
+                               {max_xyz.x, min_xyz.y, max_xyz.z},
+                               {max_xyz.x, max_xyz.y, min_xyz.z},
+                               max_xyz};
+    // cout << "调试输出初始化的包围盒顶点：" << endl;
+    // for (auto &vert : b_vertices) {
+    //   cout << "(" << vert.x << "," << vert.y << "," << vert.z << ")" << endl;
+    // }
+    vector<GLuint> b_indices = {0, 1, 0, 2, 0, 4, 1, 3, 1, 5, 2, 3,
+                                2, 6, 4, 6, 4, 5, 3, 7, 5, 7, 6, 7};
 
+    glGenVertexArrays(1, &this->box.vao);
+    glBindVertexArray(this->box.vao);
+
+    glGenBuffers(1, &this->box.vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, this->box.vbo);
+    glBufferData(GL_ARRAY_BUFFER, b_vertices.size() * sizeof(vec3),
+                 b_vertices.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glEnableVertexAttribArray(0);
+
+    glGenBuffers(1, &this->box.ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->box.ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, b_indices.size() * sizeof(GLuint),
+                 b_indices.data(), GL_STATIC_DRAW);
   }
+
+  // void initComputeShaderTexture(){
+  // }
 
 public:
   shared_ptr<Geometry> geometry;
@@ -117,12 +172,21 @@ public:
   GLuint ebo{0};
   GLuint texture{0};
 
-  // 与计算着色器之间数据交换的上下文信息
   struct {
-    GLuint position_texture; // geometry中所有顶点位置
-    GLuint index_texture;    // geometry中所有三角索引
-    GLuint output_texture;   // 计算着色器输出结果
-  } ctx;
+    GLuint vao;
+    GLuint vbo;
+    GLuint ebo;
+
+    vec3 min_bound{0.0f, 0.0f, 0.0f};
+    vec3 max_bound{0.0f, 0.0f, 0.0f};
+  } box;
+
+  // 与计算着色器之间数据交换的上下文信息
+  // struct {
+  //   GLuint position_texture; // geometry中所有顶点位置
+  //   GLuint index_texture;    // geometry中所有三角索引
+  //   GLuint output_texture;   // 计算着色器输出结果
+  // } ctx;
 
   bool isSelected{false};
   bool visible{true};
@@ -132,7 +196,9 @@ public:
                        Transform transform)
       : geometry(geometry), transform(transform) {
     initVBO();
-    initComputeShaderTexture();
+    // initComputeShaderTexture();
+    // updateBoundingBox();
+    initBoundingBoxVBO();
   }
   GeometryRenderObject(const shared_ptr<Geometry> &geometry)
       : GeometryRenderObject(geometry, Transform()) {}
@@ -142,7 +208,9 @@ public:
       : transform(transform) {
     this->geometry = make_shared<FixedGeometry>(vertices, surfaces);
     initVBO();
-    initComputeShaderTexture();
+    // initComputeShaderTexture();
+    // updateBoundingBox();
+    initBoundingBoxVBO();
   }
 
   GeometryRenderObject(const vector<Vertex> &vertices,
@@ -156,10 +224,14 @@ public:
     this->ebo = obj.ebo;
     this->texture = obj.texture;
     this->geometry = obj.geometry;
+    this->box = obj.box;
     obj.vao = 0;
     obj.vbo = 0;
     obj.ebo = 0;
     obj.geometry = nullptr;
+    obj.box.vao = 0;
+    obj.box.vbo = 0;
+    obj.box.ebo = 0;
   }
   GeometryRenderObject &operator=(GeometryRenderObject &&obj) noexcept {
     this->transform = obj.transform;
@@ -168,11 +240,56 @@ public:
     this->ebo = obj.ebo;
     this->texture = obj.texture;
     this->geometry = obj.geometry;
+    this->box = obj.box;
     obj.vao = 0;
     obj.vbo = 0;
     obj.ebo = 0;
     obj.geometry = nullptr;
+    obj.box.vao = 0;
+    obj.box.vbo = 0;
+    obj.box.ebo = 0;
     return *this;
+  }
+
+  void updateBoundingBox() {
+    // 将this->geometry->vertices变换到世界坐标系
+    mat4 model = this->transform.getModel();
+    vector<vec3> positions(this->geometry->vertices.size());
+    for (int i = 0; i < this->geometry->vertices.size(); i++) {
+      positions[i] = vec3(
+          model *
+          vec4(glm::make_vec3(this->geometry->vertices[i].position), 1.0f));
+    }
+    // 计算包围盒边界
+    this->box.min_bound = positions[0];
+    this->box.max_bound = positions[0];
+    for (auto &vert : positions) {
+      this->box.min_bound.x = glm::min(this->box.min_bound.x, vert.x);
+      this->box.min_bound.y = glm::min(this->box.min_bound.y, vert.y);
+      this->box.min_bound.z = glm::min(this->box.min_bound.z, vert.z);
+
+      this->box.max_bound.x = glm::max(this->box.max_bound.x, vert.x);
+      this->box.max_bound.y = glm::max(this->box.max_bound.y, vert.y);
+      this->box.max_bound.z = glm::max(this->box.max_bound.z, vert.z);
+    }
+  }
+  void updateBoundingBoxVBO() {
+    updateBoundingBox();
+
+    vec3 max_xyz = this->box.max_bound;
+    vec3 min_xyz = this->box.min_bound;
+    vector<vec3> b_vertices = {min_xyz,
+                               {min_xyz.x, min_xyz.y, max_xyz.z},
+                               {min_xyz.x, max_xyz.y, min_xyz.z},
+                               {min_xyz.x, max_xyz.y, max_xyz.z},
+                               {max_xyz.x, min_xyz.y, min_xyz.z},
+                               {max_xyz.x, min_xyz.y, max_xyz.z},
+                               {max_xyz.x, max_xyz.y, min_xyz.z},
+                               max_xyz};
+    glBindVertexArray(this->box.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, this->box.vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, b_vertices.size() * sizeof(vec3),
+                    b_vertices.data());
   }
 
   void updateVBO() {
@@ -186,8 +303,15 @@ public:
                  this->geometry->surfaces.size() * sizeof(Surface),
                  this->geometry->surfaces.data(), GL_DYNAMIC_DRAW);
     glBindVertexArray(0);
+
+    // 重新计算包围盒并更新包围盒的VBO
+    updateBoundingBoxVBO();
   }
   ~GeometryRenderObject() {
+    glDeleteBuffers(1, &this->box.vbo);
+    glDeleteBuffers(1, &this->box.ebo);
+    glDeleteVertexArrays(1, &this->box.vao);
+
     glDeleteBuffers(1, &this->vbo);
     glDeleteBuffers(1, &this->ebo);
     glDeleteVertexArrays(1, &this->vao);
@@ -241,6 +365,7 @@ private:
     float theta_c = 0.0f;
     float phi_c = 0.0f;
     float dist = 0.0f;
+    ImVec2 mouse_pos{0, 0};
   } imgui;
 
 public:
@@ -456,6 +581,9 @@ public:
           imgui.theta_c =
               acos(glm::dot(glm::normalize(dist_v), vec3(0.0f, 1.0f, 0.0f)));
           imgui.phi_c = atan2(dist_v.z, dist_v.x);
+        } else {
+          // 鼠标左击选中场景物体，遍历所有物体的包围盒求交
+          this->imgui.mouse_pos = io->MousePos;
         }
       }
 
@@ -489,7 +617,31 @@ public:
       }
 
       if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-        // cout << "弹起鼠标左键  " << mouse_left_click_cnt++ << endl;
+        ImVec2 mouse_pos = io->MousePos;
+        if (mouse_pos.x == this->imgui.mouse_pos.x &&
+            mouse_pos.y == this->imgui.mouse_pos.y) {
+          // 按下与弹起位置一致，中间没有鼠标拖拽
+          // 将屏幕坐标转换到裁剪坐标，然后转换为世界坐标，与包围盒求交
+
+          double xpos, ypos;
+          glfwGetCursorPos(this->window, &xpos, &ypos);
+          xpos = 2.0f * xpos / this->width - 1.0f;
+          ypos = 2.0f * ypos / this->height - 1.0f;
+          vec3 pos = vec3(xpos, ypos, 1.0f);
+          mat4 clip2world =
+              glm::inverse(this->camera.getProject() * this->camera.getView());
+          vec4 pos_world = clip2world * vec4(pos, 1.0f);
+          vec3 dirr = glm::normalize(vec3(pos_world / pos_world.w) - this->camera.getPosition());
+          printf("(%.2f, %.2f, %.2f)\n",dirr.x, dirr.y, dirr.z);
+          for (auto &[name, oobj] : this->objs) {
+            bool isHit = hitBoundingBox(oobj.box.min_bound, oobj.box.max_bound, this->camera.getPosition(), dirr);
+            cout << name <<" isHit: "<< isHit << endl;
+            if(isHit)
+              oobj.isSelected = true;
+            else
+              oobj.isSelected = false;
+          }
+        }
       }
 
       if (ImGui::IsKeyDown(ImGuiKey_W)) {
@@ -621,10 +773,10 @@ public:
   void load_all_shader() {
     shaders["default"] = new Shader("default.vert", "default.frag");
     shaders["normal"] = new Shader("normal.vert", "normal.geom", "normal.frag");
-    // shaders["auxiliary"] = new Shader("auxiliary.vert", "auxiliary.frag");
     shaders["skybox"] = new Shader("skybox.vert", "skybox.frag");
     shaders["lightDepth"] = new Shader("lightDepth.vert", "lightDepth.frag");
     // shaders["compute"] = new Shader("compute.comp");
+    shaders["line"] = new Shader("line.vert", "line.frag");
   }
 
   void load_all_texture() {
@@ -661,8 +813,8 @@ public:
         this->textures[file.path().filename().stem().string()] = new_texture;
         stbi_image_free(img_data);
 
-        cout << "load texture: \"" << file.path().filename().string() << "\""
-             << endl;
+        // cout << "load texture: \"" << file.path().filename().string() << "\""
+        //      << endl;
       }
     }
   }
@@ -834,7 +986,6 @@ public:
                                this->depthmap.near, this->depthmap.far));
     cur_shader->set("view",
                     glm::lookAt(this->light.position, {0.0f, 0.0f, 0.0f}, _up));
-    // glViewport(0, 0, width, height);
     glBindFramebuffer(GL_FRAMEBUFFER, this->depthmap.fbo);
     glClear(GL_DEPTH_BUFFER_BIT);
     for (auto &[name, obj] : this->objs) {
@@ -844,7 +995,6 @@ public:
                      GL_UNSIGNED_INT, nullptr);
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    // glViewport(0, 0, width, height);
 
 #ifdef ENABLE_NORMAL_VISUALIZATION
     // 4. 渲染法向量
@@ -856,6 +1006,19 @@ public:
 
         glBindVertexArray(cur_obj.vao);
         glDrawArrays(GL_POINTS, 0, cur_obj.geometry->vertices.size());
+      }
+    }
+#endif
+
+#ifdef ENABLE_BOUNDINGBOX_VISUALIZATION
+    // 5. 渲染包围盒边框
+    cur_shader = this->shaders["line"];
+    cur_shader->use();
+    cur_shader->set("lineColor", glm::vec3(0.0f, 1.0f, 1.0f));
+    for (auto &[name, cur_obj] : this->objs) {
+      if (cur_obj.isSelected) {
+        glBindVertexArray(cur_obj.box.vao);
+        glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, nullptr);
       }
     }
 #endif

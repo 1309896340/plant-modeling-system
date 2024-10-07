@@ -1,5 +1,6 @@
 ﻿// #define ENABLE_NORMAL_VISUALIZATION
 // #define ENBALE_POLYGON_VISUALIZATION
+#define ENABLE_BOUNDINGBOX_VISUALIZATION
 #include <cstdint>
 #include <memory>
 
@@ -43,10 +44,6 @@ float intersect(const Eigen::Vector3f &origin, const Eigen::Vector3f &dir, const
 
 using namespace std;
 int main(int argc, char **argv) {
-  float t = intersect({0, 0, 0}, {1, 1, 1}, {1, 0, 0}, {0, 1, 0}, {0, 0, 1});
-  cout << "t=" << t << endl;
-
-  return 0;
 
   Scene scene;
 
