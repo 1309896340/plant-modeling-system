@@ -2,14 +2,19 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <memory>
 
-namespace{
-    using namespace std;
-    using glm::vec3;
-    using glm::vec4;
-    using glm::mat4;
-    using glm::mat3;
+#include "Geometry.hpp"
+#include "Transform.hpp"
 
+
+namespace {
+using namespace std;
+using glm::mat3;
+using glm::mat4;
+using glm::vec3;
+using glm::vec4;
 
 class BoundingBox {
 public:
@@ -18,6 +23,19 @@ public:
   BoundingBox() = default;
   BoundingBox(vec3 min_bound, vec3 max_bound)
       : min_bound(min_bound), max_bound(max_bound) {}
+  BoundingBox(const vector<vec3> &vertices, const vector<Surface> &surfaces) {
+    // 通过传入所有三角面元来初始化min_bound与max_bound
+    this->min_bound= vertices[0];
+    this->max_bound =vertices[0];
+    for (const vec3 &vert : vertices) {
+      this->max_bound.x = std::max(this->max_bound.x, vert.x);
+      this->max_bound.y = std::max(this->max_bound.y, vert.y);
+      this->max_bound.z = std::max(this->max_bound.z, vert.z);
+      this->min_bound.x = std::min(this->min_bound.x, vert.x);
+      this->min_bound.y = std::min(this->min_bound.y, vert.y);
+      this->min_bound.z = std::min(this->min_bound.z, vert.z);
+    }
+  }
   vec3 getBoxCenter() const { return (min_bound + max_bound) / 2.0f; }
 
   bool hit(const vec3 &origin, const vec3 &dir) {
@@ -45,8 +63,48 @@ public:
   }
 };
 
-class BVH{
+struct BvhNode {
+  BvhNode *parent{nullptr};
+  BvhNode *left{nullptr}, *right{nullptr};
 
+  // 记录该节点的包围盒所包含的三角的索引，被索引目标是BvhTree::surfaces
+  vector<uint32_t> triangles;
+  BoundingBox box;
 };
 
-}
+class BvhTree {
+private:
+  BvhNode *root{nullptr};
+
+  vector<vec3> vertices;
+  vector<Surface> surfaces;
+
+public:
+  BvhTree(const shared_ptr<Geometry> &geometry, Transform transform) {
+    // 深拷贝一份geometry并对其顶点应用transform的变换
+    this->vertices.resize(geometry->vertices.size());
+    mat4 model = transform.getModel();
+    for (int i = 0; i < geometry->vertices.size(); i++) {
+      vec3 pt = vec3(model * vec4(glm::make_vec3(geometry->vertices[i].position), 1.0f));
+      memcpy(&vertices[i], glm::value_ptr(pt), 3 * sizeof(float));
+    }
+    this->surfaces = geometry->surfaces; // 拷贝构造
+  };
+  BvhTree(const shared_ptr<Geometry> &geometry) : BvhTree(geometry, Transform()) {}
+
+  void construct() {
+    // 先生成根节点包围盒
+    this->root = new BvhNode();
+    this->root->box = BoundingBox(this->vertices, this->surfaces);  // 在构造函数中计算包围盒
+    for (int i = 0; i < this->surfaces.size(); i++) // 最外层包围盒加入全部三角
+      this->root->triangles.push_back(i);
+    // 进行质量划分
+
+    
+  }
+  ~BvhTree() {
+    // 广度优先遍历释放
+  }
+};
+
+} // namespace
