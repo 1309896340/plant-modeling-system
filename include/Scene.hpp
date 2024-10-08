@@ -65,9 +65,9 @@ bool hitBoundingBox(const vec3 &min_xyz, const vec3 &max_xyz,
   vec3 t_max_xyz = (max_xyz - origin) / ndir;
   float t_enter = glm::max(t_min_xyz.x, glm::max(t_min_xyz.y, t_min_xyz.z));
   float t_exit = glm::min(t_max_xyz.x, glm::min(t_max_xyz.y, t_max_xyz.z));
-  cout << "t_min_xyz = " << glm::to_string(min_xyz) << endl;
-  cout << "t_max_xyz = " << glm::to_string(max_xyz) << endl;
-  printf("t_enter=%.4f   t_exit=%.4f\n", t_enter, t_exit);
+  // cout << "min_xyz = " << glm::to_string(min_xyz) << endl;
+  // cout << "max_xyz = " << glm::to_string(max_xyz) << endl;
+  // printf("t_enter=%.4f   t_exit=%.4f\n", t_enter, t_exit);
   if (t_enter < t_exit && t_exit >= 0)
     return true;
   return false;
@@ -366,6 +366,7 @@ private:
     float phi_c = 0.0f;
     float dist = 0.0f;
     ImVec2 mouse_pos{0, 0};
+    vector<string> items;
   } imgui;
 
 public:
@@ -626,20 +627,44 @@ public:
           double xpos, ypos;
           glfwGetCursorPos(this->window, &xpos, &ypos);
           xpos = 2.0f * xpos / this->width - 1.0f;
-          ypos = 2.0f * ypos / this->height - 1.0f;
+          ypos = 1.0f - 2.0f * ypos / this->height;
           vec3 pos = vec3(xpos, ypos, 1.0f);
           mat4 clip2world =
               glm::inverse(this->camera.getProject() * this->camera.getView());
           vec4 pos_world = clip2world * vec4(pos, 1.0f);
-          vec3 dirr = glm::normalize(vec3(pos_world / pos_world.w) - this->camera.getPosition());
-          printf("(%.2f, %.2f, %.2f)\n",dirr.x, dirr.y, dirr.z);
+          vec3 dirr = glm::normalize(vec3(pos_world / pos_world.w) -
+                                     this->camera.getPosition());
+          printf("(%.2f, %.2f, %.2f)\n", dirr.x, dirr.y, dirr.z);
+          printf("(%.2f, %.2f)\n", xpos, ypos);
+          vec3 camera_pos = this->camera.getPosition();
           for (auto &[name, oobj] : this->objs) {
-            bool isHit = hitBoundingBox(oobj.box.min_bound, oobj.box.max_bound, this->camera.getPosition(), dirr);
-            cout << name <<" isHit: "<< isHit << endl;
-            if(isHit)
-              oobj.isSelected = true;
-            else
-              oobj.isSelected = false;
+            vec3 minbound = oobj.box.min_bound, maxbound = oobj.box.max_bound;
+            // 选择就近边界为minbound，就远边界为maxbound
+            vec3 mmin = glm::abs(camera_pos - oobj.box.min_bound);
+            vec3 mmax = glm::abs(camera_pos - oobj.box.max_bound);
+            if(mmax.x < mmin.x){
+              minbound.x = oobj.box.max_bound.x;
+              maxbound.x = oobj.box.min_bound.x;
+            }
+            if(mmax.y < mmin.y){
+              minbound.y = oobj.box.max_bound.y;
+              maxbound.y = oobj.box.min_bound.y;
+            }
+            if(mmax.z < mmin.z){
+              minbound.z = oobj.box.max_bound.z;
+              maxbound.z = oobj.box.min_bound.z;
+            }
+            bool isHit = hitBoundingBox(minbound, maxbound,
+                                        this->camera.getPosition(), dirr);
+            cout << name << " isHit: " << isHit << endl;
+            if (isHit) {
+              auto selected_name_ptr = std::find(this->imgui.items.begin(),
+                                                 this->imgui.items.end(), name);
+              if (selected_name_ptr != this->imgui.items.end()) {
+                uint32_t idx = selected_name_ptr - this->imgui.items.begin();
+                this->imgui.selected_idx = idx;
+              }
+            }
           }
         }
       }
@@ -674,27 +699,27 @@ public:
 
     if (ImGui::TreeNodeEx(u8"几何管理", ImGuiTreeNodeFlags_DefaultOpen)) {
       bool is_hightlight = true;
-      vector<string> items;
+      this->imgui.items.clear();
       for (auto &obj : this->objs) {
-        items.push_back(obj.first);
+        this->imgui.items.push_back(obj.first);
       }
       if (ImGui::BeginListBox(u8"物体")) {
-        for (int i = 0; i < items.size(); i++) {
+        for (int i = 0; i < this->imgui.items.size(); i++) {
           const bool is_selected = (imgui.selected_idx == i);
-          if (ImGui::Selectable(items[i].c_str(), is_selected))
+          if (ImGui::Selectable(this->imgui.items[i].c_str(), is_selected))
             imgui.selected_idx = i;
           if (is_hightlight && ImGui::IsItemHovered())
             imgui.highlighted_idx = i;
           if (is_selected) {
-            imgui.cur_obj = &this->objs[items[i]];
+            imgui.cur_obj = &this->objs[this->imgui.items[i]];
             ImGui::SetItemDefaultFocus();
           }
         }
         // 回传选中状态
-        for (int i = 0; i < items.size(); i++) {
-          this->objs[items[i]].isSelected = false;
+        for (int i = 0; i < this->imgui.items.size(); i++) {
+          this->objs[this->imgui.items[i]].isSelected = false;
           if (imgui.selected_idx == i)
-            this->objs[items[i]].isSelected = true;
+            this->objs[this->imgui.items[i]].isSelected = true;
         }
         ImGui::EndListBox();
       }
