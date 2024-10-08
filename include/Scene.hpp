@@ -6,6 +6,7 @@
 #include "constants.h"
 #include "glm/common.hpp"
 #include "glm/ext/quaternion_geometric.hpp"
+#include "glm/geometric.hpp"
 #include <algorithm>
 #include <iostream>
 
@@ -60,14 +61,24 @@ void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 
 bool hitBoundingBox(const vec3 &min_xyz, const vec3 &max_xyz,
                     const vec3 &origin, const vec3 &dir) {
+
+  // 选择就近边界为near_bound，就远边界为far_bound
+  vec3 near_bound = min_xyz, far_bound = max_xyz;
+  vec3 near_dist = glm::abs(origin - near_bound);
+  vec3 far_dist = glm::abs(origin - far_bound);
+  if (far_dist.x < near_dist.x)
+    swap(near_bound.x, far_bound.x);
+  if (far_dist.y < near_dist.y)
+    swap(near_bound.y, far_bound.y);
+  if (far_dist.z < near_dist.z)
+    swap(near_bound.z, far_bound.z);
+
   vec3 ndir = glm::normalize(dir);
-  vec3 t_min_xyz = (min_xyz - origin) / ndir;
-  vec3 t_max_xyz = (max_xyz - origin) / ndir;
+  vec3 t_min_xyz = (near_bound - origin) / ndir;
+  vec3 t_max_xyz = (far_bound - origin) / ndir;
   float t_enter = glm::max(t_min_xyz.x, glm::max(t_min_xyz.y, t_min_xyz.z));
   float t_exit = glm::min(t_max_xyz.x, glm::min(t_max_xyz.y, t_max_xyz.z));
-  // cout << "min_xyz = " << glm::to_string(min_xyz) << endl;
-  // cout << "max_xyz = " << glm::to_string(max_xyz) << endl;
-  // printf("t_enter=%.4f   t_exit=%.4f\n", t_enter, t_exit);
+
   if (t_enter < t_exit && t_exit >= 0)
     return true;
   return false;
@@ -179,6 +190,8 @@ public:
 
     vec3 min_bound{0.0f, 0.0f, 0.0f};
     vec3 max_bound{0.0f, 0.0f, 0.0f};
+
+    vec3 getBoxCenter() const { return (min_bound + max_bound) / 2.0f; }
   } box;
 
   // 与计算着色器之间数据交换的上下文信息
@@ -636,25 +649,10 @@ public:
                                      this->camera.getPosition());
           printf("(%.2f, %.2f, %.2f)\n", dirr.x, dirr.y, dirr.z);
           printf("(%.2f, %.2f)\n", xpos, ypos);
-          vec3 camera_pos = this->camera.getPosition();
+
+          std::map<float, uint32_t> hit_objs;
           for (auto &[name, oobj] : this->objs) {
-            vec3 minbound = oobj.box.min_bound, maxbound = oobj.box.max_bound;
-            // 选择就近边界为minbound，就远边界为maxbound
-            vec3 mmin = glm::abs(camera_pos - oobj.box.min_bound);
-            vec3 mmax = glm::abs(camera_pos - oobj.box.max_bound);
-            if(mmax.x < mmin.x){
-              minbound.x = oobj.box.max_bound.x;
-              maxbound.x = oobj.box.min_bound.x;
-            }
-            if(mmax.y < mmin.y){
-              minbound.y = oobj.box.max_bound.y;
-              maxbound.y = oobj.box.min_bound.y;
-            }
-            if(mmax.z < mmin.z){
-              minbound.z = oobj.box.max_bound.z;
-              maxbound.z = oobj.box.min_bound.z;
-            }
-            bool isHit = hitBoundingBox(minbound, maxbound,
+            bool isHit = hitBoundingBox(oobj.box.min_bound, oobj.box.max_bound,
                                         this->camera.getPosition(), dirr);
             cout << name << " isHit: " << isHit << endl;
             if (isHit) {
@@ -662,9 +660,15 @@ public:
                                                  this->imgui.items.end(), name);
               if (selected_name_ptr != this->imgui.items.end()) {
                 uint32_t idx = selected_name_ptr - this->imgui.items.begin();
-                this->imgui.selected_idx = idx;
+                float obj_camera_dist = glm::distance(
+                    this->camera.getPosition(), oobj.box.getBoxCenter());
+                hit_objs[obj_camera_dist] = idx;
               }
             }
+          }
+          if (!hit_objs.empty()) {
+            // 取hit_objs中最近元素
+            this->imgui.selected_idx = hit_objs.begin()->second;
           }
         }
       }
