@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "constants.h"
+#include "glm/geometric.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -9,6 +10,8 @@ namespace {
 using glm::mat4;
 using glm::vec3;
 using glm::vec4;
+
+// const float MOUSE_VIEW_ROTATE_SENSITIVITY = 0.1f;
 
 class Camera {
 private:
@@ -20,6 +23,14 @@ private:
   float near{0.1f};
   float far{200.0f};
   float aspect{1.0f};
+
+  // 相机环绕的锚点
+  struct {
+    vec3 anchor{0.0f, 0.0f, 0.0f}; // 环绕的目标
+    float distance{0.0f};
+    float theta{0.0f};
+    float phi{0.0f};
+  } surround_info;
 
   // 天顶角，范围[0,pi]
   float theta{0.0f};
@@ -61,6 +72,29 @@ public:
       : position(position), aspect(aspect) {
     this->toward = glm::normalize(target - position);
     updateAttitude();
+  }
+
+  void setAnchor(vec3 anchor) { this->surround_info.anchor = anchor; }
+
+  void record() {
+    // 配合surround()使用
+    // 记录相机当前位置到锚点的距离、theta、phi
+    vec3 dist_v = this->position - this->surround_info.anchor;
+    this->surround_info.distance = glm::length(dist_v);
+    this->surround_info.theta = acos(glm::dot(glm::normalize(dist_v), vec3(0.0f, 1.0f, 0.0f)));
+    this->surround_info.phi = atan2(dist_v.z, dist_v.x);
+  }
+
+  void surround(float dx, float dy) {
+    // 配合record()使用
+    this->surround_info.phi += dx;
+    this->surround_info.theta -= dy;
+    vec3 new_pos;
+    new_pos.x = this->surround_info.distance * sin(this->surround_info.theta) * cos(this->surround_info.phi);
+    new_pos.y = this->surround_info.distance * cos(this->surround_info.theta);
+    new_pos.z = this->surround_info.distance * sin(this->surround_info.theta) * sin(this->surround_info.phi);
+    this->setPosition(new_pos + this->surround_info.anchor);
+    this->lookAt(this->surround_info.anchor);
   }
 
   void updatePositionFromShadow() {

@@ -5,7 +5,6 @@
 #include "GLFW/glfw3.h"
 #include "constants.h"
 #include "glm/common.hpp"
-#include "glm/ext/quaternion_geometric.hpp"
 #include "glm/geometric.hpp"
 #include <algorithm>
 #include <iostream>
@@ -34,10 +33,12 @@
 #include "proj.h"
 
 #include "Auxiliary.hpp"
+#include "Bounding.hpp"
 #include "Camera.hpp"
 #include "Geometry.hpp"
 #include "Shader.hpp"
 #include "Transform.hpp"
+
 
 #define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
 #define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.02f
@@ -47,42 +48,13 @@ static void BK(int n) { printf("break %d\n", n); }
 
 namespace {
 using namespace std;
-
 using glm::mat4;
 using glm::quat;
 using glm::vec3;
 using glm::vec4;
-
 namespace fs = filesystem;
 
-const static vec3 anchor = {0.0f, 0.0f, 0.0f};
-
 void framebufferResizeCallback(GLFWwindow *window, int width, int height);
-
-bool hitBoundingBox(const vec3 &min_xyz, const vec3 &max_xyz,
-                    const vec3 &origin, const vec3 &dir) {
-
-  // 选择就近边界为near_bound，就远边界为far_bound
-  vec3 near_bound = min_xyz, far_bound = max_xyz;
-  vec3 near_dist = glm::abs(origin - near_bound);
-  vec3 far_dist = glm::abs(origin - far_bound);
-  if (far_dist.x < near_dist.x)
-    swap(near_bound.x, far_bound.x);
-  if (far_dist.y < near_dist.y)
-    swap(near_bound.y, far_bound.y);
-  if (far_dist.z < near_dist.z)
-    swap(near_bound.z, far_bound.z);
-
-  vec3 ndir = glm::normalize(dir);
-  vec3 t_min_xyz = (near_bound - origin) / ndir;
-  vec3 t_max_xyz = (far_bound - origin) / ndir;
-  float t_enter = glm::max(t_min_xyz.x, glm::max(t_min_xyz.y, t_min_xyz.z));
-  float t_exit = glm::min(t_max_xyz.x, glm::min(t_max_xyz.y, t_max_xyz.z));
-
-  if (t_enter < t_exit && t_exit >= 0)
-    return true;
-  return false;
-}
 
 class Light {
   // 简单封装一个点光源
@@ -148,25 +120,21 @@ private:
                                {max_xyz.x, min_xyz.y, max_xyz.z},
                                {max_xyz.x, max_xyz.y, min_xyz.z},
                                max_xyz};
-    // cout << "调试输出初始化的包围盒顶点：" << endl;
-    // for (auto &vert : b_vertices) {
-    //   cout << "(" << vert.x << "," << vert.y << "," << vert.z << ")" << endl;
-    // }
     vector<GLuint> b_indices = {0, 1, 0, 2, 0, 4, 1, 3, 1, 5, 2, 3,
                                 2, 6, 4, 6, 4, 5, 3, 7, 5, 7, 6, 7};
 
-    glGenVertexArrays(1, &this->box.vao);
-    glBindVertexArray(this->box.vao);
+    glGenVertexArrays(1, &this->box_info.vao);
+    glBindVertexArray(this->box_info.vao);
 
-    glGenBuffers(1, &this->box.vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, this->box.vbo);
+    glGenBuffers(1, &this->box_info.vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, this->box_info.vbo);
     glBufferData(GL_ARRAY_BUFFER, b_vertices.size() * sizeof(vec3),
                  b_vertices.data(), GL_STATIC_DRAW);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
     glEnableVertexAttribArray(0);
 
-    glGenBuffers(1, &this->box.ebo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->box.ebo);
+    glGenBuffers(1, &this->box_info.ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->box_info.ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, b_indices.size() * sizeof(GLuint),
                  b_indices.data(), GL_STATIC_DRAW);
   }
@@ -183,16 +151,13 @@ public:
   GLuint ebo{0};
   GLuint texture{0};
 
+  BoundingBox box;
+
   struct {
     GLuint vao;
     GLuint vbo;
     GLuint ebo;
-
-    vec3 min_bound{0.0f, 0.0f, 0.0f};
-    vec3 max_bound{0.0f, 0.0f, 0.0f};
-
-    vec3 getBoxCenter() const { return (min_bound + max_bound) / 2.0f; }
-  } box;
+  } box_info;
 
   // 与计算着色器之间数据交换的上下文信息
   // struct {
@@ -210,7 +175,6 @@ public:
       : geometry(geometry), transform(transform) {
     initVBO();
     // initComputeShaderTexture();
-    // updateBoundingBox();
     initBoundingBoxVBO();
   }
   GeometryRenderObject(const shared_ptr<Geometry> &geometry)
@@ -222,47 +186,12 @@ public:
     this->geometry = make_shared<FixedGeometry>(vertices, surfaces);
     initVBO();
     // initComputeShaderTexture();
-    // updateBoundingBox();
     initBoundingBoxVBO();
   }
 
   GeometryRenderObject(const vector<Vertex> &vertices,
                        const vector<Surface> &surfaces)
       : GeometryRenderObject(vertices, surfaces, Transform()) {}
-
-  GeometryRenderObject(GeometryRenderObject &&obj) noexcept { // 实现移动语义
-    this->transform = obj.transform;
-    this->vao = obj.vao;
-    this->vbo = obj.vbo;
-    this->ebo = obj.ebo;
-    this->texture = obj.texture;
-    this->geometry = obj.geometry;
-    this->box = obj.box;
-    obj.vao = 0;
-    obj.vbo = 0;
-    obj.ebo = 0;
-    obj.geometry = nullptr;
-    obj.box.vao = 0;
-    obj.box.vbo = 0;
-    obj.box.ebo = 0;
-  }
-  GeometryRenderObject &operator=(GeometryRenderObject &&obj) noexcept {
-    this->transform = obj.transform;
-    this->vao = obj.vao;
-    this->vbo = obj.vbo;
-    this->ebo = obj.ebo;
-    this->texture = obj.texture;
-    this->geometry = obj.geometry;
-    this->box = obj.box;
-    obj.vao = 0;
-    obj.vbo = 0;
-    obj.ebo = 0;
-    obj.geometry = nullptr;
-    obj.box.vao = 0;
-    obj.box.vbo = 0;
-    obj.box.ebo = 0;
-    return *this;
-  }
 
   void updateBoundingBox() {
     // 将this->geometry->vertices变换到世界坐标系
@@ -299,8 +228,8 @@ public:
                                {max_xyz.x, min_xyz.y, max_xyz.z},
                                {max_xyz.x, max_xyz.y, min_xyz.z},
                                max_xyz};
-    glBindVertexArray(this->box.vao);
-    glBindBuffer(GL_ARRAY_BUFFER, this->box.vbo);
+    glBindVertexArray(this->box_info.vao);
+    glBindBuffer(GL_ARRAY_BUFFER, this->box_info.vbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, b_vertices.size() * sizeof(vec3),
                     b_vertices.data());
   }
@@ -321,9 +250,9 @@ public:
     updateBoundingBoxVBO();
   }
   ~GeometryRenderObject() {
-    glDeleteBuffers(1, &this->box.vbo);
-    glDeleteBuffers(1, &this->box.ebo);
-    glDeleteVertexArrays(1, &this->box.vao);
+    glDeleteBuffers(1, &this->box_info.vbo);
+    glDeleteBuffers(1, &this->box_info.ebo);
+    glDeleteVertexArrays(1, &this->box_info.vao);
 
     glDeleteBuffers(1, &this->vbo);
     glDeleteBuffers(1, &this->ebo);
@@ -370,14 +299,13 @@ private:
   bool isShowLight{true};
 
   // imgui的状态变量
-
   struct {
-    GeometryRenderObject *cur_obj{nullptr};
+    shared_ptr<GeometryRenderObject> cur_obj{nullptr};
     int selected_idx = 0;
     int highlighted_idx = 0;
-    float theta_c = 0.0f;
-    float phi_c = 0.0f;
-    float dist = 0.0f;
+    // float theta_c = 0.0f;
+    // float phi_c = 0.0f;
+    // float dist = 0.0f;
     ImVec2 mouse_pos{0, 0};
     vector<string> items;
   } imgui;
@@ -385,13 +313,11 @@ private:
 public:
   map<string, Shader *> shaders;
   map<string, GLuint> textures;
-  map<string, GeometryRenderObject> objs;
-
-  map<string, GeometryRenderObject> aux;
+  map<string, shared_ptr<GeometryRenderObject>> objs;
+  map<string, shared_ptr<GeometryRenderObject>> aux;
 
   ParallelLight light;
-  Camera camera{vec3(0.0f, 0.0f, 20.0f), vec3{0.0f, 0.0f, 0.0f},
-                static_cast<float>(width) / static_cast<float>(height)};
+  Camera camera{vec3(0.0f, 0.0f, 20.0f), vec3{0.0f, 0.0f, 0.0f}, static_cast<float>(width) / static_cast<float>(height)};
   Scene() {
     if (glfwInit() == GLFW_FALSE) {
       string msg = "failed to init glfw!";
@@ -463,21 +389,24 @@ public:
   void init_scene_obj() {
     // 光源
     shared_ptr<Geometry> lightBall = make_shared<Sphere>(0.07f, 36, 72);
-    GeometryRenderObject obj1(lightBall);
-    obj1.geometry->setColor(1.0f, 1.0f, 1.0f);
-    obj1.updateVBO();
-    this->addSceneObject("Light", std::move(obj1));
+    shared_ptr<GeometryRenderObject> obj1 =
+        make_shared<GeometryRenderObject>(lightBall);
+    obj1->geometry->setColor(1.0f, 1.0f, 1.0f);
+    obj1->updateVBO();
+    this->addSceneObject("Light", obj1);
 
     // 坐标轴
     shared_ptr<Geometry> axis = make_shared<CoordinateAxis>();
-    GeometryRenderObject obj2(axis);
-    this->addSceneObject("Axis", std::move(obj2));
+    shared_ptr<GeometryRenderObject> obj2 =
+        make_shared<GeometryRenderObject>(axis);
+    this->addSceneObject("Axis", obj2);
 
     // 地面
     shared_ptr<Geometry> ground = make_shared<Ground>(20.0f, 20.0f);
-    GeometryRenderObject obj3(ground);
-    obj3.texture = this->textures["fabric"];
-    this->addSceneObject("Ground", std::move(obj3));
+    shared_ptr<GeometryRenderObject> obj3 =
+        make_shared<GeometryRenderObject>(ground);
+    obj3->texture = this->textures["fabric"];
+    this->addSceneObject("Ground", obj3);
   }
 
   void init_skybox() {
@@ -485,9 +414,14 @@ public:
 
     // 1. 加载VBO
     vector<vec3> vertices = {
-        {-1.0, -1.0, -1.0}, {-1.0, -1.0, 1.0}, {-1.0, 1.0, -1.0},
-        {-1.0, 1.0, 1.0},   {1.0, -1.0, -1.0}, {1.0, -1.0, 1.0},
-        {1.0, 1.0, -1.0},   {1.0, 1.0, 1.0},
+        {-1.0, -1.0, -1.0},
+        {-1.0, -1.0, 1.0},
+        {-1.0, 1.0, -1.0},
+        {-1.0, 1.0, 1.0},
+        {1.0, -1.0, -1.0},
+        {1.0, -1.0, 1.0},
+        {1.0, 1.0, -1.0},
+        {1.0, 1.0, 1.0},
     };
     vector<uint32_t> surfaces = {1, 7, 5, 1, 3, 7, 0, 6, 2, 0, 4, 6,
                                  5, 6, 4, 5, 7, 6, 0, 3, 1, 0, 2, 3,
@@ -554,10 +488,10 @@ public:
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
   }
 
-  void showAxis() { this->aux["Axis"].visible = true; }
-  void hideAxis() { this->aux["Axis"].visible = false; }
-  void showGround() { this->aux["Ground"].visible = true; }
-  void hideGround() { this->aux["Ground"].visible = false; }
+  void showAxis() { this->aux["Axis"]->visible = true; }
+  void hideAxis() { this->aux["Axis"]->visible = false; }
+  void showGround() { this->aux["Ground"]->visible = true; }
+  void hideGround() { this->aux["Ground"]->visible = false; }
 
   void show_info() {
     const GLubyte *vendor = glGetString(GL_VENDOR);
@@ -581,8 +515,7 @@ public:
       if (is_theta_changed || is_phi_changed)
         this->camera.updateToward();
 
-      if (ImGui::InputFloat3(u8"位置", glm::value_ptr(this->camera.position_s),
-                             "%.2f", 0)) {
+      if (ImGui::InputFloat3(u8"位置", glm::value_ptr(this->camera.position_s), "%.2f", 0)) {
         this->camera.updatePositionFromShadow();
       }
 
@@ -590,11 +523,14 @@ public:
       // 记录下“相机环绕”时的相机球坐标
       if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         if (ImGui::IsKeyDown(ImGuiKey_ModShift)) {
-          vec3 dist_v = this->camera.position_s - anchor;
-          imgui.dist = glm::length(dist_v);
-          imgui.theta_c =
-              acos(glm::dot(glm::normalize(dist_v), vec3(0.0f, 1.0f, 0.0f)));
-          imgui.phi_c = atan2(dist_v.z, dist_v.x);
+          // vec3 dist_v = this->camera.position_s - anchor;
+          // imgui.dist = glm::length(dist_v);
+          // imgui.theta_c =
+          //     acos(glm::dot(glm::normalize(dist_v), vec3(0.0f, 1.0f, 0.0f)));
+          // imgui.phi_c = atan2(dist_v.z, dist_v.x);
+
+          this->camera.record();
+
         } else {
           // 鼠标左击选中场景物体，遍历所有物体的包围盒求交
           this->imgui.mouse_pos = io->MousePos;
@@ -605,17 +541,18 @@ public:
         if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
           if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
             // 以世界坐标锚点为中心做旋转
-            imgui.phi_c +=
-                MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x;
-            imgui.theta_c -=
-                MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y;
+            // imgui.phi_c +=
+            //     MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x;
+            // imgui.theta_c -=
+            //     MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y;
+            // vec3 new_pos;
+            // new_pos.x = imgui.dist * sin(imgui.theta_c) * cos(imgui.phi_c);
+            // new_pos.y = imgui.dist * cos(imgui.theta_c);
+            // new_pos.z = imgui.dist * sin(imgui.theta_c) * sin(imgui.phi_c);
+            // this->camera.setPosition(new_pos + anchor);
+            // this->camera.lookAt(anchor);
+            this->camera.surround(MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x, MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y);
 
-            vec3 new_pos;
-            new_pos.x = imgui.dist * sin(imgui.theta_c) * cos(imgui.phi_c);
-            new_pos.y = imgui.dist * cos(imgui.theta_c);
-            new_pos.z = imgui.dist * sin(imgui.theta_c) * sin(imgui.phi_c);
-            this->camera.setPosition(new_pos + anchor);
-            this->camera.lookAt(anchor);
           } else {
             // 以相机为中心旋转
             this->camera.rotate(
@@ -647,21 +584,18 @@ public:
           vec4 pos_world = clip2world * vec4(pos, 1.0f);
           vec3 dirr = glm::normalize(vec3(pos_world / pos_world.w) -
                                      this->camera.getPosition());
-          printf("(%.2f, %.2f, %.2f)\n", dirr.x, dirr.y, dirr.z);
-          printf("(%.2f, %.2f)\n", xpos, ypos);
 
           std::map<float, uint32_t> hit_objs;
           for (auto &[name, oobj] : this->objs) {
-            bool isHit = hitBoundingBox(oobj.box.min_bound, oobj.box.max_bound,
-                                        this->camera.getPosition(), dirr);
-            cout << name << " isHit: " << isHit << endl;
+            bool isHit = oobj->box.hit(this->camera.getPosition(), dirr);
+
             if (isHit) {
               auto selected_name_ptr = std::find(this->imgui.items.begin(),
                                                  this->imgui.items.end(), name);
               if (selected_name_ptr != this->imgui.items.end()) {
                 uint32_t idx = selected_name_ptr - this->imgui.items.begin();
                 float obj_camera_dist = glm::distance(
-                    this->camera.getPosition(), oobj.box.getBoxCenter());
+                    this->camera.getPosition(), oobj->box.getBoxCenter());
                 hit_objs[obj_camera_dist] = idx;
               }
             }
@@ -669,6 +603,7 @@ public:
           if (!hit_objs.empty()) {
             // 取hit_objs中最近元素
             this->imgui.selected_idx = hit_objs.begin()->second;
+            this->camera.setAnchor(this->objs[this->imgui.items[this->imgui.selected_idx]]->box.getBoxCenter());
           }
         }
       }
@@ -692,7 +627,7 @@ public:
       ImGui::SliderFloat3(u8"位置", glm::value_ptr(this->light.position),
                           -20.0f, 20.f);
       // 暂时这么写
-      this->aux["Light"].transform.setPosition(light.position);
+      this->aux["Light"]->transform.setPosition(light.position);
       ImGui::TreePop();
     }
 
@@ -715,15 +650,15 @@ public:
           if (is_hightlight && ImGui::IsItemHovered())
             imgui.highlighted_idx = i;
           if (is_selected) {
-            imgui.cur_obj = &this->objs[this->imgui.items[i]];
+            imgui.cur_obj = this->objs[this->imgui.items[i]];
             ImGui::SetItemDefaultFocus();
           }
         }
         // 回传选中状态
         for (int i = 0; i < this->imgui.items.size(); i++) {
-          this->objs[this->imgui.items[i]].isSelected = false;
+          this->objs[this->imgui.items[i]]->isSelected = false;
           if (imgui.selected_idx == i)
-            this->objs[this->imgui.items[i]].isSelected = true;
+            this->objs[this->imgui.items[i]]->isSelected = true;
         }
         ImGui::EndListBox();
       }
@@ -848,18 +783,15 @@ public:
     }
   }
 
-  void addSceneObject(const string &name, GeometryRenderObject &&obj) {
+  void addSceneObject(const string &name,
+                      const shared_ptr<GeometryRenderObject> &obj) {
 
     if (this->aux.find(name) != this->aux.end()) {
       cout << "scene cannot add object with an existed name!" << endl;
       return;
     }
-    this->aux[name] = std::move(obj);
+    this->aux[name] = obj;
   }
-  // void addSceneObject(const string &name,
-  //                     const shared_ptr<Geometry> &geometry) {
-  //   this->addSceneObject(name, geometry, Transform());
-  // }
 
   void add(const string &name, const shared_ptr<Geometry> &geometry,
            Transform transform) {
@@ -867,8 +799,7 @@ public:
       cout << "scene cannot add object with an existed name!" << endl;
       return;
     }
-    GeometryRenderObject obj(geometry, transform);
-    this->objs[name] = std::move(obj);
+    this->objs[name] = make_shared<GeometryRenderObject>(geometry, transform);
   }
 
   void add(const string &name, const shared_ptr<Geometry> &geometry) {
@@ -883,8 +814,8 @@ public:
   void imgui_docking_render(bool *p_open = nullptr) {
     // Variables to configure the Dockspace example.
     static bool opt_fullscreen = true; // Is the Dockspace full-screen?
-    static bool opt_padding = false; // Is there padding (a blank space) between
-                                     // the window edge and the Dockspace?
+    static bool opt_padding = false;   // Is there padding (a blank space) between
+                                       // the window edge and the Dockspace?
     static ImGuiDockNodeFlags dockspace_flags =
         ImGuiDockNodeFlags_None; // Config flags for the Dockspace
     dockspace_flags |= ImGuiDockNodeFlags_PassthruCentralNode;
@@ -976,32 +907,32 @@ public:
     cur_shader->set("diffuseStrength", 1.0f);
     cur_shader->set("specularStrength", 1.0f);
     for (auto &[name, cur_obj] : this->objs) {
-      mat4 model = cur_obj.transform.getModel();
+      mat4 model = cur_obj->transform.getModel();
       cur_shader->set("model", model);
       // 启用材质，设置材质属性
-      glBindTexture(GL_TEXTURE_2D, cur_obj.texture);
-      cur_shader->set("useTexture", (cur_obj.texture != 0) ? true : false);
+      glBindTexture(GL_TEXTURE_2D, cur_obj->texture);
+      cur_shader->set("useTexture", (cur_obj->texture != 0) ? true : false);
       cur_shader->set("useLight", true);
       // 绘制
-      glBindVertexArray(cur_obj.vao);
-      glDrawElements(GL_TRIANGLES, cur_obj.geometry->surfaces.size() * 3,
+      glBindVertexArray(cur_obj->vao);
+      glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3,
                      GL_UNSIGNED_INT, (void *)0);
     }
     // 2. 场景辅助元素
     for (auto &[name, obj] : this->aux) {
-      if (!obj.visible)
+      if (!obj->visible)
         continue;
-      cur_shader->set("model", obj.transform.getModel());
-      if (obj.texture != 0) {
+      cur_shader->set("model", obj->transform.getModel());
+      if (obj->texture != 0) {
         cur_shader->set("useTexture", true);
         cur_shader->set("useLight", true);
       } else {
         cur_shader->set("useTexture", false);
         cur_shader->set("useLight", false);
       }
-      glBindTexture(GL_TEXTURE_2D, obj.texture);
-      glBindVertexArray(obj.vao);
-      glDrawElements(GL_TRIANGLES, obj.geometry->surfaces.size() * 3,
+      glBindTexture(GL_TEXTURE_2D, obj->texture);
+      glBindVertexArray(obj->vao);
+      glDrawElements(GL_TRIANGLES, obj->geometry->surfaces.size() * 3,
                      GL_UNSIGNED_INT, nullptr);
       glBindVertexArray(0);
       glBindTexture(GL_TEXTURE_2D, 0);
@@ -1018,9 +949,9 @@ public:
     glBindFramebuffer(GL_FRAMEBUFFER, this->depthmap.fbo);
     glClear(GL_DEPTH_BUFFER_BIT);
     for (auto &[name, obj] : this->objs) {
-      cur_shader->set("model", obj.transform.getModel());
-      glBindVertexArray(obj.vao);
-      glDrawElements(GL_TRIANGLES, obj.geometry->surfaces.size() * 3,
+      cur_shader->set("model", obj->transform.getModel());
+      glBindVertexArray(obj->vao);
+      glDrawElements(GL_TRIANGLES, obj->geometry->surfaces.size() * 3,
                      GL_UNSIGNED_INT, nullptr);
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1028,13 +959,13 @@ public:
 #ifdef ENABLE_NORMAL_VISUALIZATION
     // 4. 渲染法向量
     for (auto &[name, cur_obj] : this->objs) {
-      if (cur_obj.isSelected) {
+      if (cur_obj->isSelected) {
         cur_shader = this->shaders["normal"];
         cur_shader->use();
-        cur_shader->set("model", model);
+        cur_shader->set("model", cur_obj->transform.getModel());
 
-        glBindVertexArray(cur_obj.vao);
-        glDrawArrays(GL_POINTS, 0, cur_obj.geometry->vertices.size());
+        glBindVertexArray(cur_obj->vao);
+        glDrawArrays(GL_POINTS, 0, cur_obj->geometry->vertices.size());
       }
     }
 #endif
@@ -1045,8 +976,8 @@ public:
     cur_shader->use();
     cur_shader->set("lineColor", glm::vec3(0.0f, 1.0f, 1.0f));
     for (auto &[name, cur_obj] : this->objs) {
-      if (cur_obj.isSelected) {
-        glBindVertexArray(cur_obj.box.vao);
+      if (cur_obj->isSelected) {
+        glBindVertexArray(cur_obj->box_info.vao);
         glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, nullptr);
       }
     }

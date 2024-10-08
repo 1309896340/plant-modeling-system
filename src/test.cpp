@@ -61,7 +61,7 @@ int main(int argc, char **argv) {
   scene.add("Cylinder", make_shared<Cylinder>(2.5f, 5.0f), {5.0f, 0.0f, 0.0f});
 
   // 无关于OpenGL渲染，实现CPU端的仿真计算，仅考虑Sphere形体
-  const GeometryRenderObject *obj = &scene.objs["Sphere"];
+  const shared_ptr<GeometryRenderObject> obj = scene.objs["Sphere"];
   const shared_ptr<Geometry> geom = obj->geometry;
   // 注意：这里的geom处于模型空间，未变换到世界坐标系
   const float sample_width = 20.0f;
