@@ -1,27 +1,28 @@
 ﻿// #define ENABLE_NORMAL_VISUALIZATION
 // #define ENBALE_POLYGON_VISUALIZATION
 #define ENABLE_BOUNDINGBOX_VISUALIZATION
-#include <cstdint>
 #include <memory>
 
 #include <Eigen/Dense>
 
+#include "Bounding.hpp"
+
 #include "Scene.hpp"
 
 // 创建层次包围盒的描述结构
-struct BoundingNode{
+struct BoundingNode {
   BoundingNode *parent{nullptr};
   BoundingNode *left{nullptr}, *right{nullptr};
-  struct{
-    vec3 min_xyz {0.0f,0.0f,0.0f};
-    vec3 max_xyz {0.0f,0.0f,0.0f};
-  }cube;
+  struct {
+    vec3 min_xyz{0.0f, 0.0f, 0.0f};
+    vec3 max_xyz{0.0f, 0.0f, 0.0f};
+  } cube;
   vector<Surface> objs;
 };
 
-
-float intersect(const Eigen::Vector3f &origin, const Eigen::Vector3f &dir, const Eigen::Vector3f &p1,
-                const Eigen::Vector3f &p2, const Eigen::Vector3f &p3) {
+float intersect(const Eigen::Vector3f &origin, const Eigen::Vector3f &dir,
+                const Eigen::Vector3f &p1, const Eigen::Vector3f &p2,
+                const Eigen::Vector3f &p3) {
   // 返回t值，击中点坐标为 origin + t * dir
 
   Eigen::Vector3f ddir = dir.normalized();
@@ -40,6 +41,11 @@ float intersect(const Eigen::Vector3f &origin, const Eigen::Vector3f &dir, const
   float t = A2.determinant() / tmp;
 
   return t;
+}
+void display(const vector<float> &arr) {
+  for (const float &elem : arr)
+    printf("%.4f, ", elem);
+  printf("\b\b  \n");
 }
 
 using namespace std;
@@ -89,7 +95,22 @@ int main(int argc, char **argv) {
   printf("面元总数 %llu\n", sphere->geometry->surfaces.size());
   tree.construct();
   printf("构造完毕\n");
-  BK(1);
+
+  // vector<float> buf;
+  // for (int i = 0; i < 10; i++) {
+  //   buf.push_back(i + 1.5f);
+  // }
+  // mt19937 rg;
+  // rg.seed(34);
+  // display(buf);
+  // std::shuffle(buf.begin(), buf.end(), rg);
+  // display(buf);
+  // printf("开始\n");
+  // for (int i = 0; i < buf.size(); i++) {
+  //   uint32_t idx = findKPosVal(buf, 0, buf.size() - 1, i);
+  //   printf("buf[%d]=%.4f\n", idx, buf[idx]);
+  // }
+  // return 0;
 
   // ==================================================
 

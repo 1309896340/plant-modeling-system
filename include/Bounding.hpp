@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <deque>
 #include <iostream>
 #include <iterator>
@@ -31,8 +32,7 @@ using glm::mat4;
 using glm::vec3;
 using glm::vec4;
 
-template <typename T>
-int partition(vector<T> &arr, int left, int right) {
+template <typename T> int partition(vector<T> &arr, int left, int right) {
   T pivot = arr[left];
   // printf("left: %d right: %d\n", left, right);
   while (left < right) {
@@ -60,19 +60,20 @@ int findKPosVal(vector<T> arr, int left, int right, int k) {
     // 若只有1个、2个元素，直接返回第一个元素位置
     return left;
   }
-  printf("================================开始\n");
   // 寻找第k小的元素位置
   int pos = partition(arr, left, right);
   while (true) {
-    printf("left: %d right: %d pos: %d\n", left, right, pos);
+    // printf("left: %d right: %d pos: %d\n", left, right, pos);
     if (k > pos) {
-      printf("k=%d 大于 pos=%d 向右半寻找\n", k, pos);
-      pos = pos + 1 + partition(arr, pos + 1, right);
+      // printf("k=%d 大于 pos=%d 向右半寻找\n", k, pos);
+      left = pos + 1;
+      pos = partition(arr, left, right);
     } else if (k < pos) {
-      printf("k=%d 小于 pos=%d 向左半寻找\n", k, pos);
-      pos = partition(arr, left, pos - 1);
+      // printf("k=%d 小于 pos=%d 向左半寻找\n", k, pos);
+      right = pos - 1;
+      pos = partition(arr, left, right);
     } else {
-      printf("k==pos=%d 返回\n", k);
+      // printf("k==pos=%d 返回\n", k);
       // 此时的arr[pos]是第k小元素的值，需要返回原序列找到它的位置
       auto ptr = std::find(arr_cpy.begin(), arr_cpy.end(), arr[pos]);
       if (ptr != arr_cpy.end()) {
@@ -104,7 +105,8 @@ public:
       this->min_bound.z = std::min(this->min_bound.z, vert.z);
     }
   }
-  BoundingBox(const vector<vec3> &vertices, const vector<Surface> &surfaces, const vector<uint32_t> &indices) {
+  BoundingBox(const vector<vec3> &vertices, const vector<Surface> &surfaces,
+              const vector<uint32_t> &indices) {
     // 通过传入所有三角面元，通过索引指定其子集，创建子集的包围盒
     vec3 default_bound = vertices[surfaces[indices[0]].tidx[0]];
     this->min_bound = default_bound;
@@ -184,12 +186,14 @@ public:
     this->vertices.resize(geometry->vertices.size());
     mat4 model = transform.getModel();
     for (int i = 0; i < geometry->vertices.size(); i++) {
-      vec3 pt = vec3(model * vec4(glm::make_vec3(geometry->vertices[i].position), 1.0f));
+      vec3 pt = vec3(
+          model * vec4(glm::make_vec3(geometry->vertices[i].position), 1.0f));
       memcpy(&vertices[i], glm::value_ptr(pt), 3 * sizeof(float));
     }
     this->surfaces = geometry->surfaces; // 拷贝构造
   };
-  BvhTree(const shared_ptr<Geometry> &geometry) : BvhTree(geometry, Transform()) {}
+  BvhTree(const shared_ptr<Geometry> &geometry)
+      : BvhTree(geometry, Transform()) {}
 
   void construct() {
     // 先生成根节点
@@ -209,10 +213,13 @@ public:
       cur_node = node_buf.front();
       node_buf.pop_front();
       // 进行对cur_node的划分，判断聚类维度
-      vector<float> widths{cur_node->box.getXWidth(), cur_node->box.getYWidth(), cur_node->box.getZWidth()};
-      uint32_t dimension_idx = std::distance(widths.begin(), std::max_element(widths.begin(), widths.end()));
+      vector<float> widths{cur_node->box.getXWidth(), cur_node->box.getYWidth(),
+                           cur_node->box.getZWidth()};
+      uint32_t dimension_idx = std::distance(
+          widths.begin(), std::max_element(widths.begin(), widths.end()));
       vector<float> comp_positions(cur_node->triangles.size());
-      for (int k = 0; k < cur_node->triangles.size(); k++) { // 计算cur_node->triangles里每个三角面元质心位置
+      for (int k = 0; k < cur_node->triangles.size();
+           k++) { // 计算cur_node->triangles里每个三角面元质心位置
         Surface surf = surfaces[cur_node->triangles[k]];
         // 计算三角的质心的x分量，dimension_idx决定了计算哪个维度的质心位置分量
         float center_pos = 0.0f;
@@ -220,23 +227,49 @@ public:
           center_pos += glm::value_ptr(vertices[surf.tidx[i]])[dimension_idx];
         comp_positions[k] = center_pos / 3.0f;
       }
-      printf("开始找中位点\n");
-      // 找到中位点
-      uint32_t mid_position_idx = findKPosVal(comp_positions, 0, comp_positions.size() - 1, comp_positions.size() / 2);
-      float mid_position = comp_positions[mid_position_idx];
-      printf("找到中位点\n");
-      // 对cur_node->triangles中的三角分组
+      // 找到中位点，对cur_node->triangles中的三角分组
       vector<uint32_t> left_triangles, right_triangles;
-      for (int k = 0; k < comp_positions.size(); k++)
-        if (comp_positions[k] <= mid_position)
-          left_triangles.push_back(cur_node->triangles[k]);
-        else
-          right_triangles.push_back(cur_node->triangles[k]);
-      // 调试输出分组信息
+      assert(comp_positions.size() > 0);
+      if (comp_positions.size() == 1) {
+        // cur_node为叶子节点，不进行划分
+      } else if (comp_positions.size() == 2) {
+        // 简单比较comp_positions分成左右节点
+        if (comp_positions[0] < comp_positions[1]) {
+          left_triangles.push_back(cur_node->triangles[0]);
+          right_triangles.push_back(cur_node->triangles[1]);
+        } else {
+          left_triangles.push_back(cur_node->triangles[1]);
+          right_triangles.push_back(cur_node->triangles[0]);
+        }
+      } else {
+        // 面元大于3个的情况
+        uint32_t mid_position_idx =
+            findKPosVal(comp_positions, 0, comp_positions.size() - 1,
+                        comp_positions.size() / 2);
+        float mid_position = comp_positions[mid_position_idx];
+        for (int k = 0; k < comp_positions.size(); k++)
+          if (comp_positions[k] < mid_position) {
+            left_triangles.push_back(cur_node->triangles[k]);
+          } else if (comp_positions[k] > mid_position) {
+            right_triangles.push_back(cur_node->triangles[k]);
+          } else {
+            // 为了尽可能平衡，当中位值为多个相等值时，往左右两侧平衡添加
+            if (left_triangles.size() < right_triangles.size())
+              left_triangles.push_back(cur_node->triangles[k]);
+            else
+              right_triangles.push_back(cur_node->triangles[k]);
+          }
+        // if (std::fabs(left_triangles.size() - right_triangles.size()) >= 2 &&
+        //     (left_triangles.size() == 0 || right_triangles.size() == 0)) {
+        //   printf("break\b");
+        // }
+      }
+
       printf("this: %p parent: %p left: %llu  right: %llu\n", cur_node, cur_node->parent, left_triangles.size(), right_triangles.size());
-      // 判断left_triangles和right_triangles是否为：1. 空 2. 仅1个面元 3. 2个以上面元。
-      // 对于1的情况，不创建新node。对于2的情况，加入node但不加入node_buf。 对于3的情况，加入node且将node加入node_buf
-      printf("当前node_buf.size(): %llu\n", node_buf.size());
+      // 判断left_triangles和right_triangles是否为：1. 空 2.
+      // 仅1个面元 3.2个以上面元。
+      // 对于1的情况，不创建新node。对于2的情况，加入node但不加入node_buf。
+      // 对于3的情况，加入node且将node加入node_buf
       if (left_triangles.size() > 0) {
         cur_node->left = new BvhNode();
         cur_node->left->parent = cur_node;
