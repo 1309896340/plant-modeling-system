@@ -132,7 +132,7 @@ public:
   float getYWidth() const { return max_bound.y - min_bound.y; }
   float getZWidth() const { return max_bound.z - min_bound.z; }
 
-  void genOpenGLRenderInfo(vector<vec3> &vertices, vector<uint32_t> &indices) {
+  void genOpenGLRenderInfo(vector<vec3> &vertices, vector<uint32_t> &indices) const {
     // 用于将包围盒的min_bound,max_bound生成可用GL_LINES绘制的顶点和索引数据
     vec3 max_xyz = this->max_bound;
     vec3 min_xyz = this->min_bound;
@@ -172,16 +172,6 @@ public:
   }
 };
 
-// class TrianglePrimitive {
-// public:
-//   uint32_t triangle_idx{0};
-//   BoundingBox box;
-
-//   TrianglePrimitive(uint32_t triangle_id) : triangle_idx(triangle_id) {
-//     // 传递可以访问所有三角面元的的上下文，并指定该面元对应的索引
-//   }
-// };
-
 struct BvhNode {
   BvhNode *parent{nullptr};
   BvhNode *left{nullptr}, *right{nullptr};
@@ -202,6 +192,12 @@ public:
   BvhTree() = default;
 
   BvhTree(const shared_ptr<Geometry> &geometry, Transform transform) {
+    this->loadGeometry(geometry, transform);
+  };
+  BvhTree(const shared_ptr<Geometry> &geometry)
+      : BvhTree(geometry, Transform()) {}
+
+  void loadGeometry(const shared_ptr<Geometry> &geometry, Transform transform){
     // 深拷贝一份geometry并对其顶点应用transform的变换
     this->vertices.resize(geometry->vertices.size());
     mat4 model = transform.getModel();
@@ -210,9 +206,7 @@ public:
       memcpy(&vertices[i], glm::value_ptr(pt), 3 * sizeof(float));
     }
     this->surfaces = geometry->surfaces; // 拷贝构造
-  };
-  BvhTree(const shared_ptr<Geometry> &geometry)
-      : BvhTree(geometry, Transform()) {}
+  }
 
   void construct() {
     // 先生成根节点
@@ -297,6 +291,20 @@ public:
     }
   }
 
+  void traverse(function<void(BvhNode *node)> visit) {
+    // 广度优先遍历
+    deque<BvhNode *> buf{this->root};
+    while (!buf.empty()) {
+      BvhNode *cur_node = buf.front();
+      buf.pop_front();
+      if (cur_node->left != nullptr)
+        buf.push_back(cur_node->left);
+      if (cur_node->right != nullptr)
+        buf.push_back(cur_node->right);
+
+      visit(cur_node);
+    }
+  }
   ~BvhTree() {
     // 广度优先遍历释放
     deque<BvhNode *> tmp{this->root};

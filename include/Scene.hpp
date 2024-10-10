@@ -2,16 +2,12 @@
 
 // #define NDEBUG
 
-#include "GLFW/glfw3.h"
-#include "constants.h"
-#include "glm/common.hpp"
-#include "glm/geometric.hpp"
 #include <algorithm>
-#include <iostream>
-
 #include <cassert>
 #include <cstdint>
+#include <exception>
 #include <filesystem>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <stdexcept>
@@ -30,6 +26,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include "constants.h"
 #include "proj.h"
 
 #include "Auxiliary.hpp"
@@ -73,15 +70,15 @@ public:
   vec3 color{1.0f, 1.0f, 1.0f};
 };
 
-class BoundingBoxBufferObject {
+class BoundingBoxRenderObject {
 public:
   GLuint vao{0};
   GLuint vbo{0};
   GLuint ebo{0};
   int draw_size{0};
 
-  BoundingBoxBufferObject() = default;
-  BoundingBoxBufferObject(const vector<vec3> &vertices, const vector<uint32_t> &indices) {
+  BoundingBoxRenderObject() = default;
+  BoundingBoxRenderObject(const vector<vec3> &vertices, const vector<uint32_t> &indices) {
     glGenVertexArrays(1, &this->vao);
     glBindVertexArray(this->vao);
 
@@ -117,10 +114,10 @@ public:
     glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(vec3),
                     vertices.data());
   }
-  ~BoundingBoxBufferObject() {
+  ~BoundingBoxRenderObject() {
     glDeleteBuffers(1, &this->ebo);
     glDeleteBuffers(1, &this->vbo);
-    glDeleteBuffers(1, &this->vao);
+    glDeleteVertexArrays(1, &this->vao);
   }
 };
 
@@ -157,7 +154,6 @@ private:
                  this->geometry->surfaces.data(), GL_STATIC_DRAW);
     glBindVertexArray(0);
 
-
     // 同时初始化包围盒
     mat4 model = this->transform.getModel();
     vector<vec3> vertices(this->geometry->vertices.size());
@@ -169,26 +165,9 @@ private:
     this->box = make_unique<BoundingBox>(vertices);
     vector<vec3> box_vertices;
     vector<uint32_t> box_indices;
-    this->box->genOpenGLRenderInfo(box_vertices,box_indices);
-    this->box_obj = make_unique<BoundingBoxBufferObject>(box_vertices, box_indices);
+    this->box->genOpenGLRenderInfo(box_vertices, box_indices);
+    this->box_obj = make_unique<BoundingBoxRenderObject>(box_vertices, box_indices);
   }
-
-  // void initBoundingBoxVBO() {
-  //   mat4 model = this->transform.getModel();
-  //   vector<vec3> vertices(this->geometry->vertices.size());
-  //   for (int i = 0; i < this->geometry->vertices.size(); i++) {
-  //     vertices[i] = vec3(
-  //         model *
-  //         vec4(glm::make_vec3(this->geometry->vertices[i].position), 1.0f));
-  //   }
-  //   this->box = make_unique<BoundingBox>(vertices);
-  //   vector<vec3> box_vertices;
-  //   vector<uint32_t> box_indices;
-  //   this->box_obj = make_unique<BoundingBoxBufferObject>(box_vertices, box_indices);
-  // }
-
-  // void initComputeShaderTexture(){
-  // }
 
 public:
   shared_ptr<Geometry> geometry;
@@ -200,10 +179,10 @@ public:
   GLuint texture{0};
 
   unique_ptr<BoundingBox> box; // 将BoundingBox用BvhTree代替
-  unique_ptr<BoundingBoxBufferObject> box_obj;
+  unique_ptr<BoundingBoxRenderObject> box_obj;
 
   unique_ptr<BvhTree> bvhtree{nullptr};
-  vector<shared_ptr<BoundingBoxBufferObject>> bvhbox_objs;
+  vector<shared_ptr<BoundingBoxRenderObject>> bvhbox_objs;
 
   // 与计算着色器之间数据交换的上下文信息
   // struct {
@@ -231,6 +210,14 @@ public:
     }
     this->bvhtree = make_unique<BvhTree>(this->geometry, this->transform);
     this->bvhtree->construct();
+    // 生成顶点缓冲
+    this->bvhbox_objs.clear(); // 释放所有旧的顶点缓冲（智能指针自动析构）
+    this->bvhtree->traverse([this](BvhNode *node) {
+      vector<vec3> vertices;
+      vector<uint32_t> indices;
+      node->box->genOpenGLRenderInfo(vertices, indices);
+      this->bvhbox_objs.emplace_back(make_shared<BoundingBoxRenderObject>(vertices, indices));
+    });
   }
 
   void updateVBO() {
@@ -250,8 +237,7 @@ public:
     vector<vec3> vertices(this->geometry->vertices.size());
     for (int i = 0; i < this->geometry->vertices.size(); i++) {
       vertices[i] = vec3(
-          model *
-          vec4(glm::make_vec3(this->geometry->vertices[i].position), 1.0f));
+          model * vec4(glm::make_vec3(this->geometry->vertices[i].position), 1.0f));
     }
     // 计算包围盒的6个边界值
     this->box->update(vertices);
@@ -262,9 +248,18 @@ public:
     this->box_obj->update(bound_vertices, bound_indices);
 
     // 若启用了层次包围盒，则一同更新
-    if(this->bvhtree!=nullptr){
+    if (this->bvhtree != nullptr) {
+      // 更新所有节点的包围盒
+      this->bvhtree->loadGeometry(this->geometry,this->transform);
       this->bvhtree->construct();
-      // 需要遍历bvhtree中的所有boundingbox
+      // 更新所有包围盒的顶点缓冲
+      this->bvhbox_objs.clear(); // 释放所有旧的顶点缓冲（智能指针自动析构）
+      this->bvhtree->traverse([this](BvhNode *node) {
+        vector<vec3> vertices;
+        vector<uint32_t> indices;
+        node->box->genOpenGLRenderInfo(vertices, indices);
+        this->bvhbox_objs.emplace_back(make_shared<BoundingBoxRenderObject>(vertices, indices));
+      });
     }
   }
   ~GeometryRenderObject() {
@@ -984,18 +979,27 @@ public:
     }
 #endif
 
-#ifdef ENABLE_BOUNDINGBOX_VISUALIZATION
+    // #ifdef ENABLE_BOUNDINGBOX_VISUALIZATION
     // 5. 渲染包围盒边框
     cur_shader = this->shaders["line"];
     cur_shader->use();
     cur_shader->set("lineColor", glm::vec3(0.0f, 1.0f, 1.0f));
     for (auto &[name, cur_obj] : this->objs) {
       if (cur_obj->isSelected) {
-        glBindVertexArray(cur_obj->box_obj->vao);
-        glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, nullptr);
+        if (cur_obj->bvhtree != nullptr) {
+          // 渲染层次包围盒
+          for (const shared_ptr<BoundingBoxRenderObject> &bb_obj : cur_obj->bvhbox_objs) {
+            glBindVertexArray(bb_obj->vao);
+            glDrawElements(GL_LINES, bb_obj->draw_size, GL_UNSIGNED_INT, nullptr);
+          }
+        } else {
+          // 渲染整体包围盒
+          glBindVertexArray(cur_obj->box_obj->vao);
+          glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, nullptr);
+        }
       }
     }
-#endif
+    // #endif
   }
 
   void setWindowSize(float width, float height) {

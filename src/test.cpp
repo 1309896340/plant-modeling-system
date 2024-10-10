@@ -1,5 +1,6 @@
 ﻿// #define ENABLE_NORMAL_VISUALIZATION
 // #define ENBALE_POLYGON_VISUALIZATION
+#include "glm/trigonometric.hpp"
 #define ENABLE_BOUNDINGBOX_VISUALIZATION
 #include <memory>
 
@@ -66,6 +67,9 @@ int main(int argc, char **argv) {
   scene.add("Cone", make_shared<Cone>(2.0f, 3.0f), {0.0f, 0.0f, 6.0f});
   scene.add("Cylinder", make_shared<Cylinder>(2.5f, 5.0f), {5.0f, 0.0f, 0.0f});
 
+  // scene.add("Plane", make_shared<Plane>(2.0f, 2.0f, 1, 1), Transform({-5.0f, 3.0f, 2.0f},_right,glm::radians(10.0f)));
+  // scene.objs["Plane"]->constructBvhTree();
+
   // // 无关于OpenGL渲染，实现CPU端的仿真计算，仅考虑Sphere形体
   // const shared_ptr<GeometryRenderObject> obj = scene.objs["Sphere"];
   // const shared_ptr<Geometry> geom = obj->geometry;
@@ -90,29 +94,8 @@ int main(int argc, char **argv) {
   // }
 
   // 创建Sphere对象的层次包围盒
-  shared_ptr<GeometryRenderObject> sphere = scene.objs["Sphere"];
-  BvhTree tree(sphere->geometry, sphere->transform);
-  printf("面元总数 %llu\n", sphere->geometry->surfaces.size());
-  tree.construct();
-  printf("构造完毕\n");
-
-  // vector<float> buf;
-  // for (int i = 0; i < 10; i++) {
-  //   buf.push_back(i + 1.5f);
-  // }
-  // mt19937 rg;
-  // rg.seed(34);
-  // display(buf);
-  // std::shuffle(buf.begin(), buf.end(), rg);
-  // display(buf);
-  // printf("开始\n");
-  // for (int i = 0; i < buf.size(); i++) {
-  //   uint32_t idx = findKPosVal(buf, 0, buf.size() - 1, i);
-  //   printf("buf[%d]=%.4f\n", idx, buf[idx]);
-  // }
-  // return 0;
-
-  // ==================================================
+  shared_ptr<GeometryRenderObject> obj = scene.objs["Sphere"];
+  obj->constructBvhTree();
 
   scene.mainloop();
   return 0;
