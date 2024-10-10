@@ -1,15 +1,14 @@
 ﻿#pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <cstdint>
-#include <cstdio>
 #include <deque>
 #include <iostream>
 #include <iterator>
 #include <memory>
 #include <stdexcept>
 
-#define GLM_ENABLE_EXPERIMENTAL
 #include <deque>
 #include <iostream>
 #include <iterator>
@@ -32,15 +31,15 @@ using glm::mat4;
 using glm::vec3;
 using glm::vec4;
 
-template <typename T> int partition(vector<T> &arr, int left, int right) {
-  T pivot = arr[left];
+template <typename T>
+int partition(vector<T> &arr, int left, int right) {
+  float pivot = arr[left];
   // printf("left: %d right: %d\n", left, right);
   while (left < right) {
     while (left < right && arr[right] >= pivot)
       right--;
     if (left < right)
       swap(arr[left], arr[right]);
-
     while (left < right && arr[left] <= pivot)
       left++;
     if (left < right)
@@ -63,18 +62,14 @@ int findKPosVal(vector<T> arr, int left, int right, int k) {
   // 寻找第k小的元素位置
   int pos = partition(arr, left, right);
   while (true) {
-    // printf("left: %d right: %d pos: %d\n", left, right, pos);
     if (k > pos) {
-      // printf("k=%d 大于 pos=%d 向右半寻找\n", k, pos);
       left = pos + 1;
       pos = partition(arr, left, right);
     } else if (k < pos) {
-      // printf("k=%d 小于 pos=%d 向左半寻找\n", k, pos);
       right = pos - 1;
       pos = partition(arr, left, right);
     } else {
-      // printf("k==pos=%d 返回\n", k);
-      // 此时的arr[pos]是第k小元素的值，需要返回原序列找到它的位置
+      // 此时的arr[pos]是第k小元素的值，需要返回原序列找到它的位置（可能存在多个相同的中位值）
       auto ptr = std::find(arr_cpy.begin(), arr_cpy.end(), arr[pos]);
       if (ptr != arr_cpy.end()) {
         return ptr - arr_cpy.begin();
@@ -89,25 +84,19 @@ class BoundingBox {
 public:
   vec3 min_bound{0.0f, 0.0f, 0.0f};
   vec3 max_bound{0.0f, 0.0f, 0.0f};
-  BoundingBox() = default;
+  // BoundingBox() = default;
   BoundingBox(vec3 min_bound, vec3 max_bound)
       : min_bound(min_bound), max_bound(max_bound) {}
   BoundingBox(const vector<vec3> &vertices) {
     // 通过传入所有三角面元来初始化包围盒
-    this->min_bound = vertices[0];
-    this->max_bound = vertices[0];
-    for (const vec3 &vert : vertices) {
-      this->max_bound.x = std::max(this->max_bound.x, vert.x);
-      this->max_bound.y = std::max(this->max_bound.y, vert.y);
-      this->max_bound.z = std::max(this->max_bound.z, vert.z);
-      this->min_bound.x = std::min(this->min_bound.x, vert.x);
-      this->min_bound.y = std::min(this->min_bound.y, vert.y);
-      this->min_bound.z = std::min(this->min_bound.z, vert.z);
-    }
+    this->update(vertices);
   }
-  BoundingBox(const vector<vec3> &vertices, const vector<Surface> &surfaces,
-              const vector<uint32_t> &indices) {
-    // 通过传入所有三角面元，通过索引指定其子集，创建子集的包围盒
+  BoundingBox(const vector<vec3> &vertices, const vector<Surface> &surfaces, const vector<uint32_t> &indices) {
+    // 传入三角形面元来更新包围盒
+    this->update(vertices, surfaces, indices);
+  }
+
+  void update(const vector<vec3> &vertices, const vector<Surface> &surfaces, const vector<uint32_t> &indices) {
     vec3 default_bound = vertices[surfaces[indices[0]].tidx[0]];
     this->min_bound = default_bound;
     this->max_bound = default_bound;
@@ -124,13 +113,42 @@ public:
       }
     }
   }
+
+  void update(const vector<vec3> &vertices) {
+    this->min_bound = vertices[0];
+    this->max_bound = vertices[0];
+    for (const vec3 &vert : vertices) {
+      this->max_bound.x = std::max(this->max_bound.x, vert.x);
+      this->max_bound.y = std::max(this->max_bound.y, vert.y);
+      this->max_bound.z = std::max(this->max_bound.z, vert.z);
+      this->min_bound.x = std::min(this->min_bound.x, vert.x);
+      this->min_bound.y = std::min(this->min_bound.y, vert.y);
+      this->min_bound.z = std::min(this->min_bound.z, vert.z);
+    }
+  }
+
   vec3 getBoxCenter() const { return (min_bound + max_bound) / 2.0f; }
   float getXWidth() const { return max_bound.x - min_bound.x; }
   float getYWidth() const { return max_bound.y - min_bound.y; }
   float getZWidth() const { return max_bound.z - min_bound.z; }
 
-  bool hit(const vec3 &origin, const vec3 &dir) {
+  void genOpenGLRenderInfo(vector<vec3> &vertices, vector<uint32_t> &indices) {
+    // 用于将包围盒的min_bound,max_bound生成可用GL_LINES绘制的顶点和索引数据
+    vec3 max_xyz = this->max_bound;
+    vec3 min_xyz = this->min_bound;
+    vertices = {min_xyz,
+                {min_xyz.x, min_xyz.y, max_xyz.z},
+                {min_xyz.x, max_xyz.y, min_xyz.z},
+                {min_xyz.x, max_xyz.y, max_xyz.z},
+                {max_xyz.x, min_xyz.y, min_xyz.z},
+                {max_xyz.x, min_xyz.y, max_xyz.z},
+                {max_xyz.x, max_xyz.y, min_xyz.z},
+                max_xyz};
+    indices = {0, 1, 0, 2, 0, 4, 1, 3, 1, 5, 2, 3,
+               2, 6, 4, 6, 4, 5, 3, 7, 5, 7, 6, 7};
+  }
 
+  bool hit(const vec3 &origin, const vec3 &dir) {
     // 选择就近边界为near_bound，就远边界为far_bound
     vec3 near_bound = this->min_bound, far_bound = this->max_bound;
     vec3 near_dist = glm::abs(origin - near_bound);
@@ -170,7 +188,7 @@ struct BvhNode {
 
   // 记录该节点的包围盒所包含的三角的索引，被索引目标是BvhTree::surfaces
   vector<uint32_t> triangles;
-  BoundingBox box;
+  shared_ptr<BoundingBox> box;
 };
 
 class BvhTree {
@@ -181,13 +199,14 @@ private:
   vector<Surface> surfaces;
 
 public:
+  BvhTree() = default;
+
   BvhTree(const shared_ptr<Geometry> &geometry, Transform transform) {
     // 深拷贝一份geometry并对其顶点应用transform的变换
     this->vertices.resize(geometry->vertices.size());
     mat4 model = transform.getModel();
     for (int i = 0; i < geometry->vertices.size(); i++) {
-      vec3 pt = vec3(
-          model * vec4(glm::make_vec3(geometry->vertices[i].position), 1.0f));
+      vec3 pt = vec3(model * vec4(glm::make_vec3(geometry->vertices[i].position), 1.0f));
       memcpy(&vertices[i], glm::value_ptr(pt), 3 * sizeof(float));
     }
     this->surfaces = geometry->surfaces; // 拷贝构造
@@ -200,7 +219,7 @@ public:
     BvhNode *cur_node = new BvhNode();
     for (int i = 0; i < this->surfaces.size(); i++)
       cur_node->triangles.push_back(i);
-    cur_node->box = BoundingBox(this->vertices);
+    cur_node->box = make_shared<BoundingBox>(this->vertices);
     cur_node->parent = nullptr;
 
     this->root = cur_node;
@@ -213,10 +232,8 @@ public:
       cur_node = node_buf.front();
       node_buf.pop_front();
       // 进行对cur_node的划分，判断聚类维度
-      vector<float> widths{cur_node->box.getXWidth(), cur_node->box.getYWidth(),
-                           cur_node->box.getZWidth()};
-      uint32_t dimension_idx = std::distance(
-          widths.begin(), std::max_element(widths.begin(), widths.end()));
+      vector<float> widths{cur_node->box->getXWidth(), cur_node->box->getYWidth(), cur_node->box->getZWidth()};
+      uint32_t dimension_idx = std::distance(widths.begin(), std::max_element(widths.begin(), widths.end()));
       vector<float> comp_positions(cur_node->triangles.size());
       for (int k = 0; k < cur_node->triangles.size();
            k++) { // 计算cur_node->triangles里每个三角面元质心位置
@@ -227,13 +244,12 @@ public:
           center_pos += glm::value_ptr(vertices[surf.tidx[i]])[dimension_idx];
         comp_positions[k] = center_pos / 3.0f;
       }
-      // 找到中位点，对cur_node->triangles中的三角分组
+
       vector<uint32_t> left_triangles, right_triangles;
       assert(comp_positions.size() > 0);
       if (comp_positions.size() == 1) {
-        // cur_node为叶子节点，不进行划分
+
       } else if (comp_positions.size() == 2) {
-        // 简单比较comp_positions分成左右节点
         if (comp_positions[0] < comp_positions[1]) {
           left_triangles.push_back(cur_node->triangles[0]);
           right_triangles.push_back(cur_node->triangles[1]);
@@ -242,39 +258,31 @@ public:
           right_triangles.push_back(cur_node->triangles[0]);
         }
       } else {
-        // 面元大于3个的情况
-        uint32_t mid_position_idx =
-            findKPosVal(comp_positions, 0, comp_positions.size() - 1,
-                        comp_positions.size() / 2);
+        uint32_t mid_position_idx = findKPosVal(comp_positions, 0, comp_positions.size() - 1, comp_positions.size() / 2);
         float mid_position = comp_positions[mid_position_idx];
+        // 对cur_node->triangles中的三角分组
         for (int k = 0; k < comp_positions.size(); k++)
           if (comp_positions[k] < mid_position) {
             left_triangles.push_back(cur_node->triangles[k]);
           } else if (comp_positions[k] > mid_position) {
             right_triangles.push_back(cur_node->triangles[k]);
           } else {
-            // 为了尽可能平衡，当中位值为多个相等值时，往左右两侧平衡添加
             if (left_triangles.size() < right_triangles.size())
               left_triangles.push_back(cur_node->triangles[k]);
             else
               right_triangles.push_back(cur_node->triangles[k]);
           }
-        // if (std::fabs(left_triangles.size() - right_triangles.size()) >= 2 &&
-        //     (left_triangles.size() == 0 || right_triangles.size() == 0)) {
-        //   printf("break\b");
-        // }
       }
 
-      printf("this: %p parent: %p left: %llu  right: %llu\n", cur_node, cur_node->parent, left_triangles.size(), right_triangles.size());
-      // 判断left_triangles和right_triangles是否为：1. 空 2.
-      // 仅1个面元 3.2个以上面元。
-      // 对于1的情况，不创建新node。对于2的情况，加入node但不加入node_buf。
-      // 对于3的情况，加入node且将node加入node_buf
+      // 调试输出分组信息
+      // printf("this: %p parent: %p left: %llu  right: %llu\n", cur_node, cur_node->parent, left_triangles.size(), right_triangles.size());
+      // 判断left_triangles和right_triangles是否为：1. 空 2. 仅1个面元 3. 2个以上面元。
+      // 对于1的情况，不创建新node。对于2的情况，加入node但不加入node_buf。 对于3的情况，加入node且将node加入node_buf
       if (left_triangles.size() > 0) {
         cur_node->left = new BvhNode();
         cur_node->left->parent = cur_node;
         cur_node->left->triangles = left_triangles;
-        cur_node->left->box = BoundingBox(vertices, surfaces, left_triangles);
+        cur_node->left->box = make_shared<BoundingBox>(vertices, surfaces, left_triangles);
         if (left_triangles.size() > 1)
           node_buf.push_back(cur_node->left);
       }
@@ -282,7 +290,7 @@ public:
         cur_node->right = new BvhNode();
         cur_node->right->parent = cur_node;
         cur_node->right->triangles = right_triangles;
-        cur_node->right->box = BoundingBox(vertices, surfaces, right_triangles);
+        cur_node->right->box = make_shared<BoundingBox>(vertices, surfaces, right_triangles);
         if (right_triangles.size() > 1)
           node_buf.push_back(cur_node->right);
       }
