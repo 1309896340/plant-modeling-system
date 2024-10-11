@@ -250,7 +250,7 @@ public:
     // 若启用了层次包围盒，则一同更新
     if (this->bvhtree != nullptr) {
       // 更新所有节点的包围盒
-      this->bvhtree->loadGeometry(this->geometry,this->transform);
+      this->bvhtree->loadGeometry(this->geometry, this->transform);
       this->bvhtree->construct();
       // 更新所有包围盒的顶点缓冲
       this->bvhbox_objs.clear(); // 释放所有旧的顶点缓冲（智能指针自动析构）
@@ -532,12 +532,6 @@ public:
       // 记录下“相机环绕”时的相机球坐标
       if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         if (ImGui::IsKeyDown(ImGuiKey_ModShift)) {
-          // vec3 dist_v = this->camera.position_s - anchor;
-          // imgui.dist = glm::length(dist_v);
-          // imgui.theta_c =
-          //     acos(glm::dot(glm::normalize(dist_v), vec3(0.0f, 1.0f, 0.0f)));
-          // imgui.phi_c = atan2(dist_v.z, dist_v.x);
-
           this->camera.record();
 
         } else {
@@ -550,16 +544,6 @@ public:
         if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
           if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
             // 以世界坐标锚点为中心做旋转
-            // imgui.phi_c +=
-            //     MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x;
-            // imgui.theta_c -=
-            //     MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y;
-            // vec3 new_pos;
-            // new_pos.x = imgui.dist * sin(imgui.theta_c) * cos(imgui.phi_c);
-            // new_pos.y = imgui.dist * cos(imgui.theta_c);
-            // new_pos.z = imgui.dist * sin(imgui.theta_c) * sin(imgui.phi_c);
-            // this->camera.setPosition(new_pos + anchor);
-            // this->camera.lookAt(anchor);
             this->camera.surround(MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x, MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y);
 
           } else {
@@ -596,15 +580,25 @@ public:
 
           std::map<float, uint32_t> hit_objs;
           for (auto &[name, oobj] : this->objs) {
-            bool isHit = oobj->box->hit(this->camera.getPosition(), dirr);
-
+            bool isHit = false;
+            if(oobj->bvhtree!=nullptr){
+              // 启用层次包围盒求交
+              vec3 hit_pos{0.0f,0.0f,0.0f};
+              float distance;
+              isHit = oobj->bvhtree->intersect(this->camera.getPosition(), dirr, hit_pos,distance);
+              if(isHit){
+                // 暂时借用光源的球来表示坐标
+                this->light.position = hit_pos;
+                this->aux["Light"]->transform.setPosition(hit_pos);
+              }
+            }else{
+              isHit = oobj->box->hit(this->camera.getPosition(), dirr);
+            }
             if (isHit) {
-              auto selected_name_ptr = std::find(this->imgui.items.begin(),
-                                                 this->imgui.items.end(), name);
+              auto selected_name_ptr = std::find(this->imgui.items.begin(), this->imgui.items.end(), name);
               if (selected_name_ptr != this->imgui.items.end()) {
                 uint32_t idx = selected_name_ptr - this->imgui.items.begin();
-                float obj_camera_dist = glm::distance(
-                    this->camera.getPosition(), oobj->box->getBoxCenter());
+                float obj_camera_dist = glm::distance(this->camera.getPosition(), oobj->box->getBoxCenter());
                 hit_objs[obj_camera_dist] = idx;
               }
             }
@@ -979,7 +973,7 @@ public:
     }
 #endif
 
-    // #ifdef ENABLE_BOUNDINGBOX_VISUALIZATION
+    #ifdef ENABLE_BOUNDINGBOX_VISUALIZATION
     // 5. 渲染包围盒边框
     cur_shader = this->shaders["line"];
     cur_shader->use();
@@ -999,7 +993,7 @@ public:
         }
       }
     }
-    // #endif
+    #endif
   }
 
   void setWindowSize(float width, float height) {

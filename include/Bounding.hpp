@@ -15,14 +15,19 @@
 #include <memory>
 #include <stdexcept>
 
-#define GLM_ENABLE_EXPERIMENTAL
+// #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <glm/gtx/string_cast.hpp>
+// #include <glm/gtx/string_cast.hpp>
+
+#include <Eigen/Dense>
 
 #include "Geometry.hpp"
 #include "Transform.hpp"
+#include "glm/common.hpp"
+#include "glm/geometric.hpp"
+#include "glm/matrix.hpp"
 
 namespace {
 using namespace std;
@@ -77,6 +82,34 @@ int findKPosVal(vector<T> arr, int left, int right, int k) {
         return -1;
       }
     }
+  }
+}
+
+bool hit_triangle(const vec3 &origin, const vec3 &dir, const vec3 &p1, const vec3 &p2, const vec3 &p3, vec3 &hit_pos, float &distance) {
+  vec3 _dir = glm::normalize(dir);
+  float det_base = glm::determinant(mat3(-_dir, p1 - p3, p2 - p3));
+  if (glm::abs(det_base) < 1e-7) {
+    // 此时光线和三角面为近似平行的情况
+    // 给det限定最小值，这会造成distance被低估
+    // det_base = 1e-7;
+    cerr << "hit_triangle warning. The determinant goes to 0!" << endl;
+  }
+  float t_det = glm::determinant(mat3(origin - p3, p1 - p3, p2 - p3));
+  float a1_det = glm::determinant(mat3(-_dir, origin - p3, p2 - p3));
+  float a2_det = glm::determinant(mat3(-_dir, p1 - p3, origin - p3));
+  float t = t_det / det_base;
+  float a1 = a1_det / det_base;
+  float a2 = a2_det / det_base;
+  if (a1 > 0 && a1 < 1 && a2 > 0 && a2 < 1 && a1 + a2 < 1) {
+    // 击中
+    distance = t;
+    hit_pos = origin + t * _dir;
+    return true;
+  } else {
+    // 未击中
+    distance = 0;
+    hit_pos = origin;
+    return false;
   }
 }
 
@@ -197,7 +230,7 @@ public:
   BvhTree(const shared_ptr<Geometry> &geometry)
       : BvhTree(geometry, Transform()) {}
 
-  void loadGeometry(const shared_ptr<Geometry> &geometry, Transform transform){
+  void loadGeometry(const shared_ptr<Geometry> &geometry, Transform transform) {
     // 深拷贝一份geometry并对其顶点应用transform的变换
     this->vertices.resize(geometry->vertices.size());
     mat4 model = transform.getModel();
@@ -305,6 +338,79 @@ public:
       visit(cur_node);
     }
   }
+
+  bool intersect(const vec3 &origin, const vec3 &dir, vec3 &hit_pos, float &distance) {
+
+    deque<BvhNode *> buf{this->root};
+    vector<BvhNode *> hit_table; // 所有击中包围盒的叶节点
+    bool isHit = false;
+
+    while (!buf.empty()) {
+      BvhNode *cur_node = buf.front();
+      buf.pop_front();
+
+      if (!cur_node->box->hit(origin, dir))
+        continue;
+
+      // 击中，先判断cur_node是否为叶节点
+      if (cur_node->left == nullptr && cur_node->right == nullptr)
+        hit_table.push_back(cur_node);
+
+      // 击中，但不是叶节点
+      if (cur_node->left != nullptr)
+        buf.push_back(cur_node->left);
+      if (cur_node->right != nullptr)
+        buf.push_back(cur_node->right);
+    }
+
+    // // 如果isHit为true，则cur_node为包围盒碰撞的节点
+    // if (isHit) {
+    //   // 进一步判断是否击中三角
+    //   Surface tri_idx = this->surfaces[cur_node->triangles[0]];
+    //   vec3 p1 = this->vertices[tri_idx.tidx[0]];
+    //   vec3 p2 = this->vertices[tri_idx.tidx[1]];
+    //   vec3 p3 = this->vertices[tri_idx.tidx[2]];
+
+    //   isHit = hit_triangle(origin, dir, p1, p2, p3, hit_pos, distance);
+    //   if(isHit)
+    //     cout << "击中三角，位置为 (" << hit_pos.x << "," << hit_pos.y << "," << hit_pos.z << ")" << endl;
+    //   else
+    //     cout << "击中叶节点包围盒，但没有击中三角" << endl;;
+    // }
+
+    // 遍历hit_table，与所有其中的三角求交，将它们以距离从近到远排序
+    struct HitInfo {
+      vec3 hit_pos{0.0f, 0.0f, 0.0f};
+      float distance;
+    };
+
+    vector<HitInfo> infos;  // 与碰撞叶节点中三角形求交成功的结果列表
+    for (int i = 0; i < hit_table.size(); i++) {
+      BvhNode *cur_node = hit_table[i];
+      Surface tri_idx = this->surfaces[cur_node->triangles[0]];
+      vec3 p1 = this->vertices[tri_idx.tidx[0]];
+      vec3 p2 = this->vertices[tri_idx.tidx[1]];
+      vec3 p3 = this->vertices[tri_idx.tidx[2]];
+      HitInfo info;
+      if (hit_triangle(origin, dir, p1, p2, p3, info.hit_pos, info.distance))
+        infos.emplace_back(info);
+    }
+    if (infos.size() == 0) {
+      isHit = false;
+    } else {
+      cout << "检测到与 " << infos.size() << "个三角形发生碰撞" << endl;
+      auto min_iter = std::min_element(infos.begin(), infos.end(), [](const HitInfo &h1, const HitInfo &h2) {
+        return h1.distance < h2.distance;
+      });
+      const HitInfo hinfo = *min_iter;
+      hit_pos = hinfo.hit_pos;
+      distance = hinfo.distance;
+      isHit = true;
+    }
+
+    return isHit;
+  }
+
   ~BvhTree() {
     // 广度优先遍历释放
     deque<BvhNode *> tmp{this->root};
