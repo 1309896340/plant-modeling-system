@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -312,9 +313,7 @@ private:
     shared_ptr<GeometryRenderObject> cur_obj{nullptr};
     int selected_idx = 0;
     int highlighted_idx = 0;
-    // float theta_c = 0.0f;
-    // float phi_c = 0.0f;
-    // float dist = 0.0f;
+    bool start_record{true};
     ImVec2 mouse_pos{0, 0};
     vector<string> items;
   } imgui;
@@ -533,7 +532,6 @@ public:
       if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         if (ImGui::IsKeyDown(ImGuiKey_ModShift)) {
           this->camera.record();
-
         } else {
           // 鼠标左击选中场景物体，遍历所有物体的包围盒求交
           this->imgui.mouse_pos = io->MousePos;
@@ -544,8 +542,12 @@ public:
         if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
           if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
             // 以世界坐标锚点为中心做旋转
+            if (this->imgui.start_record) {
+              // 相机记录当前环绕位置和锚点距离
+              this->camera.record();
+              this->imgui.start_record = false;
+            }
             this->camera.surround(MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x, MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y);
-
           } else {
             // 以相机为中心旋转
             this->camera.rotate(
@@ -554,6 +556,7 @@ public:
           }
         }
         if (ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f)) {
+          // 沿着相机姿态坐标系的上下左右进行平移
           this->camera.move_relative(
               {-MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.x,
                MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.y, 0.0f});
@@ -561,10 +564,15 @@ public:
       }
 
       if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+        // 相机准备好下一次环绕的启动
+        this->imgui.start_record = true;
+
+        // 鼠标按下不挪动松开，则执行场景物体拾取
         ImVec2 mouse_pos = io->MousePos;
-        if (mouse_pos.x == this->imgui.mouse_pos.x &&
-            mouse_pos.y == this->imgui.mouse_pos.y) {
-          // 按下与弹起位置一致，中间没有鼠标拖拽
+        float move_offset = std::sqrt(std::powf(mouse_pos.x - this->imgui.mouse_pos.x, 2.0f) + std::powf(mouse_pos.y - this->imgui.mouse_pos.y, 2.0f));
+        // cout << "鼠标拖拽距离：" << move_offset << endl;
+        if (move_offset < 8.0f) {
+          // 按下与弹起位置一致，中间没有鼠标大幅拖拽
           // 将屏幕坐标转换到裁剪坐标，然后转换为世界坐标，与包围盒求交
 
           double xpos, ypos;
@@ -581,17 +589,17 @@ public:
           std::map<float, uint32_t> hit_objs;
           for (auto &[name, oobj] : this->objs) {
             bool isHit = false;
-            if(oobj->bvhtree!=nullptr){
+            if (oobj->bvhtree != nullptr) {
               // 启用层次包围盒求交
-              vec3 hit_pos{0.0f,0.0f,0.0f};
+              vec3 hit_pos{0.0f, 0.0f, 0.0f};
               float distance;
-              isHit = oobj->bvhtree->intersect(this->camera.getPosition(), dirr, hit_pos,distance);
-              if(isHit){
+              isHit = oobj->bvhtree->intersect(this->camera.getPosition(), dirr, hit_pos, distance);
+              if (isHit) {
                 // 暂时借用光源的球来表示坐标
                 this->light.position = hit_pos;
                 this->aux["Light"]->transform.setPosition(hit_pos);
               }
-            }else{
+            } else {
               isHit = oobj->box->hit(this->camera.getPosition(), dirr);
             }
             if (isHit) {
@@ -973,7 +981,7 @@ public:
     }
 #endif
 
-    #ifdef ENABLE_BOUNDINGBOX_VISUALIZATION
+#ifdef ENABLE_BOUNDINGBOX_VISUALIZATION
     // 5. 渲染包围盒边框
     cur_shader = this->shaders["line"];
     cur_shader->use();
@@ -993,7 +1001,7 @@ public:
         }
       }
     }
-    #endif
+#endif
   }
 
   void setWindowSize(float width, float height) {

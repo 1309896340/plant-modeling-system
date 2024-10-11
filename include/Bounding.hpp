@@ -199,7 +199,7 @@ public:
     vec3 t_max_xyz = (far_bound - origin) / ndir;
     float t_enter = glm::max(t_min_xyz.x, glm::max(t_min_xyz.y, t_min_xyz.z));
     float t_exit = glm::min(t_max_xyz.x, glm::min(t_max_xyz.y, t_max_xyz.z));
-    if (t_enter < t_exit && t_exit >= 0)
+    if (t_enter <= t_exit && t_exit >= 0)
       return true;
     return false;
   }
@@ -363,21 +363,6 @@ public:
         buf.push_back(cur_node->right);
     }
 
-    // // 如果isHit为true，则cur_node为包围盒碰撞的节点
-    // if (isHit) {
-    //   // 进一步判断是否击中三角
-    //   Surface tri_idx = this->surfaces[cur_node->triangles[0]];
-    //   vec3 p1 = this->vertices[tri_idx.tidx[0]];
-    //   vec3 p2 = this->vertices[tri_idx.tidx[1]];
-    //   vec3 p3 = this->vertices[tri_idx.tidx[2]];
-
-    //   isHit = hit_triangle(origin, dir, p1, p2, p3, hit_pos, distance);
-    //   if(isHit)
-    //     cout << "击中三角，位置为 (" << hit_pos.x << "," << hit_pos.y << "," << hit_pos.z << ")" << endl;
-    //   else
-    //     cout << "击中叶节点包围盒，但没有击中三角" << endl;;
-    // }
-
     // 遍历hit_table，与所有其中的三角求交，将它们以距离从近到远排序
     struct HitInfo {
       vec3 hit_pos{0.0f, 0.0f, 0.0f};
@@ -398,7 +383,7 @@ public:
     if (infos.size() == 0) {
       isHit = false;
     } else {
-      cout << "检测到与 " << infos.size() << "个三角形发生碰撞" << endl;
+      cout << "击中 "  << infos.size() << " 个三角" << endl;
       auto min_iter = std::min_element(infos.begin(), infos.end(), [](const HitInfo &h1, const HitInfo &h2) {
         return h1.distance < h2.distance;
       });

@@ -67,11 +67,16 @@ public:
   float phi_s{0.0f};
   vec3 position_s{0.0f, 0.0f, 0.0f};
 
-  Camera() { updateAttitude(); };
+  Camera() {
+    updateAttitude();
+    record();
+  };
   Camera(vec3 position, vec3 target, float aspect)
       : position(position), aspect(aspect) {
     this->toward = glm::normalize(target - position);
+    view_is_changed = true;
     updateAttitude();
+    record();
   }
 
   void setAnchor(vec3 anchor) { this->surround_info.anchor = anchor; }
@@ -105,13 +110,11 @@ public:
   }
 
   void updateToward() {
-    float fx =
-        sin(this->theta_s * PI / 180.0f) * cos(this->phi_s * PI / 180.0f);
+    // 根据phi_s和theta_s更新toward方向向量
+    float fx = sin(this->theta_s * PI / 180.0f) * cos(this->phi_s * PI / 180.0f);
     float fy = cos(this->theta_s * PI / 180.0f);
-    float fz =
-        sin(this->theta_s * PI / 180.0f) * sin(-this->phi_s * PI / 180.0f);
+    float fz = sin(this->theta_s * PI / 180.0f) * sin(-this->phi_s * PI / 180.0f);
     this->toward = glm::normalize(vec3(fx, fy, fz));
-    // printf("front: (%.2f, %.2f, %.2f)\n", toward.x, toward.y, toward.z);
     this->view_is_changed = true;
   }
 
@@ -148,15 +151,13 @@ public:
   void rotate(vec3 offset) {
     this->phi_s -= offset.x;
     this->theta_s += offset.y;
-    this->updateToward();
-    view_is_changed = true;
+    this->updateToward(); // 调用此句会设置 view_is_changed = true;
   }
 
   void lookAt(vec3 target) {
     this->toward = glm::normalize(target - this->position);
-    // std::cout << "view vec: " << glm::to_string(this->toward) << std::endl;
-    updateAttitude();
     view_is_changed = true;
+    updateAttitude();
   }
 
   mat4 getProject() const {

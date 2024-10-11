@@ -12,8 +12,8 @@ int main(int argc, char **argv) {
   Scene scene;
 
   scene.showAxis();
-  scene.camera.setPosition(glm::vec3(-12.0f, 30.0f, 20.0f));
-  scene.camera.lookAt({0.0f, 4.0f, 0.0f});
+  scene.camera.setPosition(glm::vec3(0.0f, 2.0f, -15.0f));
+  scene.camera.lookAt({0.0f, 2.0f, 0.0f});
   scene.light.color = {0.6f, 0.6f, 0.6f};
   scene.light.position = {1.0f, 7.0f, 2.0f};
 
@@ -51,8 +51,8 @@ int main(int argc, char **argv) {
   // }
 
   // 创建Sphere对象的层次包围盒
-  shared_ptr<GeometryRenderObject> obj = scene.objs["Sphere"];
-  obj->constructBvhTree();
+  // scene.objs["TruncatedConeEx"]->constructBvhTree();
+  scene.objs["Sphere"]->constructBvhTree();
 
   scene.mainloop();
   return 0;
