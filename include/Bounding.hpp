@@ -1,8 +1,9 @@
 ﻿#pragma once
 
 #include <algorithm>
+#include <cassert>
 #include <cstdint>
-#include <cstdio>
+
 #include <deque>
 #include <iostream>
 #include <iterator>
@@ -13,10 +14,15 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
-#include <glm/gtx/string_cast.hpp>
+// #include <glm/gtx/string_cast.hpp>
+
+#include <Eigen/Dense>
 
 #include "Geometry.hpp"
 #include "Transform.hpp"
+#include "glm/common.hpp"
+#include "glm/geometric.hpp"
+#include "glm/matrix.hpp"
 
 namespace {
 using namespace std;
@@ -33,7 +39,6 @@ template <typename T> int partition(vector<T> &arr, int left, int right) {
       right--;
     if (left < right)
       swap(arr[left], arr[right]);
-
     while (left < right && arr[left] <= pivot)
       left++;
     if (left < right)
@@ -56,18 +61,14 @@ int findKPosVal(vector<T> arr, int left, int right, int k) {
   // 寻找第k小的元素位置
   int pos = partition(arr, left, right);
   while (true) {
-    // printf("left: %d right: %d pos: %d\n", left, right, pos);
     if (k > pos) {
-      // printf("k=%d 大于 pos=%d 向右半寻找\n", k, pos);
       left = pos + 1;
       pos = partition(arr, left, right);
     } else if (k < pos) {
-      // printf("k=%d 小于 pos=%d 向左半寻找\n", k, pos);
       right = pos - 1;
       pos = partition(arr, left, right);
     } else {
-      // printf("k==pos=%d 返回\n", k);
-      // 此时的arr[pos]是第k小元素的值，需要返回原序列找到它的位置
+      // 此时的arr[pos]是第k小元素的值，需要返回原序列找到它的位置（可能存在多个相同的中位值）
       auto ptr = std::find(arr_cpy.begin(), arr_cpy.end(), arr[pos]);
       if (ptr != arr_cpy.end()) {
         return ptr - arr_cpy.begin();
@@ -78,29 +79,51 @@ int findKPosVal(vector<T> arr, int left, int right, int k) {
   }
 }
 
+bool hit_triangle(const vec3 &origin, const vec3 &dir, const vec3 &p1, const vec3 &p2, const vec3 &p3, vec3 &hit_pos, float &distance) {
+  vec3 _dir = glm::normalize(dir);
+  float det_base = glm::determinant(mat3(-_dir, p1 - p3, p2 - p3));
+  if (glm::abs(det_base) < 1e-7) {
+    // 此时光线和三角面为近似平行的情况
+    // 给det限定最小值，这会造成distance被低估
+    // det_base = 1e-7;
+    cerr << "hit_triangle warning. The determinant goes to 0!" << endl;
+  }
+  float t_det = glm::determinant(mat3(origin - p3, p1 - p3, p2 - p3));
+  float a1_det = glm::determinant(mat3(-_dir, origin - p3, p2 - p3));
+  float a2_det = glm::determinant(mat3(-_dir, p1 - p3, origin - p3));
+  float t = t_det / det_base;
+  float a1 = a1_det / det_base;
+  float a2 = a2_det / det_base;
+  if (a1 > 0 && a1 < 1 && a2 > 0 && a2 < 1 && a1 + a2 < 1) {
+    // 击中
+    distance = t;
+    hit_pos = origin + t * _dir;
+    return true;
+  } else {
+    // 未击中
+    distance = 0;
+    hit_pos = origin;
+    return false;
+  }
+}
+
 class BoundingBox {
 public:
   vec3 min_bound{0.0f, 0.0f, 0.0f};
   vec3 max_bound{0.0f, 0.0f, 0.0f};
-  BoundingBox() = default;
+  // BoundingBox() = default;
   BoundingBox(vec3 min_bound, vec3 max_bound)
       : min_bound(min_bound), max_bound(max_bound) {}
   BoundingBox(const vector<vec3> &vertices) {
     // 通过传入所有三角面元来初始化包围盒
-    this->min_bound = vertices[0];
-    this->max_bound = vertices[0];
-    for (const vec3 &vert : vertices) {
-      this->max_bound.x = std::max(this->max_bound.x, vert.x);
-      this->max_bound.y = std::max(this->max_bound.y, vert.y);
-      this->max_bound.z = std::max(this->max_bound.z, vert.z);
-      this->min_bound.x = std::min(this->min_bound.x, vert.x);
-      this->min_bound.y = std::min(this->min_bound.y, vert.y);
-      this->min_bound.z = std::min(this->min_bound.z, vert.z);
-    }
+    this->update(vertices);
   }
-  BoundingBox(const vector<vec3> &vertices, const vector<Surface> &surfaces,
-              const vector<uint32_t> &indices) {
-    // 通过传入所有三角面元，通过索引指定其子集，创建子集的包围盒
+  BoundingBox(const vector<vec3> &vertices, const vector<Surface> &surfaces, const vector<uint32_t> &indices) {
+    // 传入三角形面元来更新包围盒
+    this->update(vertices, surfaces, indices);
+  }
+
+  void update(const vector<vec3> &vertices, const vector<Surface> &surfaces, const vector<uint32_t> &indices) {
     vec3 default_bound = vertices[surfaces[indices[0]].tidx[0]];
     this->min_bound = default_bound;
     this->max_bound = default_bound;
@@ -117,13 +140,42 @@ public:
       }
     }
   }
+
+  void update(const vector<vec3> &vertices) {
+    this->min_bound = vertices[0];
+    this->max_bound = vertices[0];
+    for (const vec3 &vert : vertices) {
+      this->max_bound.x = std::max(this->max_bound.x, vert.x);
+      this->max_bound.y = std::max(this->max_bound.y, vert.y);
+      this->max_bound.z = std::max(this->max_bound.z, vert.z);
+      this->min_bound.x = std::min(this->min_bound.x, vert.x);
+      this->min_bound.y = std::min(this->min_bound.y, vert.y);
+      this->min_bound.z = std::min(this->min_bound.z, vert.z);
+    }
+  }
+
   vec3 getBoxCenter() const { return (min_bound + max_bound) / 2.0f; }
   float getXWidth() const { return max_bound.x - min_bound.x; }
   float getYWidth() const { return max_bound.y - min_bound.y; }
   float getZWidth() const { return max_bound.z - min_bound.z; }
 
-  bool hit(const vec3 &origin, const vec3 &dir) {
+  void genOpenGLRenderInfo(vector<vec3> &vertices, vector<uint32_t> &indices) const {
+    // 用于将包围盒的min_bound,max_bound生成可用GL_LINES绘制的顶点和索引数据
+    vec3 max_xyz = this->max_bound;
+    vec3 min_xyz = this->min_bound;
+    vertices = {min_xyz,
+                {min_xyz.x, min_xyz.y, max_xyz.z},
+                {min_xyz.x, max_xyz.y, min_xyz.z},
+                {min_xyz.x, max_xyz.y, max_xyz.z},
+                {max_xyz.x, min_xyz.y, min_xyz.z},
+                {max_xyz.x, min_xyz.y, max_xyz.z},
+                {max_xyz.x, max_xyz.y, min_xyz.z},
+                max_xyz};
+    indices = {0, 1, 0, 2, 0, 4, 1, 3, 1, 5, 2, 3,
+               2, 6, 4, 6, 4, 5, 3, 7, 5, 7, 6, 7};
+  }
 
+  bool hit(const vec3 &origin, const vec3 &dir) {
     // 选择就近边界为near_bound，就远边界为far_bound
     vec3 near_bound = this->min_bound, far_bound = this->max_bound;
     vec3 near_dist = glm::abs(origin - near_bound);
@@ -141,21 +193,11 @@ public:
     vec3 t_max_xyz = (far_bound - origin) / ndir;
     float t_enter = glm::max(t_min_xyz.x, glm::max(t_min_xyz.y, t_min_xyz.z));
     float t_exit = glm::min(t_max_xyz.x, glm::min(t_max_xyz.y, t_max_xyz.z));
-    if (t_enter < t_exit && t_exit >= 0)
+    if (t_enter <= t_exit && t_exit >= 0)
       return true;
     return false;
   }
 };
-
-// class TrianglePrimitive {
-// public:
-//   uint32_t triangle_idx{0};
-//   BoundingBox box;
-
-//   TrianglePrimitive(uint32_t triangle_id) : triangle_idx(triangle_id) {
-//     // 传递可以访问所有三角面元的的上下文，并指定该面元对应的索引
-//   }
-// };
 
 struct BvhNode {
   BvhNode *parent{nullptr};
@@ -163,7 +205,7 @@ struct BvhNode {
 
   // 记录该节点的包围盒所包含的三角的索引，被索引目标是BvhTree::surfaces
   vector<uint32_t> triangles;
-  BoundingBox box;
+  shared_ptr<BoundingBox> box;
 };
 
 class BvhTree {
@@ -174,7 +216,15 @@ private:
   vector<Surface> surfaces;
 
 public:
+  BvhTree() = default;
+
   BvhTree(const shared_ptr<Geometry> &geometry, Transform transform) {
+    this->loadGeometry(geometry, transform);
+  }
+  BvhTree(const shared_ptr<Geometry> &geometry)
+      : BvhTree(geometry, Transform()) {}
+
+  void loadGeometry(const shared_ptr<Geometry> &geometry, Transform transform) {
     // 深拷贝一份geometry并对其顶点应用transform的变换
     this->vertices.resize(geometry->vertices.size());
     mat4 model = transform.getModel();
@@ -184,16 +234,14 @@ public:
       memcpy(&vertices[i], glm::value_ptr(pt), 3 * sizeof(float));
     }
     this->surfaces = geometry->surfaces; // 拷贝构造
-  };
-  BvhTree(const shared_ptr<Geometry> &geometry)
-      : BvhTree(geometry, Transform()) {}
+  }
 
   void construct() {
     // 先生成根节点
     BvhNode *cur_node = new BvhNode();
     for (int i = 0; i < this->surfaces.size(); i++)
       cur_node->triangles.push_back(i);
-    cur_node->box = BoundingBox(this->vertices);
+    cur_node->box = make_shared<BoundingBox>(this->vertices);
     cur_node->parent = nullptr;
 
     this->root = cur_node;
@@ -206,13 +254,10 @@ public:
       cur_node = node_buf.front();
       node_buf.pop_front();
       // 进行对cur_node的划分，判断聚类维度
-      vector<float> widths{cur_node->box.getXWidth(), cur_node->box.getYWidth(),
-                           cur_node->box.getZWidth()};
-      uint32_t dimension_idx = std::distance(
-          widths.begin(), std::max_element(widths.begin(), widths.end()));
+      vector<float> widths{cur_node->box->getXWidth(), cur_node->box->getYWidth(), cur_node->box->getZWidth()};
+      uint32_t dimension_idx = std::distance(widths.begin(), std::max_element(widths.begin(), widths.end()));
       vector<float> comp_positions(cur_node->triangles.size());
-      for (int k = 0; k < cur_node->triangles.size();
-           k++) { // 计算cur_node->triangles里每个三角面元质心位置
+      for (int k = 0; k < cur_node->triangles.size(); k++) { // 计算cur_node->triangles里每个三角面元质心位置
         Surface surf = surfaces[cur_node->triangles[k]];
         // 计算三角的质心的x分量，dimension_idx决定了计算哪个维度的质心位置分量
         float center_pos = 0.0f;
@@ -220,7 +265,7 @@ public:
           center_pos += glm::value_ptr(vertices[surf.tidx[i]])[dimension_idx];
         comp_positions[k] = center_pos / 3.0f;
       }
-      // 找到中位点，对cur_node->triangles中的三角分组
+
       vector<uint32_t> left_triangles, right_triangles;
       assert(comp_positions.size() > 0);
       if (comp_positions.size() == 1) {
@@ -267,7 +312,7 @@ public:
         cur_node->left = new BvhNode();
         cur_node->left->parent = cur_node;
         cur_node->left->triangles = left_triangles;
-        cur_node->left->box = BoundingBox(vertices, surfaces, left_triangles);
+        cur_node->left->box = make_shared<BoundingBox>(vertices, surfaces, left_triangles);
         if (left_triangles.size() > 1)
           node_buf.push_back(cur_node->left);
       }
@@ -275,11 +320,83 @@ public:
         cur_node->right = new BvhNode();
         cur_node->right->parent = cur_node;
         cur_node->right->triangles = right_triangles;
-        cur_node->right->box = BoundingBox(vertices, surfaces, right_triangles);
+        cur_node->right->box = make_shared<BoundingBox>(vertices, surfaces, right_triangles);
         if (right_triangles.size() > 1)
           node_buf.push_back(cur_node->right);
       }
     }
+  }
+
+  void traverse(function<void(BvhNode *node)> visit) {
+    // 广度优先遍历
+    deque<BvhNode *> buf{this->root};
+    while (!buf.empty()) {
+      BvhNode *cur_node = buf.front();
+      buf.pop_front();
+      if (cur_node->left != nullptr)
+        buf.push_back(cur_node->left);
+      if (cur_node->right != nullptr)
+        buf.push_back(cur_node->right);
+
+      visit(cur_node);
+    }
+  }
+
+  bool intersect(const vec3 &origin, const vec3 &dir, vec3 &hit_pos, float &distance) {
+
+    deque<BvhNode *> buf{this->root};
+    vector<BvhNode *> hit_table; // 所有击中包围盒的叶节点
+    bool isHit = false;
+
+    while (!buf.empty()) {
+      BvhNode *cur_node = buf.front();
+      buf.pop_front();
+
+      if (!cur_node->box->hit(origin, dir))
+        continue;
+
+      // 击中，先判断cur_node是否为叶节点
+      if (cur_node->left == nullptr && cur_node->right == nullptr)
+        hit_table.push_back(cur_node);
+
+      // 击中，但不是叶节点
+      if (cur_node->left != nullptr)
+        buf.push_back(cur_node->left);
+      if (cur_node->right != nullptr)
+        buf.push_back(cur_node->right);
+    }
+
+    // 遍历hit_table，与所有其中的三角求交，将它们以距离从近到远排序
+    struct HitInfo {
+      vec3 hit_pos{0.0f, 0.0f, 0.0f};
+      float distance;
+    };
+
+    vector<HitInfo> infos;  // 与碰撞叶节点中三角形求交成功的结果列表
+    for (int i = 0; i < hit_table.size(); i++) {
+      BvhNode *cur_node = hit_table[i];
+      Surface tri_idx = this->surfaces[cur_node->triangles[0]];
+      vec3 p1 = this->vertices[tri_idx.tidx[0]];
+      vec3 p2 = this->vertices[tri_idx.tidx[1]];
+      vec3 p3 = this->vertices[tri_idx.tidx[2]];
+      HitInfo info;
+      if (hit_triangle(origin, dir, p1, p2, p3, info.hit_pos, info.distance))
+        infos.emplace_back(info);
+    }
+    if (infos.size() == 0) {
+      isHit = false;
+    } else {
+      cout << "击中 "  << infos.size() << " 个三角" << endl;
+      auto min_iter = std::min_element(infos.begin(), infos.end(), [](const HitInfo &h1, const HitInfo &h2) {
+        return h1.distance < h2.distance;
+      });
+      const HitInfo hinfo = *min_iter;
+      hit_pos = hinfo.hit_pos;
+      distance = hinfo.distance;
+      isHit = true;
+    }
+
+    return isHit;
   }
 
   ~BvhTree() {

@@ -1,52 +1,10 @@
 ﻿// #define ENABLE_NORMAL_VISUALIZATION
-// #define ENBALE_POLYGON_VISUALIZATION
-#define ENABLE_BOUNDINGBOX_VISUALIZATION
+#define ENBALE_POLYGON_VISUALIZATION
+// #define ENABLE_BOUNDINGBOX_VISUALIZATION
 #include <memory>
 
-#include <Eigen/Dense>
-
-#include "Bounding.hpp"
-
+// #include "Bounding.hpp"
 #include "Scene.hpp"
-
-// 创建层次包围盒的描述结构
-struct BoundingNode {
-  BoundingNode *parent{nullptr};
-  BoundingNode *left{nullptr}, *right{nullptr};
-  struct {
-    vec3 min_xyz{0.0f, 0.0f, 0.0f};
-    vec3 max_xyz{0.0f, 0.0f, 0.0f};
-  } cube;
-  vector<Surface> objs;
-};
-
-float intersect(const Eigen::Vector3f &origin, const Eigen::Vector3f &dir,
-                const Eigen::Vector3f &p1, const Eigen::Vector3f &p2,
-                const Eigen::Vector3f &p3) {
-  // 返回t值，击中点坐标为 origin + t * dir
-
-  Eigen::Vector3f ddir = dir.normalized();
-
-  Eigen::Matrix3f A1;
-  Eigen::Matrix3f A2;
-  Eigen::Vector3f B;
-  A1 << -ddir, p1 - p3, p2 - p3;
-  B << origin - p3;
-  A2 << B, p1 - p3, p2 - p3;
-  float tmp = A1.determinant();
-  if (abs(tmp) < 1e-6) {
-    cerr << "奇异矩阵，错误" << endl;
-    return 0;
-  }
-  float t = A2.determinant() / tmp;
-
-  return t;
-}
-void display(const vector<float> &arr) {
-  for (const float &elem : arr)
-    printf("%.4f, ", elem);
-  printf("\b\b  \n");
-}
 
 using namespace std;
 int main(int argc, char **argv) {
@@ -54,17 +12,20 @@ int main(int argc, char **argv) {
   Scene scene;
 
   scene.showAxis();
-  scene.camera.setPosition(glm::vec3(-12.0f, 30.0f, 20.0f));
-  scene.camera.lookAt({0.0f, 4.0f, 0.0f});
+  scene.camera.setPosition(glm::vec3(0.0f, 2.0f, -15.0f));
+  scene.camera.lookAt({0.0f, 2.0f, 0.0f});
   scene.light.color = {0.6f, 0.6f, 0.6f};
   scene.light.position = {1.0f, 7.0f, 2.0f};
 
   scene.add("TruncatedConeEx",
             make_shared<TruncatedConeEx>(2.0f, 0.5f, 6.0f, 0.0f, 0.0f),
             {-4.0f, 0.0f, -6.0f});
-  scene.add("Sphere", make_shared<Sphere>(2.0f, 36, 72), {0.0f, 2.0f, 0.0f});
+  scene.add("Sphere", make_shared<Sphere>(2.0f, 18, 36), {0.0f, 2.0f, 0.0f});
   scene.add("Cone", make_shared<Cone>(2.0f, 3.0f), {0.0f, 0.0f, 6.0f});
   scene.add("Cylinder", make_shared<Cylinder>(2.5f, 5.0f), {5.0f, 0.0f, 0.0f});
+
+  // scene.add("Plane", make_shared<Plane>(2.0f, 2.0f, 1, 1), Transform({-5.0f, 3.0f, 2.0f},_right,glm::radians(10.0f)));
+  // scene.objs["Plane"]->constructBvhTree();
 
   // // 无关于OpenGL渲染，实现CPU端的仿真计算，仅考虑Sphere形体
   // const shared_ptr<GeometryRenderObject> obj = scene.objs["Sphere"];
@@ -90,29 +51,8 @@ int main(int argc, char **argv) {
   // }
 
   // 创建Sphere对象的层次包围盒
-  shared_ptr<GeometryRenderObject> sphere = scene.objs["Sphere"];
-  BvhTree tree(sphere->geometry, sphere->transform);
-  printf("面元总数 %llu\n", sphere->geometry->surfaces.size());
-  tree.construct();
-  printf("构造完毕\n");
-
-  // vector<float> buf;
-  // for (int i = 0; i < 10; i++) {
-  //   buf.push_back(i + 1.5f);
-  // }
-  // mt19937 rg;
-  // rg.seed(34);
-  // display(buf);
-  // std::shuffle(buf.begin(), buf.end(), rg);
-  // display(buf);
-  // printf("开始\n");
-  // for (int i = 0; i < buf.size(); i++) {
-  //   uint32_t idx = findKPosVal(buf, 0, buf.size() - 1, i);
-  //   printf("buf[%d]=%.4f\n", idx, buf[idx]);
-  // }
-  // return 0;
-
-  // ==================================================
+  // scene.objs["TruncatedConeEx"]->constructBvhTree();
+  scene.objs["Sphere"]->constructBvhTree();
 
   scene.mainloop();
   return 0;

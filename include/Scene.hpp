@@ -2,16 +2,13 @@
 
 // #define NDEBUG
 
-#include "GLFW/glfw3.h"
-#include "constants.h"
-#include "glm/common.hpp"
-#include "glm/geometric.hpp"
 #include <algorithm>
-#include <iostream>
-
 #include <cassert>
+#include <cmath>
 #include <cstdint>
+#include <exception>
 #include <filesystem>
+#include <iostream>
 #include <map>
 #include <memory>
 #include <stdexcept>
@@ -30,6 +27,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
+#include "constants.h"
 #include "proj.h"
 
 #include "Auxiliary.hpp"
@@ -38,7 +36,6 @@
 #include "Geometry.hpp"
 #include "Shader.hpp"
 #include "Transform.hpp"
-
 
 #define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
 #define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.02f
@@ -74,6 +71,57 @@ public:
   vec3 color{1.0f, 1.0f, 1.0f};
 };
 
+class BoundingBoxRenderObject {
+public:
+  GLuint vao{0};
+  GLuint vbo{0};
+  GLuint ebo{0};
+  int draw_size{0};
+
+  BoundingBoxRenderObject() = default;
+  BoundingBoxRenderObject(const vector<vec3> &vertices, const vector<uint32_t> &indices) {
+    glGenVertexArrays(1, &this->vao);
+    glBindVertexArray(this->vao);
+
+    glGenBuffers(1, &this->vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vec3),
+                 vertices.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glEnableVertexAttribArray(0);
+
+    glGenBuffers(1, &this->ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(uint32_t),
+                 indices.data(), GL_STATIC_DRAW);
+
+    this->draw_size = indices.size();
+  }
+  void update(const vector<vec3> &vertices, const vector<uint32_t> &indices) {
+    // 仅更新vbo和ebo
+
+    glBindVertexArray(this->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(vec3),
+                    vertices.data());
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
+    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, indices.size() * sizeof(uint32_t),
+                    indices.data());
+  }
+  void update(const vector<Vertex> &vertices) {
+    // 仅更新vbo
+    glBindVertexArray(this->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(vec3),
+                    vertices.data());
+  }
+  ~BoundingBoxRenderObject() {
+    glDeleteBuffers(1, &this->ebo);
+    glDeleteBuffers(1, &this->vbo);
+    glDeleteVertexArrays(1, &this->vao);
+  }
+};
+
 class GeometryRenderObject {
 private:
   void initVBO() {
@@ -106,41 +154,21 @@ private:
                  this->geometry->surfaces.size() * sizeof(Surface),
                  this->geometry->surfaces.data(), GL_STATIC_DRAW);
     glBindVertexArray(0);
+
+    // 同时初始化包围盒
+    mat4 model = this->transform.getModel();
+    vector<vec3> vertices(this->geometry->vertices.size());
+    for (int i = 0; i < this->geometry->vertices.size(); i++) {
+      vertices[i] = vec3(
+          model *
+          vec4(glm::make_vec3(this->geometry->vertices[i].position), 1.0f));
+    }
+    this->box = make_unique<BoundingBox>(vertices);
+    vector<vec3> box_vertices;
+    vector<uint32_t> box_indices;
+    this->box->genOpenGLRenderInfo(box_vertices, box_indices);
+    this->box_obj = make_unique<BoundingBoxRenderObject>(box_vertices, box_indices);
   }
-
-  void initBoundingBoxVBO() {
-    updateBoundingBox();
-    vec3 max_xyz = this->box.max_bound;
-    vec3 min_xyz = this->box.min_bound;
-    vector<vec3> b_vertices = {min_xyz,
-                               {min_xyz.x, min_xyz.y, max_xyz.z},
-                               {min_xyz.x, max_xyz.y, min_xyz.z},
-                               {min_xyz.x, max_xyz.y, max_xyz.z},
-                               {max_xyz.x, min_xyz.y, min_xyz.z},
-                               {max_xyz.x, min_xyz.y, max_xyz.z},
-                               {max_xyz.x, max_xyz.y, min_xyz.z},
-                               max_xyz};
-    vector<GLuint> b_indices = {0, 1, 0, 2, 0, 4, 1, 3, 1, 5, 2, 3,
-                                2, 6, 4, 6, 4, 5, 3, 7, 5, 7, 6, 7};
-
-    glGenVertexArrays(1, &this->box_info.vao);
-    glBindVertexArray(this->box_info.vao);
-
-    glGenBuffers(1, &this->box_info.vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, this->box_info.vbo);
-    glBufferData(GL_ARRAY_BUFFER, b_vertices.size() * sizeof(vec3),
-                 b_vertices.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
-    glEnableVertexAttribArray(0);
-
-    glGenBuffers(1, &this->box_info.ebo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->box_info.ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, b_indices.size() * sizeof(GLuint),
-                 b_indices.data(), GL_STATIC_DRAW);
-  }
-
-  // void initComputeShaderTexture(){
-  // }
 
 public:
   shared_ptr<Geometry> geometry;
@@ -151,13 +179,11 @@ public:
   GLuint ebo{0};
   GLuint texture{0};
 
-  BoundingBox box;
+  unique_ptr<BoundingBox> box; // 将BoundingBox用BvhTree代替
+  unique_ptr<BoundingBoxRenderObject> box_obj;
 
-  struct {
-    GLuint vao;
-    GLuint vbo;
-    GLuint ebo;
-  } box_info;
+  unique_ptr<BvhTree> bvhtree{nullptr};
+  vector<shared_ptr<BoundingBoxRenderObject>> bvhbox_objs;
 
   // 与计算着色器之间数据交换的上下文信息
   // struct {
@@ -174,64 +200,25 @@ public:
                        Transform transform)
       : geometry(geometry), transform(transform) {
     initVBO();
-    // initComputeShaderTexture();
-    initBoundingBoxVBO();
   }
   GeometryRenderObject(const shared_ptr<Geometry> &geometry)
       : GeometryRenderObject(geometry, Transform()) {}
 
-  GeometryRenderObject(const vector<Vertex> &vertices,
-                       const vector<Surface> &surfaces, Transform transform)
-      : transform(transform) {
-    this->geometry = make_shared<FixedGeometry>(vertices, surfaces);
-    initVBO();
-    // initComputeShaderTexture();
-    initBoundingBoxVBO();
-  }
-
-  GeometryRenderObject(const vector<Vertex> &vertices,
-                       const vector<Surface> &surfaces)
-      : GeometryRenderObject(vertices, surfaces, Transform()) {}
-
-  void updateBoundingBox() {
-    // 将this->geometry->vertices变换到世界坐标系
-    mat4 model = this->transform.getModel();
-    vector<vec3> positions(this->geometry->vertices.size());
-    for (int i = 0; i < this->geometry->vertices.size(); i++) {
-      positions[i] = vec3(
-          model *
-          vec4(glm::make_vec3(this->geometry->vertices[i].position), 1.0f));
+  void constructBvhTree() {
+    if (this->bvhtree != nullptr) {
+      // 销毁当前的tree，完全重构
+      this->bvhtree.reset();
     }
-    // 计算包围盒边界
-    this->box.min_bound = positions[0];
-    this->box.max_bound = positions[0];
-    for (auto &vert : positions) {
-      this->box.min_bound.x = glm::min(this->box.min_bound.x, vert.x);
-      this->box.min_bound.y = glm::min(this->box.min_bound.y, vert.y);
-      this->box.min_bound.z = glm::min(this->box.min_bound.z, vert.z);
-
-      this->box.max_bound.x = glm::max(this->box.max_bound.x, vert.x);
-      this->box.max_bound.y = glm::max(this->box.max_bound.y, vert.y);
-      this->box.max_bound.z = glm::max(this->box.max_bound.z, vert.z);
-    }
-  }
-  void updateBoundingBoxVBO() {
-    updateBoundingBox();
-
-    vec3 max_xyz = this->box.max_bound;
-    vec3 min_xyz = this->box.min_bound;
-    vector<vec3> b_vertices = {min_xyz,
-                               {min_xyz.x, min_xyz.y, max_xyz.z},
-                               {min_xyz.x, max_xyz.y, min_xyz.z},
-                               {min_xyz.x, max_xyz.y, max_xyz.z},
-                               {max_xyz.x, min_xyz.y, min_xyz.z},
-                               {max_xyz.x, min_xyz.y, max_xyz.z},
-                               {max_xyz.x, max_xyz.y, min_xyz.z},
-                               max_xyz};
-    glBindVertexArray(this->box_info.vao);
-    glBindBuffer(GL_ARRAY_BUFFER, this->box_info.vbo);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, b_vertices.size() * sizeof(vec3),
-                    b_vertices.data());
+    this->bvhtree = make_unique<BvhTree>(this->geometry, this->transform);
+    this->bvhtree->construct();
+    // 生成顶点缓冲
+    this->bvhbox_objs.clear(); // 释放所有旧的顶点缓冲（智能指针自动析构）
+    this->bvhtree->traverse([this](BvhNode *node) {
+      vector<vec3> vertices;
+      vector<uint32_t> indices;
+      node->box->genOpenGLRenderInfo(vertices, indices);
+      this->bvhbox_objs.emplace_back(make_shared<BoundingBoxRenderObject>(vertices, indices));
+    });
   }
 
   void updateVBO() {
@@ -247,13 +234,36 @@ public:
     glBindVertexArray(0);
 
     // 重新计算包围盒并更新包围盒的VBO
-    updateBoundingBoxVBO();
+    mat4 model = this->transform.getModel();
+    vector<vec3> vertices(this->geometry->vertices.size());
+    for (int i = 0; i < this->geometry->vertices.size(); i++) {
+      vertices[i] = vec3(
+          model * vec4(glm::make_vec3(this->geometry->vertices[i].position), 1.0f));
+    }
+    // 计算包围盒的6个边界值
+    this->box->update(vertices);
+    // 更新到OpenGL的顶点缓冲区
+    vector<vec3> bound_vertices;
+    vector<uint32_t> bound_indices;
+    this->box->genOpenGLRenderInfo(bound_vertices, bound_indices);
+    this->box_obj->update(bound_vertices, bound_indices);
+
+    // 若启用了层次包围盒，则一同更新
+    if (this->bvhtree != nullptr) {
+      // 更新所有节点的包围盒
+      this->bvhtree->loadGeometry(this->geometry, this->transform);
+      this->bvhtree->construct();
+      // 更新所有包围盒的顶点缓冲
+      this->bvhbox_objs.clear(); // 释放所有旧的顶点缓冲（智能指针自动析构）
+      this->bvhtree->traverse([this](BvhNode *node) {
+        vector<vec3> vertices;
+        vector<uint32_t> indices;
+        node->box->genOpenGLRenderInfo(vertices, indices);
+        this->bvhbox_objs.emplace_back(make_shared<BoundingBoxRenderObject>(vertices, indices));
+      });
+    }
   }
   ~GeometryRenderObject() {
-    glDeleteBuffers(1, &this->box_info.vbo);
-    glDeleteBuffers(1, &this->box_info.ebo);
-    glDeleteVertexArrays(1, &this->box_info.vao);
-
     glDeleteBuffers(1, &this->vbo);
     glDeleteBuffers(1, &this->ebo);
     glDeleteVertexArrays(1, &this->vao);
@@ -303,9 +313,7 @@ private:
     shared_ptr<GeometryRenderObject> cur_obj{nullptr};
     int selected_idx = 0;
     int highlighted_idx = 0;
-    // float theta_c = 0.0f;
-    // float phi_c = 0.0f;
-    // float dist = 0.0f;
+    bool start_record{true};
     ImVec2 mouse_pos{0, 0};
     vector<string> items;
   } imgui;
@@ -523,14 +531,7 @@ public:
       // 记录下“相机环绕”时的相机球坐标
       if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         if (ImGui::IsKeyDown(ImGuiKey_ModShift)) {
-          // vec3 dist_v = this->camera.position_s - anchor;
-          // imgui.dist = glm::length(dist_v);
-          // imgui.theta_c =
-          //     acos(glm::dot(glm::normalize(dist_v), vec3(0.0f, 1.0f, 0.0f)));
-          // imgui.phi_c = atan2(dist_v.z, dist_v.x);
-
           this->camera.record();
-
         } else {
           // 鼠标左击选中场景物体，遍历所有物体的包围盒求交
           this->imgui.mouse_pos = io->MousePos;
@@ -541,18 +542,12 @@ public:
         if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
           if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
             // 以世界坐标锚点为中心做旋转
-            // imgui.phi_c +=
-            //     MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x;
-            // imgui.theta_c -=
-            //     MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y;
-            // vec3 new_pos;
-            // new_pos.x = imgui.dist * sin(imgui.theta_c) * cos(imgui.phi_c);
-            // new_pos.y = imgui.dist * cos(imgui.theta_c);
-            // new_pos.z = imgui.dist * sin(imgui.theta_c) * sin(imgui.phi_c);
-            // this->camera.setPosition(new_pos + anchor);
-            // this->camera.lookAt(anchor);
+            if (this->imgui.start_record) {
+              // 相机记录当前环绕位置和锚点距离
+              this->camera.record();
+              this->imgui.start_record = false;
+            }
             this->camera.surround(MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x, MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y);
-
           } else {
             // 以相机为中心旋转
             this->camera.rotate(
@@ -561,6 +556,7 @@ public:
           }
         }
         if (ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f)) {
+          // 沿着相机姿态坐标系的上下左右进行平移
           this->camera.move_relative(
               {-MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.x,
                MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.y, 0.0f});
@@ -568,10 +564,15 @@ public:
       }
 
       if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+        // 相机准备好下一次环绕的启动
+        this->imgui.start_record = true;
+
+        // 鼠标按下不挪动松开，则执行场景物体拾取
         ImVec2 mouse_pos = io->MousePos;
-        if (mouse_pos.x == this->imgui.mouse_pos.x &&
-            mouse_pos.y == this->imgui.mouse_pos.y) {
-          // 按下与弹起位置一致，中间没有鼠标拖拽
+        float move_offset = std::sqrt(std::powf(mouse_pos.x - this->imgui.mouse_pos.x, 2.0f) + std::powf(mouse_pos.y - this->imgui.mouse_pos.y, 2.0f));
+        // cout << "鼠标拖拽距离：" << move_offset << endl;
+        if (move_offset < 8.0f) {
+          // 按下与弹起位置一致，中间没有鼠标大幅拖拽
           // 将屏幕坐标转换到裁剪坐标，然后转换为世界坐标，与包围盒求交
 
           double xpos, ypos;
@@ -587,15 +588,25 @@ public:
 
           std::map<float, uint32_t> hit_objs;
           for (auto &[name, oobj] : this->objs) {
-            bool isHit = oobj->box.hit(this->camera.getPosition(), dirr);
-
+            bool isHit = false;
+            if (oobj->bvhtree != nullptr) {
+              // 启用层次包围盒求交
+              vec3 hit_pos{0.0f, 0.0f, 0.0f};
+              float distance;
+              isHit = oobj->bvhtree->intersect(this->camera.getPosition(), dirr, hit_pos, distance);
+              if (isHit) {
+                // 暂时借用光源的球来表示坐标
+                this->light.position = hit_pos;
+                this->aux["Light"]->transform.setPosition(hit_pos);
+              }
+            } else {
+              isHit = oobj->box->hit(this->camera.getPosition(), dirr);
+            }
             if (isHit) {
-              auto selected_name_ptr = std::find(this->imgui.items.begin(),
-                                                 this->imgui.items.end(), name);
+              auto selected_name_ptr = std::find(this->imgui.items.begin(), this->imgui.items.end(), name);
               if (selected_name_ptr != this->imgui.items.end()) {
                 uint32_t idx = selected_name_ptr - this->imgui.items.begin();
-                float obj_camera_dist = glm::distance(
-                    this->camera.getPosition(), oobj->box.getBoxCenter());
+                float obj_camera_dist = glm::distance(this->camera.getPosition(), oobj->box->getBoxCenter());
                 hit_objs[obj_camera_dist] = idx;
               }
             }
@@ -603,7 +614,7 @@ public:
           if (!hit_objs.empty()) {
             // 取hit_objs中最近元素
             this->imgui.selected_idx = hit_objs.begin()->second;
-            this->camera.setAnchor(this->objs[this->imgui.items[this->imgui.selected_idx]]->box.getBoxCenter());
+            this->camera.setAnchor(this->objs[this->imgui.items[this->imgui.selected_idx]]->box->getBoxCenter());
           }
         }
       }
@@ -977,8 +988,17 @@ public:
     cur_shader->set("lineColor", glm::vec3(0.0f, 1.0f, 1.0f));
     for (auto &[name, cur_obj] : this->objs) {
       if (cur_obj->isSelected) {
-        glBindVertexArray(cur_obj->box_info.vao);
-        glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, nullptr);
+        if (cur_obj->bvhtree != nullptr) {
+          // 渲染层次包围盒
+          for (const shared_ptr<BoundingBoxRenderObject> &bb_obj : cur_obj->bvhbox_objs) {
+            glBindVertexArray(bb_obj->vao);
+            glDrawElements(GL_LINES, bb_obj->draw_size, GL_UNSIGNED_INT, nullptr);
+          }
+        } else {
+          // 渲染整体包围盒
+          glBindVertexArray(cur_obj->box_obj->vao);
+          glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, nullptr);
+        }
       }
     }
 #endif
