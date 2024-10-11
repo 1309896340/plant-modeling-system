@@ -20,9 +20,6 @@
 
 #include "Geometry.hpp"
 #include "Transform.hpp"
-#include "glm/common.hpp"
-#include "glm/geometric.hpp"
-#include "glm/matrix.hpp"
 
 namespace {
 using namespace std;
@@ -79,7 +76,9 @@ int findKPosVal(vector<T> arr, int left, int right, int k) {
   }
 }
 
-bool hit_triangle(const vec3 &origin, const vec3 &dir, const vec3 &p1, const vec3 &p2, const vec3 &p3, vec3 &hit_pos, float &distance) {
+bool hit_triangle(const vec3 &origin, const vec3 &dir, const vec3 &p1,
+                  const vec3 &p2, const vec3 &p3, vec3 &hit_pos,
+                  float &distance) {
   vec3 _dir = glm::normalize(dir);
   float det_base = glm::determinant(mat3(-_dir, p1 - p3, p2 - p3));
   if (glm::abs(det_base) < 1e-7) {
@@ -87,6 +86,10 @@ bool hit_triangle(const vec3 &origin, const vec3 &dir, const vec3 &p1, const vec
     // 给det限定最小值，这会造成distance被低估
     // det_base = 1e-7;
     cerr << "hit_triangle warning. The determinant goes to 0!" << endl;
+    // 平行视作未击中
+    distance = 0;
+    hit_pos = origin;
+    return false;
   }
   float t_det = glm::determinant(mat3(origin - p3, p1 - p3, p2 - p3));
   float a1_det = glm::determinant(mat3(-_dir, origin - p3, p2 - p3));
@@ -94,7 +97,7 @@ bool hit_triangle(const vec3 &origin, const vec3 &dir, const vec3 &p1, const vec
   float t = t_det / det_base;
   float a1 = a1_det / det_base;
   float a2 = a2_det / det_base;
-  if (a1 > 0 && a1 < 1 && a2 > 0 && a2 < 1 && a1 + a2 < 1) {
+  if (a1 >= 0 && a1 <= 1 && a2 >= 0 && a2 <= 1 && a1 + a2 <= 1) {
     // 击中
     distance = t;
     hit_pos = origin + t * _dir;
@@ -118,12 +121,14 @@ public:
     // 通过传入所有三角面元来初始化包围盒
     this->update(vertices);
   }
-  BoundingBox(const vector<vec3> &vertices, const vector<Surface> &surfaces, const vector<uint32_t> &indices) {
+  BoundingBox(const vector<vec3> &vertices, const vector<Surface> &surfaces,
+              const vector<uint32_t> &indices) {
     // 传入三角形面元来更新包围盒
     this->update(vertices, surfaces, indices);
   }
 
-  void update(const vector<vec3> &vertices, const vector<Surface> &surfaces, const vector<uint32_t> &indices) {
+  void update(const vector<vec3> &vertices, const vector<Surface> &surfaces,
+              const vector<uint32_t> &indices) {
     vec3 default_bound = vertices[surfaces[indices[0]].tidx[0]];
     this->min_bound = default_bound;
     this->max_bound = default_bound;
@@ -159,7 +164,8 @@ public:
   float getYWidth() const { return max_bound.y - min_bound.y; }
   float getZWidth() const { return max_bound.z - min_bound.z; }
 
-  void genOpenGLRenderInfo(vector<vec3> &vertices, vector<uint32_t> &indices) const {
+  void genOpenGLRenderInfo(vector<vec3> &vertices,
+                           vector<uint32_t> &indices) const {
     // 用于将包围盒的min_bound,max_bound生成可用GL_LINES绘制的顶点和索引数据
     vec3 max_xyz = this->max_bound;
     vec3 min_xyz = this->min_bound;
@@ -176,21 +182,20 @@ public:
   }
 
   bool hit(const vec3 &origin, const vec3 &dir) {
-    // 选择就近边界为near_bound，就远边界为far_bound
-    vec3 near_bound = this->min_bound, far_bound = this->max_bound;
-    vec3 near_dist = glm::abs(origin - near_bound);
-    vec3 far_dist = glm::abs(origin - far_bound);
-    if (far_dist.x < near_dist.x)
-      swap(near_bound.x, far_bound.x);
-    if (far_dist.y < near_dist.y)
-      swap(near_bound.y, far_bound.y);
-    if (far_dist.z < near_dist.z)
-      swap(near_bound.z, far_bound.z);
+    vec3 in_bound = this->min_bound;
+    vec3 out_bound = this->max_bound;
+
+    if (dir.x < 0)
+      swap(in_bound.x, out_bound.x);
+    if (dir.y < 0)
+      swap(in_bound.y, out_bound.y);
+    if (dir.z < 0)
+      swap(in_bound.z, out_bound.z);
 
     // 判断求交
     vec3 ndir = glm::normalize(dir);
-    vec3 t_min_xyz = (near_bound - origin) / ndir;
-    vec3 t_max_xyz = (far_bound - origin) / ndir;
+    vec3 t_min_xyz = (in_bound - origin) / ndir;
+    vec3 t_max_xyz = (out_bound - origin) / ndir;
     float t_enter = glm::max(t_min_xyz.x, glm::max(t_min_xyz.y, t_min_xyz.z));
     float t_exit = glm::min(t_max_xyz.x, glm::min(t_max_xyz.y, t_max_xyz.z));
     if (t_enter <= t_exit && t_exit >= 0)
@@ -254,10 +259,14 @@ public:
       cur_node = node_buf.front();
       node_buf.pop_front();
       // 进行对cur_node的划分，判断聚类维度
-      vector<float> widths{cur_node->box->getXWidth(), cur_node->box->getYWidth(), cur_node->box->getZWidth()};
-      uint32_t dimension_idx = std::distance(widths.begin(), std::max_element(widths.begin(), widths.end()));
+      vector<float> widths{cur_node->box->getXWidth(),
+                           cur_node->box->getYWidth(),
+                           cur_node->box->getZWidth()};
+      uint32_t dimension_idx = std::distance(
+          widths.begin(), std::max_element(widths.begin(), widths.end()));
       vector<float> comp_positions(cur_node->triangles.size());
-      for (int k = 0; k < cur_node->triangles.size(); k++) { // 计算cur_node->triangles里每个三角面元质心位置
+      for (int k = 0; k < cur_node->triangles.size();
+           k++) { // 计算cur_node->triangles里每个三角面元质心位置
         Surface surf = surfaces[cur_node->triangles[k]];
         // 计算三角的质心的x分量，dimension_idx决定了计算哪个维度的质心位置分量
         float center_pos = 0.0f;
@@ -297,13 +306,10 @@ public:
             else
               right_triangles.push_back(cur_node->triangles[k]);
           }
-        // if (std::fabs(left_triangles.size() - right_triangles.size()) >= 2 &&
-        //     (left_triangles.size() == 0 || right_triangles.size() == 0)) {
-        //   printf("break\b");
-        // }
       }
 
-      printf("this: %p parent: %p left: %llu  right: %llu\n", cur_node, cur_node->parent, left_triangles.size(), right_triangles.size());
+      // printf("this: %p parent: %p left: %llu  right: %llu\n", cur_node,
+      // cur_node->parent, left_triangles.size(), right_triangles.size());
       // 判断left_triangles和right_triangles是否为：1. 空 2.
       // 仅1个面元 3.2个以上面元。
       // 对于1的情况，不创建新node。对于2的情况，加入node但不加入node_buf。
@@ -312,7 +318,8 @@ public:
         cur_node->left = new BvhNode();
         cur_node->left->parent = cur_node;
         cur_node->left->triangles = left_triangles;
-        cur_node->left->box = make_shared<BoundingBox>(vertices, surfaces, left_triangles);
+        cur_node->left->box =
+            make_shared<BoundingBox>(vertices, surfaces, left_triangles);
         if (left_triangles.size() > 1)
           node_buf.push_back(cur_node->left);
       }
@@ -320,7 +327,8 @@ public:
         cur_node->right = new BvhNode();
         cur_node->right->parent = cur_node;
         cur_node->right->triangles = right_triangles;
-        cur_node->right->box = make_shared<BoundingBox>(vertices, surfaces, right_triangles);
+        cur_node->right->box =
+            make_shared<BoundingBox>(vertices, surfaces, right_triangles);
         if (right_triangles.size() > 1)
           node_buf.push_back(cur_node->right);
       }
@@ -342,7 +350,8 @@ public:
     }
   }
 
-  bool intersect(const vec3 &origin, const vec3 &dir, vec3 &hit_pos, float &distance) {
+  bool intersect(const vec3 &origin, const vec3 &dir, vec3 &hit_pos,
+                 float &distance) {
 
     deque<BvhNode *> buf{this->root};
     vector<BvhNode *> hit_table; // 所有击中包围盒的叶节点
@@ -356,8 +365,10 @@ public:
         continue;
 
       // 击中，先判断cur_node是否为叶节点
-      if (cur_node->left == nullptr && cur_node->right == nullptr)
+      if (cur_node->left == nullptr && cur_node->right == nullptr) {
         hit_table.push_back(cur_node);
+        continue;
+      }
 
       // 击中，但不是叶节点
       if (cur_node->left != nullptr)
@@ -372,7 +383,7 @@ public:
       float distance;
     };
 
-    vector<HitInfo> infos;  // 与碰撞叶节点中三角形求交成功的结果列表
+    vector<HitInfo> infos; // 与碰撞叶节点中三角形求交成功的结果列表
     for (int i = 0; i < hit_table.size(); i++) {
       BvhNode *cur_node = hit_table[i];
       Surface tri_idx = this->surfaces[cur_node->triangles[0]];
@@ -386,10 +397,11 @@ public:
     if (infos.size() == 0) {
       isHit = false;
     } else {
-      cout << "击中 "  << infos.size() << " 个三角" << endl;
-      auto min_iter = std::min_element(infos.begin(), infos.end(), [](const HitInfo &h1, const HitInfo &h2) {
-        return h1.distance < h2.distance;
-      });
+      // cout << "击中 " << infos.size() << " 个三角" << endl;
+      auto min_iter = std::min_element(
+          infos.begin(), infos.end(), [](const HitInfo &h1, const HitInfo &h2) {
+            return h1.distance < h2.distance;
+          });
       const HitInfo hinfo = *min_iter;
       hit_pos = hinfo.hit_pos;
       distance = hinfo.distance;

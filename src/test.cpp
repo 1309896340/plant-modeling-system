@@ -1,6 +1,6 @@
 ﻿// #define ENABLE_NORMAL_VISUALIZATION
-#define ENBALE_POLYGON_VISUALIZATION
-// #define ENABLE_BOUNDINGBOX_VISUALIZATION
+// #define ENBALE_POLYGON_VISUALIZATION
+#define ENABLE_BOUNDINGBOX_VISUALIZATION
 #include <memory>
 
 // #include "Bounding.hpp"
@@ -24,7 +24,8 @@ int main(int argc, char **argv) {
   scene.add("Cone", make_shared<Cone>(2.0f, 3.0f), {0.0f, 0.0f, 6.0f});
   scene.add("Cylinder", make_shared<Cylinder>(2.5f, 5.0f), {5.0f, 0.0f, 0.0f});
 
-  // scene.add("Plane", make_shared<Plane>(2.0f, 2.0f, 1, 1), Transform({-5.0f, 3.0f, 2.0f},_right,glm::radians(10.0f)));
+  // scene.add("Plane", make_shared<Plane>(2.0f, 2.0f, 1, 1),
+  // Transform({-5.0f, 3.0f, 2.0f},_right,glm::radians(10.0f)));
   // scene.objs["Plane"]->constructBvhTree();
 
   // // 无关于OpenGL渲染，实现CPU端的仿真计算，仅考虑Sphere形体
@@ -52,7 +53,9 @@ int main(int argc, char **argv) {
 
   // 创建Sphere对象的层次包围盒
   // scene.objs["TruncatedConeEx"]->constructBvhTree();
-  scene.objs["Sphere"]->constructBvhTree();
+  // scene.objs["Sphere"]->constructBvhTree();
+  for (auto &obj : scene.objs)
+    obj.second->constructBvhTree();
 
   scene.mainloop();
   return 0;
