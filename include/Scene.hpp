@@ -2,6 +2,7 @@
 
 // #define NDEBUG
 
+#include "glm/common.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -40,6 +41,8 @@
 #define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
 #define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.02f
 
+#define TEXT(txt) reinterpret_cast<const char *>(u8##txt)
+
 // 仅用于该文件内的调试
 static void BK(int n) { printf("break %d\n", n); }
 
@@ -70,6 +73,12 @@ void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 //   vec3 direction{0.0f, 0.0f, -1.0f};
 //   vec3 color{1.0f, 1.0f, 1.0f};
 // };
+
+struct RadiosityResult {
+  // float radiant_flux{0.0f};
+  // 与GeometryRenderObject::geometry::surfaces的元素一一对应
+  vector<float> radiant_flux;
+};
 
 class BoundingBoxRenderObject {
 public:
@@ -179,9 +188,13 @@ public:
   GLuint ebo{0};
   GLuint texture{0};
 
-  unique_ptr<BoundingBox> box; // 将BoundingBox用BvhTree代替
+  RadiosityResult radiosity; // 由compute_radiosity()更新
+
+  // 最外层包围盒
+  unique_ptr<BoundingBox> box;
   unique_ptr<BoundingBoxRenderObject> box_obj;
 
+  // 层次包围盒
   unique_ptr<BvhTree> bvhtree{nullptr};
   vector<shared_ptr<BoundingBoxRenderObject>> bvhbox_objs;
 
@@ -219,6 +232,13 @@ public:
       node->box->genOpenGLRenderInfo(vertices, indices);
       this->bvhbox_objs.emplace_back(make_shared<BoundingBoxRenderObject>(vertices, indices));
     });
+  }
+
+  void destroyBvhTree() {
+    if (this->bvhtree != nullptr) {
+      this->bvhtree.reset();
+      this->bvhbox_objs.clear();
+    }
   }
 
   void updateVBO() {
@@ -325,8 +345,8 @@ public:
   map<string, shared_ptr<GeometryRenderObject>> aux;
 
   // 开发阶段暂时忽略渲染逻辑，实现lights中光源模拟辐照度计算
-  vector<shared_ptr<Light>> lights;                         // 只用于计算的光源，为了能在场景中看到光源实际位置，需要将其加入到aux中使用sphere进行渲染可视化
-  PointLight light{{1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}}; // 用于OpenGL可视化渲染的光源
+  vector<shared_ptr<Light>> lights;                               // 只用于计算的光源，为了能在场景中看到光源实际位置，需要将其加入到aux中使用sphere进行渲染可视化
+  PointLight light{{1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, 1.0f}; // 用于OpenGL可视化渲染的光源
 
   Camera camera{vec3(0.0f, 0.0f, 20.0f), vec3{0.0f, 0.0f, 0.0f}, static_cast<float>(width) / static_cast<float>(height)};
   Scene() {
@@ -516,17 +536,17 @@ public:
     // ImGui::ShowDemoWindow();
     imgui_docking_render();
 
-    ImGui::Begin(u8"场景");
-    if (ImGui::TreeNodeEx(u8"相机", ImGuiTreeNodeFlags_Selected |
-                                        ImGuiTreeNodeFlags_DefaultOpen)) {
+    ImGui::Begin(TEXT("场景"));
+    if (ImGui::TreeNodeEx(TEXT("相机"), ImGuiTreeNodeFlags_Selected |
+                                            ImGuiTreeNodeFlags_DefaultOpen)) {
       bool is_theta_changed = ImGui::SliderFloat(
-          u8"天顶角", &this->camera.theta_s, 0.0f, 180.0f, "%.1f");
-      bool is_phi_changed = ImGui::SliderFloat(u8"方向角", &this->camera.phi_s,
+          TEXT("天顶角"), &this->camera.theta_s, 0.0f, 180.0f, "%.1f");
+      bool is_phi_changed = ImGui::SliderFloat(TEXT("方向角"), &this->camera.phi_s,
                                                -180.0f, 180.0f, "%.1f");
       if (is_theta_changed || is_phi_changed)
         this->camera.updateToward();
 
-      if (ImGui::InputFloat3(u8"位置", glm::value_ptr(this->camera.position_s), "%.2f", 0)) {
+      if (ImGui::InputFloat3(TEXT("位置"), glm::value_ptr(this->camera.position_s), "%.2f", 0)) {
         this->camera.updatePositionFromShadow();
       }
 
@@ -637,8 +657,8 @@ public:
       ImGui::TreePop();
     }
 
-    if (ImGui::TreeNodeEx(u8"光源", ImGuiTreeNodeFlags_DefaultOpen)) {
-      ImGui::SliderFloat3(u8"位置", glm::value_ptr(this->light.position),
+    if (ImGui::TreeNodeEx(TEXT("光源"), ImGuiTreeNodeFlags_DefaultOpen)) {
+      ImGui::SliderFloat3(TEXT("位置"), glm::value_ptr(this->light.position),
                           -20.0f, 20.f);
       // 暂时这么写
       this->aux["Light"]->transform.setPosition(light.position);
@@ -650,13 +670,13 @@ public:
       return;
     }
 
-    if (ImGui::TreeNodeEx(u8"几何管理", ImGuiTreeNodeFlags_DefaultOpen)) {
+    if (ImGui::TreeNodeEx(TEXT("几何管理"), ImGuiTreeNodeFlags_DefaultOpen)) {
       bool is_hightlight = true;
       this->imgui.items.clear();
       for (auto &obj : this->objs) {
         this->imgui.items.push_back(obj.first);
       }
-      if (ImGui::BeginListBox(u8"物体")) {
+      if (ImGui::BeginListBox(TEXT("物体"))) {
         for (int i = 0; i < this->imgui.items.size(); i++) {
           const bool is_selected = (imgui.selected_idx == i);
           if (ImGui::Selectable(this->imgui.items[i].c_str(), is_selected))
@@ -684,7 +704,7 @@ public:
         ImGui::End();
         return; // 直接返回
       }
-      ImGui::Text(u8"形体参数");
+      ImGui::Text(TEXT("形体参数"));
       struct visitor {
         string pname;
         Scene *context{nullptr};
@@ -848,10 +868,38 @@ public:
     }
     }
 
-    if (render_obj != nullptr)
+    if (render_obj != nullptr) {
       this->aux[name] = render_obj;
-    else
+    } else
       cerr << "该光源类型的渲染对象未在Scene::addLight()中实现！" << endl;
+
+    // 即使无法可视化，也会将对象加入
+    this->lights.emplace_back(light);
+  }
+
+  void compute_radiosity() {
+    // 遍历场景中所有objs并计算每个物体对应接收到的辐射通量
+
+    // 实际光源并不只有一个，而且并非只有平行光(后续考虑)
+    shared_ptr<ParallelLight> light = dynamic_pointer_cast<ParallelLight>(this->lights[0]);
+
+    for (auto &[name, cur_obj] : this->objs) {
+      shared_ptr<Geometry> geometry = cur_obj->geometry;
+      cur_obj->radiosity.radiant_flux.resize(geometry->surfaces.size());
+      for (int i = 0; i < geometry->surfaces.size(); i++) {
+        Surface triangle = geometry->surfaces[i];
+        vector<vec3> pt(3);
+        vec3 norm{0.0f, 0.0f, 0.0f};
+        float area{0.0f};
+        for (int j = 0; j < 3; j++)
+          pt[j] = glm::make_vec3(geometry->vertices[triangle.tidx[j]].position);
+        vec3 tri_cross = glm::cross(pt[1] - pt[0], pt[2] - pt[0]);
+        norm = glm::normalize(tri_cross);
+        area = glm::length(tri_cross) / 2.0f;
+        // 计算辐射通量(每个三角面)
+        cur_obj->radiosity.radiant_flux[i] = light->irradiance * area * glm::max(0.0f, glm::dot(norm, -light->direction));
+      }
+    }
   }
 
   void imgui_docking_render(bool *p_open = nullptr) {

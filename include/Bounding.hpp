@@ -85,7 +85,8 @@ bool hit_triangle(const vec3 &origin, const vec3 &dir, const vec3 &p1,
     // 此时光线和三角面为近似平行的情况
     // 给det限定最小值，这会造成distance被低估
     // det_base = 1e-7;
-    cerr << "hit_triangle warning. The determinant goes to 0!" << endl;
+    // cerr << "hit_triangle warning. The determinant goes to 0!" << endl;
+    
     // 平行视作未击中
     distance = 0;
     hit_pos = origin;

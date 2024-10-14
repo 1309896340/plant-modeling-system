@@ -2,7 +2,7 @@ add_rules("mode.debug","mode.release")
 add_requires("glm","glfw","glad","glm","eigen")
 add_requires("imgui",{version="v1.91.1-docking", configs={opengl3=true,glfw=true}})
 add_requires("stb",{version="2024.06.01"})
-set_languages("c++17")
+set_languages("c++20")
 
 -- target("demo")
 --     set_kind("binary")
