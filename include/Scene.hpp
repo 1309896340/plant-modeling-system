@@ -6,7 +6,6 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
-#include <exception>
 #include <filesystem>
 #include <iostream>
 #include <map>
@@ -31,6 +30,7 @@
 #include "proj.h"
 
 #include "Auxiliary.hpp"
+#include "Light.hpp"
 #include "Bounding.hpp"
 #include "Camera.hpp"
 #include "Geometry.hpp"
@@ -53,23 +53,23 @@ namespace fs = filesystem;
 
 void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 
-class Light {
-  // 简单封装一个点光源
-public:
-  vec3 position{0.0f, 0.0f, 0.0f};
-  vec3 color{1.0f, 1.0f, 1.0f};
-  // float intensity{1.0f};
+// class Light {
+//   // 简单封装一个点光源
+// public:
+//   vec3 position{0.0f, 0.0f, 0.0f};
+//   vec3 color{1.0f, 1.0f, 1.0f};
+//   // float intensity{1.0f};
 
-  Light() = default;
-  Light(vec3 position, vec3 color) : position(position), color(color) {}
-};
+//   Light() = default;
+//   Light(vec3 position, vec3 color) : position(position), color(color) {}
+// };
 
-class ParallelLight {
-public:
-  vec3 position{0.0f, 0.0f, 0.0f};
-  vec3 direction{0.0f, 0.0f, -1.0f};
-  vec3 color{1.0f, 1.0f, 1.0f};
-};
+// class ParallelLight {
+// public:
+//   vec3 position{0.0f, 0.0f, 0.0f};
+//   vec3 direction{0.0f, 0.0f, -1.0f};
+//   vec3 color{1.0f, 1.0f, 1.0f};
+// };
 
 class BoundingBoxRenderObject {
 public:
@@ -324,7 +324,7 @@ public:
   map<string, shared_ptr<GeometryRenderObject>> objs;
   map<string, shared_ptr<GeometryRenderObject>> aux;
 
-  ParallelLight light;
+  PointLight light;
   Camera camera{vec3(0.0f, 0.0f, 20.0f), vec3{0.0f, 0.0f, 0.0f}, static_cast<float>(width) / static_cast<float>(height)};
   Scene() {
     if (glfwInit() == GLFW_FALSE) {
