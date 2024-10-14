@@ -30,10 +30,10 @@
 #include "proj.h"
 
 #include "Auxiliary.hpp"
-#include "Light.hpp"
 #include "Bounding.hpp"
 #include "Camera.hpp"
 #include "Geometry.hpp"
+#include "Light.hpp"
 #include "Shader.hpp"
 #include "Transform.hpp"
 
@@ -324,7 +324,10 @@ public:
   map<string, shared_ptr<GeometryRenderObject>> objs;
   map<string, shared_ptr<GeometryRenderObject>> aux;
 
-  PointLight light;
+  // 开发阶段暂时忽略渲染逻辑，实现lights中光源模拟辐照度计算
+  vector<shared_ptr<Light>> lights;                         // 只用于计算的光源，为了能在场景中看到光源实际位置，需要将其加入到aux中使用sphere进行渲染可视化
+  PointLight light{{1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}}; // 用于OpenGL可视化渲染的光源
+
   Camera camera{vec3(0.0f, 0.0f, 20.0f), vec3{0.0f, 0.0f, 0.0f}, static_cast<float>(width) / static_cast<float>(height)};
   Scene() {
     if (glfwInit() == GLFW_FALSE) {
@@ -807,7 +810,7 @@ public:
   void add(const string &name, const shared_ptr<Geometry> &geometry,
            Transform transform) {
     if (this->objs.find(name) != this->objs.end()) {
-      cout << "scene cannot add object with an existed name!" << endl;
+      cerr << "scene cannot add object with an existed name!" << endl;
       return;
     }
     this->objs[name] = make_shared<GeometryRenderObject>(geometry, transform);
@@ -820,6 +823,35 @@ public:
   void add(const string &name, const shared_ptr<Geometry> &geometry,
            vec3 position) {
     this->add(name, geometry, Transform(position));
+  }
+
+  void addLight(const string &name, const shared_ptr<Light> &light) {
+    if (this->objs.find(name) != this->objs.end()) {
+      cerr << "scene cannot add object with an existed name!" << endl;
+      return;
+    }
+    this->lights.emplace_back(light);
+    // 建立渲染对象，加入到aux中，不同子类建立的可视化对象不一样
+    shared_ptr<GeometryRenderObject> render_obj = nullptr;
+    switch (light->type) {
+    case Light::LightType::POINT: {
+      render_obj = make_shared<GeometryRenderObject>(make_shared<Sphere>(0.03, 36, 72));
+      break;
+    }
+    case Light::LightType::PARALLEL: {
+      // 未实现
+      break;
+    }
+    case Light::LightType::SPOT: {
+      // 未实现
+      break;
+    }
+    }
+
+    if (render_obj != nullptr)
+      this->aux[name] = render_obj;
+    else
+      cerr << "该光源类型的渲染对象未在Scene::addLight()中实现！" << endl;
   }
 
   void imgui_docking_render(bool *p_open = nullptr) {

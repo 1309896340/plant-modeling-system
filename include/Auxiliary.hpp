@@ -45,4 +45,12 @@ public:
   Ground() : Ground(20.0f, 20.0f) {}
 };
 
+// class Beam : public FixedGeometry{
+//   // 用于可视化平行光
+//   public:
+//   Beam(){
+
+//   }
+// };
+
 } // namespace
