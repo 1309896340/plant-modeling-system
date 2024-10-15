@@ -2,7 +2,6 @@
 
 // #define NDEBUG
 
-#include "glm/common.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -11,6 +10,7 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <variant>
 
@@ -57,7 +57,6 @@ using glm::vec4;
 namespace fs = filesystem;
 
 void framebufferResizeCallback(GLFWwindow *window, int width, int height);
-
 
 struct Pixel {
   // 用于解析stb_load加载的png图片
@@ -148,7 +147,8 @@ public:
   int draw_size{0};
 
   BoundingBoxRenderObject() = default;
-  BoundingBoxRenderObject(const vector<vec3> &vertices, const vector<uint32_t> &indices) {
+  BoundingBoxRenderObject(const vector<vec3> &vertices,
+                          const vector<uint32_t> &indices) {
     glGenVertexArrays(1, &this->vao);
     glBindVertexArray(this->vao);
 
@@ -174,8 +174,8 @@ public:
     glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(vec3),
                     vertices.data());
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
-    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, indices.size() * sizeof(uint32_t),
-                    indices.data());
+    glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0,
+                    indices.size() * sizeof(uint32_t), indices.data());
   }
   void update(const vector<Vertex> &vertices) {
     // 仅更新vbo
@@ -236,7 +236,8 @@ private:
     vector<vec3> box_vertices;
     vector<uint32_t> box_indices;
     this->box->genOpenGLRenderInfo(box_vertices, box_indices);
-    this->box_obj = make_unique<BoundingBoxRenderObject>(box_vertices, box_indices);
+    this->box_obj =
+        make_unique<BoundingBoxRenderObject>(box_vertices, box_indices);
   }
 
 public:
@@ -267,6 +268,9 @@ public:
 
   bool isSelected{false};
   bool visible{true};
+  // 暂时只是为了处理Ground作为aux元素却需要做光线碰撞的问题
+  // 仅仅为了能将Ground从objs的其他对象中区分出来
+  bool isAux{false};
 
   GeometryRenderObject() = default;
   GeometryRenderObject(const shared_ptr<Geometry> &geometry,
@@ -290,7 +294,8 @@ public:
       vector<vec3> vertices;
       vector<uint32_t> indices;
       node->box->genOpenGLRenderInfo(vertices, indices);
-      this->bvhbox_objs.emplace_back(make_shared<BoundingBoxRenderObject>(vertices, indices));
+      this->bvhbox_objs.emplace_back(
+          make_shared<BoundingBoxRenderObject>(vertices, indices));
     });
   }
 
@@ -318,7 +323,8 @@ public:
     vector<vec3> vertices(this->geometry->vertices.size());
     for (int i = 0; i < this->geometry->vertices.size(); i++) {
       vertices[i] = vec3(
-          model * vec4(glm::make_vec3(this->geometry->vertices[i].position), 1.0f));
+          model *
+          vec4(glm::make_vec3(this->geometry->vertices[i].position), 1.0f));
     }
     // 计算包围盒的6个边界值
     this->box->update(vertices);
@@ -339,7 +345,8 @@ public:
         vector<vec3> vertices;
         vector<uint32_t> indices;
         node->box->genOpenGLRenderInfo(vertices, indices);
-        this->bvhbox_objs.emplace_back(make_shared<BoundingBoxRenderObject>(vertices, indices));
+        this->bvhbox_objs.emplace_back(
+            make_shared<BoundingBoxRenderObject>(vertices, indices));
       });
     }
   }
@@ -408,10 +415,14 @@ public:
   map<string, shared_ptr<GeometryRenderObject>> aux;
 
   // 开发阶段暂时忽略渲染逻辑，实现lights中光源模拟辐照度计算
-  vector<shared_ptr<Light>> lights;                               // 只用于计算的光源，为了能在场景中看到光源实际位置，需要将其加入到aux中使用sphere进行渲染可视化
-  PointLight light{{1.0f, 1.0f, 1.0f}, {0.0f, 1.0f, 0.0f}, 1.0f}; // 用于OpenGL可视化渲染的光源
+  vector<shared_ptr<Light>>
+      lights; // 只用于计算的光源，为了能在场景中看到光源实际位置，需要将其加入到aux中使用sphere进行渲染可视化
+  PointLight light{{1.0f, 1.0f, 1.0f},
+                   {0.0f, 1.0f, 0.0f},
+                   1.0f}; // 用于OpenGL可视化渲染的光源
 
-  Camera camera{vec3(0.0f, 0.0f, 20.0f), vec3{0.0f, 0.0f, 0.0f}, static_cast<float>(width) / static_cast<float>(height)};
+  Camera camera{vec3(0.0f, 0.0f, 20.0f), vec3{0.0f, 0.0f, 0.0f},
+                static_cast<float>(width) / static_cast<float>(height)};
   Scene() {
     if (glfwInit() == GLFW_FALSE) {
       string msg = "failed to init glfw!";
@@ -466,7 +477,7 @@ public:
     for (int i = 0; i < 6; i++)
       stbi_image_free(this->cubemaps[i].img);
     this->objs.clear();
-    this->aux.clear();
+    // this->aux.clear();
   }
 
   void init_ubo() {
@@ -504,7 +515,9 @@ public:
     // 游标
     shared_ptr<Geometry> cursor = make_shared<Sphere>(0.05, 36, 72);
     cursor->setColor(1.0f, 1.0f, 0.0f);
-    shared_ptr<GeometryRenderObject> cursor_obj = make_shared<GeometryRenderObject>(cursor, Transform{vec3(0.0f, 2.0f, 0.0f)});
+    shared_ptr<GeometryRenderObject> cursor_obj =
+        make_shared<GeometryRenderObject>(cursor,
+                                          Transform{vec3(0.0f, 2.0f, 0.0f)});
     this->addSceneObject("Cursor", cursor_obj);
 
     // 地面
@@ -512,7 +525,7 @@ public:
     shared_ptr<GeometryRenderObject> obj3 =
         make_shared<GeometryRenderObject>(ground);
     obj3->texture = this->textures["fabric"];
-    this->addSceneObject("Ground", obj3);
+    this->addSceneObject("Ground", obj3, true); // 第三个参数表示是否作为特殊对象加入到this->objs中
   }
 
   void init_skybox() {
@@ -557,15 +570,18 @@ public:
       string fname =
           "assets/textures/skybox/" + skybox_texture_names[i] + ".png";
       int width, height, channel;
-      this->cubemaps[i].img = reinterpret_cast<Pixel *>(stbi_load(fname.c_str(), &this->cubemaps[i].width, &this->cubemaps[i].height, &this->cubemaps[i].channel, 0));
+      this->cubemaps[i].img = reinterpret_cast<Pixel *>(
+          stbi_load(fname.c_str(), &this->cubemaps[i].width,
+                    &this->cubemaps[i].height, &this->cubemaps[i].channel, 0));
       assert(this->cubemaps[i].channel && "make sure image channel num is 4!");
       if (this->cubemaps[i].img == 0) {
         cerr << "load skybox texture failed: \"" << fname << "\"" << endl;
         continue;
       }
 
-      glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, this->cubemaps[i].width,
-                   this->cubemaps[i].height, 0, GL_RGBA, GL_UNSIGNED_BYTE, this->cubemaps[i].img);
+      glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA,
+                   this->cubemaps[i].width, this->cubemaps[i].height, 0,
+                   GL_RGBA, GL_UNSIGNED_BYTE, this->cubemaps[i].img);
 
       // stbi_image_free(this->cubemaps[i]);
     }
@@ -640,7 +656,8 @@ public:
     mat4 clip2world =
         glm::inverse(this->camera.getProject() * this->camera.getView());
     vec4 pos_world = clip2world * vec4(pos, 1.0f);
-    vec3 dir = glm::normalize(vec3(pos_world / pos_world.w) - this->camera.getPosition());
+    vec3 dir = glm::normalize(vec3(pos_world / pos_world.w) -
+                              this->camera.getPosition());
     return {this->camera.getPosition(), dir};
   }
 
@@ -654,12 +671,14 @@ public:
                                             ImGuiTreeNodeFlags_DefaultOpen)) {
       bool is_theta_changed = ImGui::SliderFloat(
           TEXT("天顶角"), &this->camera.theta_s, 0.0f, 180.0f, "%.1f");
-      bool is_phi_changed = ImGui::SliderFloat(TEXT("方向角"), &this->camera.phi_s,
-                                               -180.0f, 180.0f, "%.1f");
+      bool is_phi_changed = ImGui::SliderFloat(
+          TEXT("方向角"), &this->camera.phi_s, -180.0f, 180.0f, "%.1f");
       if (is_theta_changed || is_phi_changed)
         this->camera.updateToward();
 
-      if (ImGui::InputFloat3(TEXT("位置"), glm::value_ptr(this->camera.position_s), "%.2f", 0)) {
+      if (ImGui::InputFloat3(TEXT("位置"),
+                             glm::value_ptr(this->camera.position_s), "%.2f",
+                             0)) {
         this->camera.updatePositionFromShadow();
       }
 
@@ -683,7 +702,9 @@ public:
               this->camera.record();
               this->imgui.start_record = false;
             }
-            this->camera.surround(MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x, MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y);
+            this->camera.surround(
+                MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x,
+                MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y);
           } else {
             // 以相机为中心旋转
             this->camera.rotate(
@@ -704,7 +725,9 @@ public:
 
           // 鼠标按下不挪动松开，则执行场景物体拾取
           ImVec2 mouse_pos = io->MousePos;
-          float move_offset = std::sqrt(std::powf(mouse_pos.x - this->imgui.mouse_pos.x, 2.0f) + std::powf(mouse_pos.y - this->imgui.mouse_pos.y, 2.0f));
+          float move_offset =
+              std::sqrt(std::powf(mouse_pos.x - this->imgui.mouse_pos.x, 2.0f) +
+                        std::powf(mouse_pos.y - this->imgui.mouse_pos.y, 2.0f));
           // cout << "鼠标拖拽距离：" << move_offset << endl;
           if (move_offset < 8.0f) {
             // 按下与弹起位置一致，中间没有鼠标大幅拖拽，则进行拾取操作
@@ -719,12 +742,17 @@ public:
 
             std::map<float, HitObj> hit_objs;
             for (auto &[name, oobj] : this->objs) {
+              if(oobj->isAux){
+                // 排除该对象
+                continue;
+              }
               bool isHit = false;
               float distance = 0.0f;
               HitObj obj;
               if (oobj->bvhtree != nullptr) {
                 // 层次包围盒求交
-                isHit = oobj->bvhtree->intersect(ray.origin, ray.dir, obj.hitPos, distance);
+                isHit = oobj->bvhtree->intersect(ray.origin, ray.dir,
+                                                 obj.hitPos, distance);
                 if (isHit) {
                   obj.type = 1;
                 }
@@ -733,11 +761,13 @@ public:
                 isHit = oobj->box->hit(this->camera.getPosition(), ray.dir);
                 if (isHit) {
                   obj.type = 0;
-                  distance = glm::distance(this->camera.getPosition(), oobj->box->getBoxCenter());
+                  distance = glm::distance(this->camera.getPosition(),
+                                           oobj->box->getBoxCenter());
                 }
               }
               if (isHit) {
-                auto selected_name_ptr = std::find(this->imgui.items.begin(), this->imgui.items.end(), name);
+                auto selected_name_ptr = std::find(
+                    this->imgui.items.begin(), this->imgui.items.end(), name);
                 if (selected_name_ptr != this->imgui.items.end()) {
                   obj.id = selected_name_ptr - this->imgui.items.begin();
                   hit_objs[distance] = obj;
@@ -748,7 +778,9 @@ public:
               // 取hit_objs中最近元素
               const HitObj &obj = hit_objs.begin()->second;
               this->imgui.selected_idx = obj.id;
-              this->camera.setAnchor(this->objs[this->imgui.items[this->imgui.selected_idx]]->box->getBoxCenter());
+              this->camera.setAnchor(
+                  this->objs[this->imgui.items[this->imgui.selected_idx]]
+                      ->box->getBoxCenter());
               if (obj.type == 1) {
                 this->aux["Cursor"]->transform.setPosition(obj.hitPos);
               }
@@ -789,6 +821,10 @@ public:
       bool is_hightlight = true;
       this->imgui.items.clear();
       for (auto &obj : this->objs) {
+        if(obj.second->isAux){
+          // 排除该对象
+          continue;
+        }
         this->imgui.items.push_back(obj.first);
       }
       if (ImGui::BeginListBox(TEXT("物体"))) {
@@ -932,20 +968,28 @@ public:
     }
   }
 
-  void addSceneObject(const string &name,
-                      const shared_ptr<GeometryRenderObject> &obj) {
-
-    if (this->aux.find(name) != this->aux.end()) {
-      cout << "scene cannot add object with an existed name!" << endl;
-      return;
+  void addSceneObject(const string &name, const shared_ptr<GeometryRenderObject> &obj, bool flag = false) {
+    // 第三个参数为true时，将obj加入到this->objs中，并将其设置isAux为true，其他对象默认isAux为false
+    if (!flag) {
+      if (this->aux.find(name) != this->aux.end()) {
+        cout << "scene cannot add object with an existed name \"" << name << "\"" << endl;
+        return;
+      }
+      this->aux[name] = obj;
+    } else {
+      if (this->objs.find(name) != this->objs.end()) {
+        cout << "scene cannot add object with an existed name \"" << name << "\"" << endl;
+        return;
+      }
+      obj->isAux = true;
+      this->objs[name] = obj;
     }
-    this->aux[name] = obj;
   }
 
   void add(const string &name, const shared_ptr<Geometry> &geometry,
            Transform transform) {
     if (this->objs.find(name) != this->objs.end()) {
-      cerr << "scene cannot add object with an existed name!" << endl;
+      cout << "scene cannot add object with an existed name \"" << name << "\"" << endl;
       return;
     }
     this->objs[name] = make_shared<GeometryRenderObject>(geometry, transform);
@@ -970,7 +1014,8 @@ public:
     shared_ptr<GeometryRenderObject> render_obj = nullptr;
     switch (light->type) {
     case Light::LightType::POINT: {
-      render_obj = make_shared<GeometryRenderObject>(make_shared<Sphere>(0.03, 36, 72));
+      render_obj =
+          make_shared<GeometryRenderObject>(make_shared<Sphere>(0.03, 36, 72));
       break;
     }
     case Light::LightType::PARALLEL: {
@@ -992,11 +1037,12 @@ public:
     this->lights.emplace_back(light);
   }
 
-  void compute_radiosity() {
+  void compute_radiosity_1() {
     // 遍历场景中所有objs并计算每个物体对应接收到的辐射通量
 
     // 实际光源并不只有一个，而且并非只有平行光(后续考虑)
-    shared_ptr<ParallelLight> light = dynamic_pointer_cast<ParallelLight>(this->lights[0]);
+    shared_ptr<ParallelLight> light =
+        dynamic_pointer_cast<ParallelLight>(this->lights[0]);
 
     for (auto &[name, cur_obj] : this->objs) {
       shared_ptr<Geometry> geometry = cur_obj->geometry;
@@ -1012,7 +1058,96 @@ public:
         norm = glm::normalize(tri_cross);
         area = glm::length(tri_cross) / 2.0f;
         // 计算辐射通量(每个三角面)
-        cur_obj->radiosity.radiant_flux[i] = light->irradiance * area * glm::max(0.0f, glm::dot(norm, -light->direction));
+        cur_obj->radiosity.radiant_flux[i] =
+            light->irradiance * area *
+            glm::max(0.0f, glm::dot(norm, -light->direction));
+      }
+    }
+  }
+
+  struct HitGeometryObj {
+    string obj_name;
+    uint32_t tri_id;
+    vec3 hitPos;
+  };
+
+  // 场景物体全局求交
+  bool hit_obj(Ray ray, HitGeometryObj &hit_obj) {
+    // 遍历this->objs所有元素，从引用参数回传 HitGeometryObj
+    bool isHit = false;
+
+    // 记得同时判断一下this->aux["Ground"]
+    for (auto &[name, obj] : this->objs) {
+      // 假定都生成了bvh树
+      assert(obj->bvhtree != nullptr && "element in scene.objs must construct bvh-tree!");
+    }
+
+    return isHit;
+  }
+
+  float trace_ray(Ray ray, HitGeometryObj obj, float PR) {
+    // ray.origin 为当前物体表面，ray.dir为从物体表面射出的radiance
+    // 这应当是三角面元接收到的其他物体的光，ray.origin为从三角面元出发沿着-ray.dir击中的物体表面
+    // 所以应当在调用该函数之前，在处理三角面元时，就要进行一个wi的采样，wi就是-ray.dir，击中的物体的位置就是ray.origin
+    // 因此，该函数还需要传入“击中的三角面元所属的几何体”与“击中的三角面元的索引”，这里描述为HitGeometryObj结构体
+
+    assert(PR < 1.0f && PR > 0.0f);
+    // 计算光源贡献
+    float L_dir = 0.0f;
+    // 。。。       // 需要做与光源之间的遮挡检测
+
+    // 计算间接光贡献
+    float L_indir = 0.0f;
+    random_device rd;
+    mt19937 gen(rd());
+    uniform_real_distribution<> distr(0.0, 1.0);
+
+    float PR_D = distr(gen);
+    if (PR > PR_D) { // 俄罗斯赌轮盘
+      float theta = acosf(1.0f - distr(gen));
+      float phi = 2.0f * PI * distr(gen);
+      vec3 wi{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi)}; //  在半球上均匀分布随机做一次采样
+
+      assert(this->objs.find(obj.obj_name) != this->objs.end() && "trace_ray hit object cannot found in scene.objs!");
+      shared_ptr<GeometryRenderObject> gobj = this->objs[obj.obj_name];
+      shared_ptr<Geometry> geom = gobj->geometry;
+      mat4 model = gobj->transform.getModel();
+      Surface triangle = geom->surfaces[obj.tri_id];
+      vec3 tri_center{0.0f, 0.0f, 0.0f};
+      vec3 pt[3];
+      for (int j = 0; j < 3; j++) { // 取出击中三角面元的三个顶点，同时变换到世界坐标系
+        pt[j] = vec3(model * vec4(glm::make_vec3(geom->vertices[triangle.tidx[j]].position), 1.0f));
+        tri_center += pt[j] / 3.0f; // 计算三角形质心
+      }
+      vec3 tri_cross = glm::cross(pt[1] - pt[0], pt[2] - pt[0]);
+      vec3 norm = glm::normalize(tri_cross);
+      float area = glm::length(tri_cross);
+      float cosine = glm::dot(wi, norm);
+      float BRDF = 1.0f; // 应当根据gobj的材质计算出来，这里先假定为1.0，即光滑镜面反射
+      // 以obj.hitPos为起点，-wi为方向，发射光线，与scene.objs中所有物体，包括scene.aux["Ground"]进行求交测试
+      // 将求交结果整理为新的HitGeometryObj，即"击中的GeometryRenderObject的name" "对应三角面元的索引" "世界坐标系下的击中位置"
+      HitGeometryObj new_obj;
+      // ... 实现求交
+
+      L_indir += trace_ray({obj.hitPos, -wi}, new_obj, PR) * BRDF * cosine / PR;
+    }
+
+    return L_dir + L_indir;
+  }
+
+  void compute_radiosity() {
+
+    for (auto &[name, cur_obj] : this->objs) {
+      shared_ptr<Geometry> geometry = cur_obj->geometry;
+      cur_obj->radiosity.radiant_flux.resize(geometry->surfaces.size());
+      for (int i = 0; i < geometry->surfaces.size(); i++) {
+        Surface triangle = geometry->surfaces[i];
+        vector<vec3> pt(3);
+        for (int j = 0; j < 3; j++)
+          pt[j] = glm::make_vec3(geometry->vertices[triangle.tidx[j]].position);
+        vec3 tri_cross = glm::cross(pt[1] - pt[0], pt[2] - pt[0]);
+        vec3 norm = glm::normalize(tri_cross);
+        float area = glm::length(tri_cross);
       }
     }
   }
@@ -1185,9 +1320,11 @@ public:
       if (cur_obj->isSelected) {
         if (cur_obj->bvhtree != nullptr) {
           // 渲染层次包围盒
-          for (const shared_ptr<BoundingBoxRenderObject> &bb_obj : cur_obj->bvhbox_objs) {
+          for (const shared_ptr<BoundingBoxRenderObject> &bb_obj :
+               cur_obj->bvhbox_objs) {
             glBindVertexArray(bb_obj->vao);
-            glDrawElements(GL_LINES, bb_obj->draw_size, GL_UNSIGNED_INT, nullptr);
+            glDrawElements(GL_LINES, bb_obj->draw_size, GL_UNSIGNED_INT,
+                           nullptr);
           }
         } else {
           // 渲染整体包围盒

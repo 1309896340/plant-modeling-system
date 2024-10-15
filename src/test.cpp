@@ -26,7 +26,9 @@ int main(int argc, char **argv) {
   scene.add("Cylinder", make_shared<Cylinder>(2.5f, 5.0f), {5.0f, 0.0f, 0.0f});
 
   // 对场景中物体进行统一计算，返回一个key相同的map，其value为一个“结果集”
-  scene.addLight("plight_1", make_shared<ParallelLight>(vec3(1.0f, 1.0f, 1.0f), vec3(0.866f, -0.5f, 0.0f), 1.0f));
+  scene.addLight("plight_1",
+                 make_shared<ParallelLight>(vec3(1.0f, 1.0f, 1.0f),
+                                            vec3(0.866f, -0.5f, 0.0f), 1.0f));
 
   scene.compute_radiosity();
   for (auto &[name, cur_obj] : scene.objs) {
@@ -38,20 +40,8 @@ int main(int argc, char **argv) {
   }
 
   // 创建Sphere对象的层次包围盒
-  // for (auto &obj : scene.objs)
-  //   obj.second->constructBvhTree();
-  scene.objs["Cylinder"]->constructBvhTree();
-
-  // 包围盒采样
-  // cubmap_sample(nullptr, {0.01, 1.0, -0.01});       // 上面 偏下偏右
-  // cubmap_sample(nullptr, {-0.01, -1.0, -0.01});      // 下面 偏上偏左
-
-  // cubmap_sample(nullptr, {-1.0, -0.01, -0.01});     // 左面 偏下偏右
-  // cubmap_sample(nullptr, {1.0, 0.01, 0.01});        // 右面 偏上偏右   x为负的不对 应该为正
-
-  // cubmap_sample(nullptr, {0.01, 0.01, -1.0});       // 前面 偏上偏右
-  // cubmap_sample(nullptr, {-0.01, -0.01, 1.0});     // 后面 偏下偏左
-
+  for (auto &obj : scene.objs)
+    obj.second->constructBvhTree();
 
   scene.mainloop();
   return 0;
