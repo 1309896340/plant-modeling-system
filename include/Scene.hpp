@@ -25,7 +25,9 @@
 #include <imgui_impl_opengl3.h>
 
 #define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image.h>
+#include <stb_image_write.h>
 
 #include "constants.h"
 #include "proj.h"
@@ -74,11 +76,86 @@ void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 //   vec3 color{1.0f, 1.0f, 1.0f};
 // };
 
+struct Pixel {
+  // 用于解析stb_load加载的png图片
+  uint8_t r;
+  uint8_t g;
+  uint8_t b;
+  uint8_t a;
+};
+
+struct PngImage {
+  Pixel *img;
+  int width;
+  int height;
+  int channel;
+};
+
 struct RadiosityResult {
   // float radiant_flux{0.0f};
   // 与GeometryRenderObject::geometry::surfaces的元素一一对应
   vector<float> radiant_flux;
 };
+
+Pixel cubemap_sample(PngImage *cubmaps, vec3 dir) {
+  dir = glm::normalize(dir);
+  // cubmaps顺序 px nx py ny pz nz
+  uint8_t map_idx{0};
+
+  float theta = acosf(glm::dot(dir, _up));
+  float phi = atan2(-dir.z, dir.x);
+  float x{0.0f}, y{0.0f};
+  if (theta < PI / 4.0f) {
+    // 上面, py
+    float r = sqrtf(2) * sin(theta);
+    x = r * sqrtf(2) * cos(phi);
+    y = -r * sqrtf(2) * sin(phi);
+    map_idx = 2;
+  } else if (theta >= 3.0f * PI / 4.0f) {
+    // 下面, ny
+    float r = sqrtf(2) * sin(theta);
+    x = r * sqrtf(2) * cos(phi);
+    y = r * sqrtf(2) * sin(phi);
+    map_idx = 3;
+  } else {
+    if (phi >= 3.0f * PI / 4.0f || phi < -3.0f * PI / 4.0f) {
+      // 左面, nx
+      y = sqrtf(2) * cos(theta);
+      x = sqrtf(2) * sin(phi);
+      map_idx = 1;
+    } else if (phi >= -PI / 4.0f && phi < PI / 4.0f) {
+      // 右面, px
+      y = sqrtf(2) * cos(theta);
+      x = -sqrtf(2) * sin(phi);
+      map_idx = 0;
+    } else if (phi >= PI / 4.0f && phi < 3.0f * PI / 4.0f) {
+      // 前面, nz
+      y = sqrtf(2) * cos(theta);
+      x = sqrtf(2) * cos(phi);
+      map_idx = 4;
+    } else {
+      // 后面, pz
+      y = sqrtf(2) * cos(theta);
+      x = -sqrtf(2) * cos(phi);
+      map_idx = 5;
+    }
+  }
+  x = max(x, -1.0f);
+  x = min(x, 1.0f);
+  y = max(y, -1.0f);
+  y = min(y, 1.0f);
+  
+  // 将(x,y)映射到图片像素上
+  uint32_t width = cubmaps[map_idx].width;
+  uint32_t height = cubmaps[map_idx].height;
+  uint32_t row_idx = static_cast<uint32_t>(height * (0.5f - y / 2));
+  uint32_t col_idx = static_cast<uint32_t>(width * (0.5f + x / 2));
+
+  row_idx = min(row_idx, height-1);
+  col_idx = min(col_idx, width-1);
+  
+  return cubmaps[map_idx].img[col_idx + row_idx * width];
+}
 
 class BoundingBoxRenderObject {
 public:
@@ -306,6 +383,9 @@ private:
   GLuint ubo{0};
   const GLuint PVM_binding_point = 0;
 
+  // 用于CPU端存储天空盒图片
+  PngImage cubemaps[6];
+
   struct {
     GLuint vao{0};
     GLuint vbo{0};
@@ -393,11 +473,17 @@ public:
     init_skybox();
 
     init_depthmap();
+
+    // test_cubemap();
   }
   Scene(const Scene &sc) = delete;
   ~Scene() {
     for (const pair<string, Shader *> &sd : this->shaders)
       delete sd.second;
+    for (int i = 0; i < 6; i++)
+      stbi_image_free(this->cubemaps[i].img);
+    this->objs.clear();
+    this->aux.clear();
   }
 
   void init_ubo() {
@@ -482,22 +568,47 @@ public:
       string fname =
           "assets/textures/skybox/" + skybox_texture_names[i] + ".png";
       int width, height, channel;
-      void *data = stbi_load(fname.c_str(), &width, &height, &channel, 0);
-      if (data == 0) {
+      this->cubemaps[i].img = reinterpret_cast<Pixel *>(stbi_load(fname.c_str(), &this->cubemaps[i].width, &this->cubemaps[i].height, &this->cubemaps[i].channel, 0));
+      assert(this->cubemaps[i].channel && "make sure image channel num is 4!");
+      if (this->cubemaps[i].img == 0) {
         cerr << "load skybox texture failed: \"" << fname << "\"" << endl;
         continue;
       }
 
-      glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, width,
-                   height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+      glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, this->cubemaps[i].width,
+                   this->cubemaps[i].height, 0, GL_RGBA, GL_UNSIGNED_BYTE, this->cubemaps[i].img);
 
-      stbi_image_free(data);
+      // stbi_image_free(this->cubemaps[i]);
     }
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+  }
+
+  void test_cubemap() {
+    // 包围盒测试
+
+    cout << "开始测试" << endl;
+    vector<Pixel> buf;
+
+    uint32_t phi_num = 3600;
+    uint32_t theta_num = 1800;
+    for (uint32_t v = 0; v < theta_num; v++) {
+      for (uint32_t u = 0; u < phi_num; u++) {
+        float phi = static_cast<float>(u) / phi_num * 2.0f * PI;
+        float theta = static_cast<float>(v) / theta_num * PI;
+        float x = sin(theta) * cos(phi);
+        float y = cos(theta);
+        float z = -sin(theta) * sin(phi);
+        Pixel p = cubemap_sample(this->cubemaps, {x, y, z});
+        buf.emplace_back(p);
+      }
+    }
+    cout << "测试结束，写出图像" << endl;
+
+    stbi_write_png("output.png", phi_num, theta_num, 4, buf.data(), 0);
   }
 
   void init_depthmap() {

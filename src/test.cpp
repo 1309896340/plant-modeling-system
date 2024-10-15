@@ -37,37 +37,48 @@ int main(int argc, char **argv) {
     cout << name << " : " << flux_sum << endl;
   }
 
-  // 创建Sphere对象的层次包围盒
-  for (auto &obj : scene.objs)
-    obj.second->constructBvhTree();
+  // // 创建Sphere对象的层次包围盒
+  // for (auto &obj : scene.objs)
+  //   obj.second->constructBvhTree();
+
+  // 包围盒采样
+  // cubmap_sample(nullptr, {0.01, 1.0, -0.01});       // 上面 偏下偏右
+  // cubmap_sample(nullptr, {-0.01, -1.0, -0.01});      // 下面 偏上偏左
+
+  // cubmap_sample(nullptr, {-1.0, -0.01, -0.01});     // 左面 偏下偏右
+  // cubmap_sample(nullptr, {1.0, 0.01, 0.01});        // 右面 偏上偏右   x为负的不对 应该为正
+
+  // cubmap_sample(nullptr, {0.01, 0.01, -1.0});       // 前面 偏上偏右
+  // cubmap_sample(nullptr, {-0.01, -0.01, 1.0});     // 后面 偏下偏左
+
 
   scene.mainloop();
   return 0;
 }
 
-void ray_cast_test(Scene *scene) {
-  // 没有确定是否采用这种方式进行计算
+// void ray_cast_test(Scene *scene) {
+//   // 没有确定是否采用这种方式进行计算
 
-  // 无关于OpenGL渲染，实现CPU端的仿真计算，仅考虑Sphere形体
-  const shared_ptr<GeometryRenderObject> obj = scene->objs["Sphere"];
-  const shared_ptr<Geometry> geom = obj->geometry;
-  // 注意：这里的geom处于模型空间，未变换到世界坐标系
-  const float sample_width = 20.0f;
-  const float sample_height = 20.0f;
-  const uint32_t sample_w_num = 100;
-  const uint32_t sample_h_num = 100;
-  const float dw = sample_width / sample_w_num;
-  const float dh = sample_height / sample_h_num;
-  vec3 lightPos = {0.0f, 4.0f, 4.0f};
-  vec3 lightDir = glm::normalize(obj->transform.getPosition() - lightPos);
-  vec3 right = glm::cross(lightDir, _up);
-  vec3 up = glm::cross(right, lightDir);
-  for (uint32_t i = 0; i < sample_w_num; i++) {
-    for (uint32_t j = 0; j < sample_h_num; j++) {
-      vec3 lightSamplePos =
-          (-sample_width / 2.0f + dw / 2.0f + i * dw) * right +
-          (sample_height / 2.0f - dh / 2.0f - j * dh) * up;
-      // 以lightSamplePos为起点，以lightDir为方向，对几何目标进行轰击
-    }
-  }
-}
+//   // 无关于OpenGL渲染，实现CPU端的仿真计算，仅考虑Sphere形体
+//   const shared_ptr<GeometryRenderObject> obj = scene->objs["Sphere"];
+//   const shared_ptr<Geometry> geom = obj->geometry;
+//   // 注意：这里的geom处于模型空间，未变换到世界坐标系
+//   const float sample_width = 20.0f;
+//   const float sample_height = 20.0f;
+//   const uint32_t sample_w_num = 100;
+//   const uint32_t sample_h_num = 100;
+//   const float dw = sample_width / sample_w_num;
+//   const float dh = sample_height / sample_h_num;
+//   vec3 lightPos = {0.0f, 4.0f, 4.0f};
+//   vec3 lightDir = glm::normalize(obj->transform.getPosition() - lightPos);
+//   vec3 right = glm::cross(lightDir, _up);
+//   vec3 up = glm::cross(right, lightDir);
+//   for (uint32_t i = 0; i < sample_w_num; i++) {
+//     for (uint32_t j = 0; j < sample_h_num; j++) {
+//       vec3 lightSamplePos =
+//           (-sample_width / 2.0f + dw / 2.0f + i * dw) * right +
+//           (sample_height / 2.0f - dh / 2.0f - j * dh) * up;
+//       // 以lightSamplePos为起点，以lightDir为方向，对几何目标进行轰击
+//     }
+//   }
+// }
