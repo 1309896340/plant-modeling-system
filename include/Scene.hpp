@@ -58,23 +58,6 @@ namespace fs = filesystem;
 
 void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 
-// class Light {
-//   // 简单封装一个点光源
-// public:
-//   vec3 position{0.0f, 0.0f, 0.0f};
-//   vec3 color{1.0f, 1.0f, 1.0f};
-//   // float intensity{1.0f};
-
-//   Light() = default;
-//   Light(vec3 position, vec3 color) : position(position), color(color) {}
-// };
-
-// class ParallelLight {
-// public:
-//   vec3 position{0.0f, 0.0f, 0.0f};
-//   vec3 direction{0.0f, 0.0f, -1.0f};
-//   vec3 color{1.0f, 1.0f, 1.0f};
-// };
 
 struct Pixel {
   // 用于解析stb_load加载的png图片
@@ -144,16 +127,16 @@ Pixel cubemap_sample(PngImage *cubmaps, vec3 dir) {
   x = min(x, 1.0f);
   y = max(y, -1.0f);
   y = min(y, 1.0f);
-  
+
   // 将(x,y)映射到图片像素上
   uint32_t width = cubmaps[map_idx].width;
   uint32_t height = cubmaps[map_idx].height;
   uint32_t row_idx = static_cast<uint32_t>(height * (0.5f - y / 2));
   uint32_t col_idx = static_cast<uint32_t>(width * (0.5f + x / 2));
 
-  row_idx = min(row_idx, height-1);
-  col_idx = min(col_idx, width-1);
-  
+  row_idx = min(row_idx, height - 1);
+  col_idx = min(col_idx, width - 1);
+
   return cubmaps[map_idx].img[col_idx + row_idx * width];
 }
 
@@ -518,6 +501,12 @@ public:
         make_shared<GeometryRenderObject>(axis);
     this->addSceneObject("Axis", obj2);
 
+    // 游标
+    shared_ptr<Geometry> cursor = make_shared<Sphere>(0.05, 36, 72);
+    cursor->setColor(1.0f, 1.0f, 0.0f);
+    shared_ptr<GeometryRenderObject> cursor_obj = make_shared<GeometryRenderObject>(cursor, Transform{vec3(0.0f, 2.0f, 0.0f)});
+    this->addSceneObject("Cursor", cursor_obj);
+
     // 地面
     shared_ptr<Geometry> ground = make_shared<Ground>(20.0f, 20.0f);
     shared_ptr<GeometryRenderObject> obj3 =
@@ -588,8 +577,6 @@ public:
   }
 
   void test_cubemap() {
-    // 包围盒测试
-
     cout << "开始测试" << endl;
     vector<Pixel> buf;
 
@@ -642,6 +629,21 @@ public:
     cout << "Graphics Device: " << renderer << endl;
   }
 
+  Ray cast_ray_from_mouse() {
+    // 捕捉鼠标在窗口中的位置，并将其转换为世界坐标系下的一条射线
+
+    double xpos, ypos;
+    glfwGetCursorPos(this->window, &xpos, &ypos);
+    xpos = 2.0f * xpos / this->width - 1.0f;
+    ypos = 1.0f - 2.0f * ypos / this->height;
+    vec3 pos = vec3(xpos, ypos, 1.0f);
+    mat4 clip2world =
+        glm::inverse(this->camera.getProject() * this->camera.getView());
+    vec4 pos_world = clip2world * vec4(pos, 1.0f);
+    vec3 dir = glm::normalize(vec3(pos_world / pos_world.w) - this->camera.getPosition());
+    return {this->camera.getPosition(), dir};
+  }
+
   void imgui_menu() {
 
     // ImGui::ShowDemoWindow();
@@ -663,16 +665,16 @@ public:
 
       // 鼠标交互动作
       // 记录下“相机环绕”时的相机球坐标
-      if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-        if (ImGui::IsKeyDown(ImGuiKey_ModShift)) {
-          this->camera.record();
-        } else {
-          // 鼠标左击选中场景物体，遍历所有物体的包围盒求交
-          this->imgui.mouse_pos = io->MousePos;
-        }
-      }
-
       if (!io->WantCaptureMouse) {
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+          if (ImGui::IsKeyDown(ImGuiKey_ModShift)) {
+            this->camera.record();
+          } else {
+            // 鼠标左击选中场景物体，遍历所有物体的包围盒求交
+            this->imgui.mouse_pos = io->MousePos;
+          }
+        }
+
         if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
           if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
             // 以世界坐标锚点为中心做旋转
@@ -695,60 +697,62 @@ public:
               {-MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.x,
                MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.y, 0.0f});
         }
-      }
 
-      if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-        // 相机准备好下一次环绕的启动
-        this->imgui.start_record = true;
+        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+          // 相机准备好下一次环绕的启动
+          this->imgui.start_record = true;
 
-        // 鼠标按下不挪动松开，则执行场景物体拾取
-        ImVec2 mouse_pos = io->MousePos;
-        float move_offset = std::sqrt(std::powf(mouse_pos.x - this->imgui.mouse_pos.x, 2.0f) + std::powf(mouse_pos.y - this->imgui.mouse_pos.y, 2.0f));
-        // cout << "鼠标拖拽距离：" << move_offset << endl;
-        if (move_offset < 8.0f) {
-          // 按下与弹起位置一致，中间没有鼠标大幅拖拽
-          // 将屏幕坐标转换到裁剪坐标，然后转换为世界坐标，与包围盒求交
+          // 鼠标按下不挪动松开，则执行场景物体拾取
+          ImVec2 mouse_pos = io->MousePos;
+          float move_offset = std::sqrt(std::powf(mouse_pos.x - this->imgui.mouse_pos.x, 2.0f) + std::powf(mouse_pos.y - this->imgui.mouse_pos.y, 2.0f));
+          // cout << "鼠标拖拽距离：" << move_offset << endl;
+          if (move_offset < 8.0f) {
+            // 按下与弹起位置一致，中间没有鼠标大幅拖拽，则进行拾取操作
 
-          double xpos, ypos;
-          glfwGetCursorPos(this->window, &xpos, &ypos);
-          xpos = 2.0f * xpos / this->width - 1.0f;
-          ypos = 1.0f - 2.0f * ypos / this->height;
-          vec3 pos = vec3(xpos, ypos, 1.0f);
-          mat4 clip2world =
-              glm::inverse(this->camera.getProject() * this->camera.getView());
-          vec4 pos_world = clip2world * vec4(pos, 1.0f);
-          vec3 dirr = glm::normalize(vec3(pos_world / pos_world.w) -
-                                     this->camera.getPosition());
+            Ray ray = cast_ray_from_mouse();
 
-          std::map<float, uint32_t> hit_objs;
-          for (auto &[name, oobj] : this->objs) {
-            bool isHit = false;
-            if (oobj->bvhtree != nullptr) {
-              // 启用层次包围盒求交
-              vec3 hit_pos{0.0f, 0.0f, 0.0f};
-              float distance;
-              isHit = oobj->bvhtree->intersect(this->camera.getPosition(), dirr, hit_pos, distance);
+            struct HitObj {
+              uint32_t id{0};
+              uint32_t type{0}; // 0为普通包围盒，1为层次包围盒
+              vec3 hitPos{0.0f, 0.0f, 0.0f};
+            };
+
+            std::map<float, HitObj> hit_objs;
+            for (auto &[name, oobj] : this->objs) {
+              bool isHit = false;
+              float distance = 0.0f;
+              HitObj obj;
+              if (oobj->bvhtree != nullptr) {
+                // 层次包围盒求交
+                isHit = oobj->bvhtree->intersect(ray.origin, ray.dir, obj.hitPos, distance);
+                if (isHit) {
+                  obj.type = 1;
+                }
+              } else {
+                // 普通外层包围盒求交
+                isHit = oobj->box->hit(this->camera.getPosition(), ray.dir);
+                if (isHit) {
+                  obj.type = 0;
+                  distance = glm::distance(this->camera.getPosition(), oobj->box->getBoxCenter());
+                }
+              }
               if (isHit) {
-                // 暂时借用光源的球来表示坐标
-                this->light.position = hit_pos;
-                this->aux["Light"]->transform.setPosition(hit_pos);
-              }
-            } else {
-              isHit = oobj->box->hit(this->camera.getPosition(), dirr);
-            }
-            if (isHit) {
-              auto selected_name_ptr = std::find(this->imgui.items.begin(), this->imgui.items.end(), name);
-              if (selected_name_ptr != this->imgui.items.end()) {
-                uint32_t idx = selected_name_ptr - this->imgui.items.begin();
-                float obj_camera_dist = glm::distance(this->camera.getPosition(), oobj->box->getBoxCenter());
-                hit_objs[obj_camera_dist] = idx;
+                auto selected_name_ptr = std::find(this->imgui.items.begin(), this->imgui.items.end(), name);
+                if (selected_name_ptr != this->imgui.items.end()) {
+                  obj.id = selected_name_ptr - this->imgui.items.begin();
+                  hit_objs[distance] = obj;
+                }
               }
             }
-          }
-          if (!hit_objs.empty()) {
-            // 取hit_objs中最近元素
-            this->imgui.selected_idx = hit_objs.begin()->second;
-            this->camera.setAnchor(this->objs[this->imgui.items[this->imgui.selected_idx]]->box->getBoxCenter());
+            if (!hit_objs.empty()) {
+              // 取hit_objs中最近元素
+              const HitObj &obj = hit_objs.begin()->second;
+              this->imgui.selected_idx = obj.id;
+              this->camera.setAnchor(this->objs[this->imgui.items[this->imgui.selected_idx]]->box->getBoxCenter());
+              if (obj.type == 1) {
+                this->aux["Cursor"]->transform.setPosition(obj.hitPos);
+              }
+            }
           }
         }
       }

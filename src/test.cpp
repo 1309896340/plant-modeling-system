@@ -37,9 +37,10 @@ int main(int argc, char **argv) {
     cout << name << " : " << flux_sum << endl;
   }
 
-  // // 创建Sphere对象的层次包围盒
+  // 创建Sphere对象的层次包围盒
   // for (auto &obj : scene.objs)
   //   obj.second->constructBvhTree();
+  scene.objs["Cylinder"]->constructBvhTree();
 
   // 包围盒采样
   // cubmap_sample(nullptr, {0.01, 1.0, -0.01});       // 上面 偏下偏右

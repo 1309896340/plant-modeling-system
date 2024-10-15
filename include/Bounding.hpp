@@ -28,7 +28,13 @@ using glm::mat4;
 using glm::vec3;
 using glm::vec4;
 
-template <typename T> int partition(vector<T> &arr, int left, int right) {
+struct Ray {
+  vec3 origin{0.0f, 0.0f, 0.0f};
+  vec3 dir{0.0f, 0.0f, 0.0f};
+};
+
+template <typename T>
+int partition(vector<T> &arr, int left, int right) {
   T pivot = arr[left];
   // printf("left: %d right: %d\n", left, right);
   while (left < right) {
@@ -86,7 +92,7 @@ bool hit_triangle(const vec3 &origin, const vec3 &dir, const vec3 &p1,
     // 给det限定最小值，这会造成distance被低估
     // det_base = 1e-7;
     // cerr << "hit_triangle warning. The determinant goes to 0!" << endl;
-    
+
     // 平行视作未击中
     distance = 0;
     hit_pos = origin;
