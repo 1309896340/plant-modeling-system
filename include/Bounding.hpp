@@ -358,7 +358,7 @@ public:
   }
 
   bool intersect(const vec3 &origin, const vec3 &dir, vec3 &hit_pos,
-                 float &distance) {
+                 float &distance, uint32_t &triangle_idx) {
 
     deque<BvhNode *> buf{this->root};
     vector<BvhNode *> hit_table; // 所有击中包围盒的叶节点
@@ -387,6 +387,7 @@ public:
     // 遍历hit_table，与所有其中的三角求交，将它们以距离从近到远排序
     struct HitInfo {
       vec3 hit_pos{0.0f, 0.0f, 0.0f};
+      uint32_t triangle_idx;
       float distance;
     };
 
@@ -398,8 +399,10 @@ public:
       vec3 p2 = this->vertices[tri_idx.tidx[1]];
       vec3 p3 = this->vertices[tri_idx.tidx[2]];
       HitInfo info;
-      if (hit_triangle(origin, dir, p1, p2, p3, info.hit_pos, info.distance))
+      if (hit_triangle(origin, dir, p1, p2, p3, info.hit_pos, info.distance)) {
+        info.triangle_idx = cur_node->triangles[0];
         infos.emplace_back(info);
+      }
     }
     if (infos.size() == 0) {
       isHit = false;
@@ -412,6 +415,7 @@ public:
       const HitInfo hinfo = *min_iter;
       hit_pos = hinfo.hit_pos;
       distance = hinfo.distance;
+      triangle_idx = hinfo.triangle_idx;
       isHit = true;
     }
 

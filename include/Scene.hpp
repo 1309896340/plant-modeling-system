@@ -735,14 +735,14 @@ public:
             Ray ray = cast_ray_from_mouse();
 
             struct HitObj {
-              uint32_t id{0};
+              uint32_t id{0};   // 该物体在Scene::imgui::items中的索引位置
               uint32_t type{0}; // 0为普通包围盒，1为层次包围盒
               vec3 hitPos{0.0f, 0.0f, 0.0f};
             };
 
             std::map<float, HitObj> hit_objs;
             for (auto &[name, oobj] : this->objs) {
-              if(oobj->isAux){
+              if (oobj->isAux) {
                 // 排除该对象
                 continue;
               }
@@ -751,8 +751,8 @@ public:
               HitObj obj;
               if (oobj->bvhtree != nullptr) {
                 // 层次包围盒求交
-                isHit = oobj->bvhtree->intersect(ray.origin, ray.dir,
-                                                 obj.hitPos, distance);
+                uint32_t triangle_idx;
+                isHit = oobj->bvhtree->intersect(ray.origin, ray.dir, obj.hitPos, distance, triangle_idx);
                 if (isHit) {
                   obj.type = 1;
                 }
@@ -769,7 +769,7 @@ public:
                 auto selected_name_ptr = std::find(
                     this->imgui.items.begin(), this->imgui.items.end(), name);
                 if (selected_name_ptr != this->imgui.items.end()) {
-                  obj.id = selected_name_ptr - this->imgui.items.begin();
+                  obj.id = std::distance(this->imgui.items.begin(), selected_name_ptr);
                   hit_objs[distance] = obj;
                 }
               }
@@ -821,7 +821,7 @@ public:
       bool is_hightlight = true;
       this->imgui.items.clear();
       for (auto &obj : this->objs) {
-        if(obj.second->isAux){
+        if (obj.second->isAux) {
           // 排除该对象
           continue;
         }
@@ -1066,20 +1066,32 @@ public:
   }
 
   struct HitGeometryObj {
-    string obj_name;
-    uint32_t tri_id;
-    vec3 hitPos;
+    string obj_name; // 击中物体名称
+    uint32_t tri_id; // 击中物体所在三角面元的索引
+    vec3 hit_pos;    // 世界坐标系下的击中位置
   };
 
-  // 场景物体全局求交
   bool hit_obj(Ray ray, HitGeometryObj &hit_obj) {
-    // 遍历this->objs所有元素，从引用参数回传 HitGeometryObj
+    // 场景物体全局求交
+    // 遍历this->objs所有元素，找到距离最近的相交物体，从引用参数回传 HitGeometryObj
+    // 返回击中物体名称、三角面元索引、击中位置
     bool isHit = false;
 
-    // 记得同时判断一下this->aux["Ground"]
+    map<float, HitGeometryObj> hit_table;
     for (auto &[name, obj] : this->objs) {
       // 假定都生成了bvh树
       assert(obj->bvhtree != nullptr && "element in scene.objs must construct bvh-tree!");
+      float distance;
+      HitGeometryObj hobj;
+      if (obj->bvhtree->intersect(ray.origin, ray.dir, hobj.hit_pos, distance, hobj.tri_id)) {
+        hobj.obj_name = name;
+        hit_table[distance] = hobj; // 按distance升序排序
+        isHit = true;
+      }
+    }
+    if (isHit) {
+      // 返回hit_table中第一个，distance最小的那个
+      hit_obj = hit_table.begin()->second;
     }
 
     return isHit;
@@ -1124,12 +1136,13 @@ public:
       float area = glm::length(tri_cross);
       float cosine = glm::dot(wi, norm);
       float BRDF = 1.0f; // 应当根据gobj的材质计算出来，这里先假定为1.0，即光滑镜面反射
-      // 以obj.hitPos为起点，-wi为方向，发射光线，与scene.objs中所有物体，包括scene.aux["Ground"]进行求交测试
+      // 以obj.hit_pos为起点，wi为方向，发射光线，与scene.objs中所有物体，包括scene.aux["Ground"]进行求交测试
       // 将求交结果整理为新的HitGeometryObj，即"击中的GeometryRenderObject的name" "对应三角面元的索引" "世界坐标系下的击中位置"
       HitGeometryObj new_obj;
       // ... 实现求交
-
-      L_indir += trace_ray({obj.hitPos, -wi}, new_obj, PR) * BRDF * cosine / PR;
+      if(hit_obj({obj.hit_pos, wi}, new_obj))
+        L_indir += trace_ray({new_obj.hit_pos, -wi}, new_obj, PR) * BRDF * cosine / PR;
+      // 虽然传递的参数有重复确实有点怪怪的，但似乎没问题？
     }
 
     return L_dir + L_indir;
