@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "constants.h"
+#include "glm/common.hpp"
 #include "glm/geometric.hpp"
 
 #include <glm/glm.hpp>
@@ -157,6 +158,13 @@ public:
   void rotate(vec3 offset) {
     this->phi_s -= offset.x;
     this->theta_s += offset.y;
+    if (this->phi_s < -180.0f)
+      this->phi_s += 360.0f;
+    else if (this->phi_s > 180.0f)
+      this->phi_s -= 360.0f;
+
+    this->theta_s = glm::clamp(this->theta_s, 1e-4f, 180.0f - 1e-4f);
+
     this->updateToward(); // 调用此句会设置 view_is_changed = true;
   }
 

@@ -41,7 +41,7 @@
 #include "Transform.hpp"
 
 #define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
-#define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.02f
+#define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.06f
 
 #define TEXT(txt) reinterpret_cast<const char *>(u8##txt)
 
@@ -77,11 +77,6 @@ class RayBufferObject {
 private:
   static inline mt19937 random_generator;
 
-  // struct RayObject {
-  //   vector<vec3> vertices;
-  //   vec3 color{1.0f, 0.0f, 0.0f};
-  // };
-
 public:
   GLuint vao{0};
   GLuint vbo{0};
@@ -102,6 +97,11 @@ public:
     uniform_real_distribution<> distr(0.1f, 0.9f);
     vec3 color = vec3(distr(RayBufferObject::random_generator), distr(RayBufferObject::random_generator), distr(RayBufferObject::random_generator));
     this->colors.push_back(color);
+  }
+  void clear() {
+    this->rays.clear();
+    this->v_nums.clear();
+    this->colors.clear();
   }
   void updateVBO() {
     // for (int i = 0; i < this->rays.size(); i++) {
@@ -594,6 +594,24 @@ public:
     shared_ptr<GeometryRenderObject> obj3 = make_shared<GeometryRenderObject>(ground, Transform({0.0f, -0.1f, 0.0f}));
     obj3->texture = this->textures["fabric"];
     this->addSceneObject("Ground", obj3, true); // 第三个参数表示是否作为特殊对象加入到this->objs中
+
+    // 左侧面
+    shared_ptr<Geometry> side_left = make_shared<Plane>(20.0f, 20.0f);
+    side_left->setColor(0.0f, 0.0f, 1.0f);
+    shared_ptr<GeometryRenderObject> side_left_obj = make_shared<GeometryRenderObject>(side_left, Transform({-10.0f, 9.9f, 0.0f}, _front, glm::radians(90.0f)));
+    this->addSceneObject("Side_left", side_left_obj, true);
+
+    // 后侧面
+    shared_ptr<Geometry> side_back = make_shared<Plane>(20.0f, 20.0f);
+    side_back->setColor(0.0f, 1.0f, 0.0f);
+    shared_ptr<GeometryRenderObject> side_back_obj = make_shared<GeometryRenderObject>(side_back, Transform({0.0f, 9.9f, -10.0f}, _right, glm::radians(90.0f)));
+    this->addSceneObject("Side_back", side_back_obj, true);
+
+    // 上侧面
+    shared_ptr<Geometry> side_top = make_shared<Plane>(20.0f, 20.0f);
+    side_top->setColor(1.0f, 0.0f, 0.0f);
+    shared_ptr<GeometryRenderObject> side_top_obj = make_shared<GeometryRenderObject>(side_top, Transform({0.0f, 19.9f, 0.0f}, _right, glm::radians(180.0f)));
+    this->addSceneObject("Side_top", side_top_obj, true);
   }
 
   void init_skybox() {
@@ -825,7 +843,10 @@ public:
               vec3 hitPos{0.0f, 0.0f, 0.0f};
             };
 
-            std::map<float, HitObj> hit_objs;
+            // std::map<float, HitObj> hit_objs;
+            float min_distance = FLT_MAX;
+            HitObj target_obj;
+            bool isisHit = false;
             for (auto &[name, oobj] : this->objs) {
               if (oobj->isAux) {
                 // 排除该对象
@@ -837,38 +858,51 @@ public:
               if (oobj->bvhtree != nullptr) {
                 // 层次包围盒求交
                 uint32_t triangle_idx;
-                isHit = oobj->bvhtree->intersect(ray.origin, ray.dir, obj.hitPos, distance, triangle_idx);
-                if (isHit) {
+                if (oobj->bvhtree->intersect(ray.origin, ray.dir, obj.hitPos, distance, triangle_idx)) {
+                  isHit = true;
                   obj.type = 1;
                 }
               } else {
                 // 普通外层包围盒求交
-                isHit = oobj->box->hit(this->camera.getPosition(), ray.dir);
-                if (isHit) {
+                if (oobj->box->hit(this->camera.getPosition(), ray.dir)) {
+                  isHit = true;
                   obj.type = 0;
-                  distance = glm::distance(this->camera.getPosition(),
-                                           oobj->box->getBoxCenter());
+                  distance = glm::distance(this->camera.getPosition(), oobj->box->getBoxCenter());
                 }
               }
-              if (isHit) {
-                auto selected_name_ptr = std::find(
-                    this->imgui.items.begin(), this->imgui.items.end(), name);
-                if (selected_name_ptr != this->imgui.items.end()) {
-                  obj.id = std::distance(this->imgui.items.begin(), selected_name_ptr);
-                  hit_objs[distance] = obj;
-                }
+              if (isHit && distance < min_distance) {
+                cout << "击中对象为 " << name << endl;
+                obj.id = std::distance(this->imgui.items.begin(), std::find(this->imgui.items.begin(), this->imgui.items.end(), name));
+                target_obj = obj;
+                min_distance = distance;
+                isisHit = isHit;
               }
+              // if (isHit) {
+              //   auto selected_name_ptr = std::find(this->imgui.items.begin(), this->imgui.items.end(), name);
+              //   cout << "击中的对象为 " << name << endl;
+              //   if (selected_name_ptr != this->imgui.items.end()) {
+              //     obj.id = std::distance(this->imgui.items.begin(), selected_name_ptr);
+              //     // hit_objs[distance] = obj;
+              //     if (distance < min_distance) {
+              //       printf("距离 %.4f 比距离 %.4f 更短 id=%d\n", distance, min_distance, obj.id);
+              //       for (auto &elem : this->imgui.items) {
+              //         cout << "item: " << elem << endl;
+              //       }
+              //       target_obj = obj;
+              //       min_distance = distance;
+              //     }
+              //   }
+              // }
             }
-            if (!hit_objs.empty()) {
+            if (isisHit) {
               // 取hit_objs中最近元素
-              const HitObj &obj = hit_objs.begin()->second;
-              this->imgui.selected_idx = obj.id;
+              this->imgui.selected_idx = target_obj.id;
               this->camera.setAnchor(
                   this->objs[this->imgui.items[this->imgui.selected_idx]]
                       ->box->getBoxCenter());
-              if (obj.type == 1) {
-                this->aux["Cursor"]->transform.setPosition(obj.hitPos);
-                printf("选中点位置：(%.2f, %.2f, %.2f)\n", obj.hitPos.x, obj.hitPos.y, obj.hitPos.z);
+              if (target_obj.type == 1) {
+                this->aux["Cursor"]->transform.setPosition(target_obj.hitPos);
+                printf("选中点位置：(%.2f, %.2f, %.2f)\n", target_obj.hitPos.x, target_obj.hitPos.y, target_obj.hitPos.z);
               }
             }
           }
@@ -950,6 +984,7 @@ public:
           if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
             context->imgui.cur_obj->geometry->update();
             context->imgui.cur_obj->updateVBO();
+            // context->compute_radiosity();
           }
         }
         void operator()(uint32_t &arg) {
@@ -957,6 +992,7 @@ public:
                                reinterpret_cast<int *>(&arg), 2, 50)) {
             context->imgui.cur_obj->geometry->update();
             context->imgui.cur_obj->updateVBO();
+            // context->compute_radiosity();
           }
         }
         void operator()(bool &arg) {}
@@ -1182,7 +1218,10 @@ public:
     // 返回击中物体名称、三角面元索引、击中位置
     bool isHit = false;
 
-    map<float, HitGeometryObj> hit_table;
+    float min_distance = FLT_MAX;
+    HitGeometryObj target_obj;
+    // map<float, HitGeometryObj> hit_table;
+
     for (auto &[name, obj] : this->objs) {
       // 假定都生成了bvh树
       assert(obj->bvhtree != nullptr && "element in scene.objs must construct bvh-tree!");
@@ -1190,13 +1229,18 @@ public:
       HitGeometryObj hobj;
       if (obj->bvhtree->intersect(ray.origin, ray.dir, hobj.hit_pos, distance, hobj.tri_id)) {
         hobj.obj_name = name;
-        hit_table[distance] = hobj; // 按distance升序排序
+        // hit_table[distance] = hobj; // 按distance升序排序
+        if (distance < min_distance) {
+          min_distance = distance;
+          target_obj = hobj;
+        }
         isHit = true;
       }
     }
     if (isHit) {
       // 返回hit_table中第一个，distance最小的那个
-      hit_obj = hit_table.begin()->second;
+      // hit_obj = hit_table.begin()->second;
+      hit_obj = target_obj;
       // cout << "光线击中物体 \"" << hit_obj.obj_name << "\"  tri_id=" << hit_obj.tri_id << " hit_pos=(" << hit_obj.hit_pos.x << ", " << hit_obj.hit_pos.y << ", " << hit_obj.hit_pos.z << ")" << endl;
     }
 
@@ -1263,13 +1307,12 @@ public:
         L_indir += trace_ray({new_obj.hit_pos + 0.01f * norm, -wi}, new_obj, PR, recursive_depth + 1, vert_buffer) * BRDF * cosine / PR;
       } else {
         Pixel p = cubemap_sample(this->cubemaps, wi);
-        L_dir += (p.r + p.g + p.b) / 3.0f;
+        L_dir += (p.r + p.g + p.b) / 3.0f / 255.0f;
         if (vert_buffer != nullptr)
           vert_buffer->push_back(obj.hit_pos + 10.0f * wi);
         // cout << "" << recursive_depth << endl;
-        printf("cubemap采样辐射率: %.4f  光线递归深度: %d\n", L_dir, recursive_depth);
+        // printf("cubemap采样辐射率: %.4f  光线递归深度: %d\n", L_dir, recursive_depth);
       }
-      // 虽然传递的参数有重复确实有点怪怪的，但似乎没问题？
     }
 
     return L_dir + L_indir;
@@ -1278,6 +1321,7 @@ public:
   void compute_radiosity() {
     uniform_real_distribution<> distr(0.0, 1.0);
 
+    this->ray_buffer->clear();
     // 遍历每个场景(非aux)物体
     for (auto &[name, cur_obj] : this->objs) {
       if (cur_obj->isAux)
@@ -1325,18 +1369,16 @@ public:
           vec_buffer->push_back(tri_center + 10.0f * wi); // 没击中就朝着采样方向延伸10单位距离
           // 检索cubemap返回颜色值作为radiance
           Pixel p = cubemap_sample(this->cubemaps, wi);
-          L_dir += (p.r + p.g + p.b) / 3.0f;
+          L_dir += (p.r + p.g + p.b) / 3.0f / 255.0f;
         }
         // 将vec_buffer加入到RayBufferObject中进行渲染
+
         this->ray_buffer->push(vec_buffer);
 
         // 将计算的irradiance的结果存储
         float Lo = L_dir + L_indir;
         cur_obj->radiosity.radiant_flux[i] = Lo;
-        printf("物体\"%s\"第(%d/%llu)面元 radiance: %.4f\n", name.c_str(), i, geometry->surfaces.size(), Lo);
-
-        // 暂时只计算一个三角面元
-        // break;
+        // printf("物体\"%s\"第(%d/%llu)面元 radiance: %.4f\n", name.c_str(), i, geometry->surfaces.size(), Lo);
       }
     }
   }
