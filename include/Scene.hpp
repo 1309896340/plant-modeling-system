@@ -843,7 +843,6 @@ public:
               vec3 hitPos{0.0f, 0.0f, 0.0f};
             };
 
-            // std::map<float, HitObj> hit_objs;
             float min_distance = FLT_MAX;
             HitObj target_obj;
             bool isisHit = false;
@@ -871,31 +870,13 @@ public:
                 }
               }
               if (isHit && distance < min_distance) {
-                cout << "击中对象为 " << name << endl;
                 obj.id = std::distance(this->imgui.items.begin(), std::find(this->imgui.items.begin(), this->imgui.items.end(), name));
                 target_obj = obj;
                 min_distance = distance;
-                isisHit = isHit;
+                isisHit = true;
               }
-              // if (isHit) {
-              //   auto selected_name_ptr = std::find(this->imgui.items.begin(), this->imgui.items.end(), name);
-              //   cout << "击中的对象为 " << name << endl;
-              //   if (selected_name_ptr != this->imgui.items.end()) {
-              //     obj.id = std::distance(this->imgui.items.begin(), selected_name_ptr);
-              //     // hit_objs[distance] = obj;
-              //     if (distance < min_distance) {
-              //       printf("距离 %.4f 比距离 %.4f 更短 id=%d\n", distance, min_distance, obj.id);
-              //       for (auto &elem : this->imgui.items) {
-              //         cout << "item: " << elem << endl;
-              //       }
-              //       target_obj = obj;
-              //       min_distance = distance;
-              //     }
-              //   }
-              // }
             }
             if (isisHit) {
-              // 取hit_objs中最近元素
               this->imgui.selected_idx = target_obj.id;
               this->camera.setAnchor(
                   this->objs[this->imgui.items[this->imgui.selected_idx]]
@@ -969,43 +950,44 @@ public:
       }
 
       // 显示参数
-      if (imgui.cur_obj == nullptr ||
-          imgui.cur_obj->geometry->parameters.empty()) {
+      if (imgui.cur_obj != nullptr && !imgui.cur_obj->geometry->parameters.empty()) {
+
+        ImGui::Text(TEXT("形体参数"));
+        struct visitor {
+          string pname;
+          Scene *context{nullptr};
+          visitor(string name, Scene *context) : pname(name), context(context) {}
+          void operator()(float &arg) {
+            if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
+              context->imgui.cur_obj->geometry->update();
+              context->imgui.cur_obj->updateVBO();
+              // context->compute_radiosity();
+            }
+          }
+          void operator()(uint32_t &arg) {
+            if (ImGui::SliderInt(this->pname.c_str(),
+                                 reinterpret_cast<int *>(&arg), 2, 50)) {
+              context->imgui.cur_obj->geometry->update();
+              context->imgui.cur_obj->updateVBO();
+              // context->compute_radiosity();
+            }
+          }
+          void operator()(bool &arg) {}
+          void operator()(int &arg) {}
+          void operator()(vec3 &arg) {}
+        };
+        for (auto &[name, arg_val] : imgui.cur_obj->geometry->parameters)
+          std::visit(visitor(name, this), arg_val);
+
         ImGui::TreePop();
-        ImGui::End();
-        return; // 直接返回
       }
-      ImGui::Text(TEXT("形体参数"));
-      struct visitor {
-        string pname;
-        Scene *context{nullptr};
-        visitor(string name, Scene *context) : pname(name), context(context) {}
-        void operator()(float &arg) {
-          if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
-            context->imgui.cur_obj->geometry->update();
-            context->imgui.cur_obj->updateVBO();
-            // context->compute_radiosity();
-          }
-        }
-        void operator()(uint32_t &arg) {
-          if (ImGui::SliderInt(this->pname.c_str(),
-                               reinterpret_cast<int *>(&arg), 2, 50)) {
-            context->imgui.cur_obj->geometry->update();
-            context->imgui.cur_obj->updateVBO();
-            // context->compute_radiosity();
-          }
-        }
-        void operator()(bool &arg) {}
-        void operator()(int &arg) {}
-        void operator()(vec3 &arg) {}
-      };
-      for (auto &[name, arg_val] : imgui.cur_obj->geometry->parameters)
-        std::visit(visitor(name, this), arg_val);
 
-      ImGui::TreePop();
+      if(ImGui::Button(TEXT("重新投射光线"))){
+        this->compute_radiosity();
+      }
+
+      ImGui::End();
     }
-
-    ImGui::End();
   }
 
   void loadIcon() {
@@ -1220,8 +1202,6 @@ public:
 
     float min_distance = FLT_MAX;
     HitGeometryObj target_obj;
-    // map<float, HitGeometryObj> hit_table;
-
     for (auto &[name, obj] : this->objs) {
       // 假定都生成了bvh树
       assert(obj->bvhtree != nullptr && "element in scene.objs must construct bvh-tree!");
@@ -1229,7 +1209,6 @@ public:
       HitGeometryObj hobj;
       if (obj->bvhtree->intersect(ray.origin, ray.dir, hobj.hit_pos, distance, hobj.tri_id)) {
         hobj.obj_name = name;
-        // hit_table[distance] = hobj; // 按distance升序排序
         if (distance < min_distance) {
           min_distance = distance;
           target_obj = hobj;
@@ -1238,8 +1217,6 @@ public:
       }
     }
     if (isHit) {
-      // 返回hit_table中第一个，distance最小的那个
-      // hit_obj = hit_table.begin()->second;
       hit_obj = target_obj;
       // cout << "光线击中物体 \"" << hit_obj.obj_name << "\"  tri_id=" << hit_obj.tri_id << " hit_pos=(" << hit_obj.hit_pos.x << ", " << hit_obj.hit_pos.y << ", " << hit_obj.hit_pos.z << ")" << endl;
     }
@@ -1381,6 +1358,7 @@ public:
         // printf("物体\"%s\"第(%d/%llu)面元 radiance: %.4f\n", name.c_str(), i, geometry->surfaces.size(), Lo);
       }
     }
+    this->ray_buffer->updateVBO();
   }
 
   void imgui_docking_render(bool *p_open = nullptr) {
@@ -1565,18 +1543,13 @@ public:
       }
     }
 #endif
+#ifdef ENBALE_RAY_VISUALIZATION
     // 6. 可视化光线追踪
     cur_shader = this->shaders["line"];
     cur_shader->use();
-    // for (const shared_ptr<RayObject> &obj : this->ray_objs) {
-    //   cur_shader->set("lineColor", obj->color);
-    //   obj->updateVBO();
-    //   obj->draw();
-    // }
-    this->ray_buffer->updateVBO();
     this->ray_buffer->draw(cur_shader);
+#endif
   }
-
   void setWindowSize(float width, float height) {
     this->width = width;
     this->height = height;
