@@ -73,6 +73,62 @@ struct PngImage {
   int channel;
 };
 
+class RayBufferObject {
+private:
+  static inline mt19937 random_generator;
+
+  // struct RayObject {
+  //   vector<vec3> vertices;
+  //   vec3 color{1.0f, 0.0f, 0.0f};
+  // };
+
+public:
+  GLuint vao{0};
+  GLuint vbo{0};
+  vector<vec3> rays;
+  vector<uint32_t> v_nums;
+  vector<vec3> colors;
+
+  RayBufferObject() {
+    glGenVertexArrays(1, &this->vao);
+    glGenBuffers(1, &this->vbo);
+    // // 随机生成一个颜色
+    // uniform_real_distribution<> distr(0.1f, 0.9f);
+    // this->color = vec3(distr(RayObject::random_generator), distr(RayObject::random_generator), distr(RayObject::random_generator));
+  }
+  void push(shared_ptr<vector<vec3>> vert) {
+    this->rays.insert(this->rays.end(), vert->begin(), vert->end());
+    this->v_nums.push_back(vert->size());
+    uniform_real_distribution<> distr(0.1f, 0.9f);
+    vec3 color = vec3(distr(RayBufferObject::random_generator), distr(RayBufferObject::random_generator), distr(RayBufferObject::random_generator));
+    this->colors.push_back(color);
+  }
+  void updateVBO() {
+    // for (int i = 0; i < this->rays.size(); i++) {
+    //   all_vertices.insert(all_vertices.begin(), this->rays[i].vertices.begin(), this->rays[i].vertices.end());
+    //   ray_size.push_back(this->rays[i].vertices.size());
+    // }
+    glBindVertexArray(this->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
+    glBufferData(GL_ARRAY_BUFFER, this->rays.size() * sizeof(vec3), this->rays.data(), GL_DYNAMIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
+    glEnableVertexAttribArray(0);
+  }
+  void draw(Shader *sd) {
+    glBindVertexArray(this->vao);
+    uint32_t offset = 0u;
+    for (int i = 0; i < this->v_nums.size(); i++) {
+      sd->set("lineColor", this->colors[i]);
+      glDrawArrays(GL_LINE_STRIP, offset, v_nums[i]);
+      offset += v_nums[i]; // 累加上第i段的顶点数
+    }
+  }
+  ~RayBufferObject() {
+    glDeleteVertexArrays(1, &this->vao);
+    glDeleteBuffers(1, &this->vbo);
+  }
+};
+
 struct RadiosityResult {
   // float radiant_flux{0.0f};
   // 与GeometryRenderObject::geometry::surfaces的元素一一对应
@@ -373,10 +429,12 @@ private:
   GLuint ubo{0};
   const GLuint PVM_binding_point = 0;
 
+  mt19937 random_generator;
+
   // 用于CPU端存储天空盒图片
   PngImage cubemaps[6];
 
-  struct {
+  struct SkyboxInfo {
     GLuint vao{0};
     GLuint vbo{0};
     GLuint ebo{0};
@@ -399,7 +457,7 @@ private:
   bool isShowLight{true};
 
   // imgui的状态变量
-  struct {
+  struct ImguiInfo {
     shared_ptr<GeometryRenderObject> cur_obj{nullptr};
     int selected_idx = 0;
     int highlighted_idx = 0;
@@ -413,6 +471,8 @@ public:
   map<string, GLuint> textures;
   map<string, shared_ptr<GeometryRenderObject>> objs;
   map<string, shared_ptr<GeometryRenderObject>> aux;
+
+  shared_ptr<RayBufferObject> ray_buffer{nullptr};
 
   // 开发阶段暂时忽略渲染逻辑，实现lights中光源模拟辐照度计算
   vector<shared_ptr<Light>>
@@ -468,6 +528,10 @@ public:
 
     init_depthmap();
 
+    init_ray_buffer();
+
+    // init_ray_visualze(); // 创建用于可视化光线路径的线条对象
+
     // test_cubemap();
   }
   Scene(const Scene &sc) = delete;
@@ -478,6 +542,10 @@ public:
       stbi_image_free(this->cubemaps[i].img);
     this->objs.clear();
     // this->aux.clear();
+  }
+
+  void init_ray_buffer() {
+    this->ray_buffer = make_shared<RayBufferObject>();
   }
 
   void init_ubo() {
@@ -522,8 +590,8 @@ public:
 
     // 地面
     shared_ptr<Geometry> ground = make_shared<Ground>(20.0f, 20.0f);
-    shared_ptr<GeometryRenderObject> obj3 =
-        make_shared<GeometryRenderObject>(ground);
+    // 为了让光线不在两个重叠面上抖动进而穿透，将Ground下移一个微小距离
+    shared_ptr<GeometryRenderObject> obj3 = make_shared<GeometryRenderObject>(ground, Transform({0.0f, -0.1f, 0.0f}));
     obj3->texture = this->textures["fabric"];
     this->addSceneObject("Ground", obj3, true); // 第三个参数表示是否作为特殊对象加入到this->objs中
   }
@@ -633,6 +701,19 @@ public:
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
   }
 
+  // shared_ptr<RayObject> generate_ray_object() {
+  //   shared_ptr<RayObject> obj = make_shared<RayObject>();
+  //   this->ray_objs.emplace_back(obj);
+  //   return obj;
+  // }
+
+  // void update_ray_obj() {
+  //   // 根据ray_obj.vertices更新vbo
+  //   glBindVertexArray(ray_obj.vao);
+  //   glBindBuffer(GL_ARRAY_BUFFER, ray_obj.vbo);
+  //   glBufferData(GL_ARRAY_BUFFER, ray_obj.vertices.size() * sizeof(vec3), ray_obj.vertices.data(), GL_DYNAMIC_DRAW);
+  // }
+
   void showAxis() { this->aux["Axis"]->visible = true; }
   void hideAxis() { this->aux["Axis"]->visible = false; }
   void showGround() { this->aux["Ground"]->visible = true; }
@@ -643,6 +724,10 @@ public:
     const GLubyte *renderer = glGetString(GL_RENDERER);
     cout << "Vendor: " << vendor << endl;
     cout << "Graphics Device: " << renderer << endl;
+  }
+
+  void setSeed(uint32_t sd) {
+    this->random_generator.seed(sd);
   }
 
   Ray cast_ray_from_mouse() {
@@ -783,6 +868,7 @@ public:
                       ->box->getBoxCenter());
               if (obj.type == 1) {
                 this->aux["Cursor"]->transform.setPosition(obj.hitPos);
+                printf("选中点位置：(%.2f, %.2f, %.2f)\n", obj.hitPos.x, obj.hitPos.y, obj.hitPos.z);
               }
             }
           }
@@ -993,6 +1079,25 @@ public:
       return;
     }
     this->objs[name] = make_shared<GeometryRenderObject>(geometry, transform);
+
+    // 加入对场景元素的默认选择，总是选中最后加入的物体，并取消选择其他物体
+    for (auto &[name, obj] : this->objs) {
+      if (obj->isAux)
+        continue;
+      obj->isSelected = false;
+    }
+    this->objs[name]->isSelected = true;
+    // 初始化Scene::imgui::selected_idx
+    this->imgui.items.clear();
+    for (auto &[name, obj] : this->objs) {
+      if (obj->isAux)
+        continue;
+      this->imgui.items.emplace_back(name); // 初始化 this->imgui.items
+    }
+    for (int i = 0; i < this->imgui.items.size(); i++) {
+      if (this->objs[this->imgui.items[i]]->isSelected)
+        this->imgui.selected_idx = i; // 初始化 this->imgui.selected_idx
+    }
   }
 
   void add(const string &name, const shared_ptr<Geometry> &geometry) {
@@ -1092,13 +1197,17 @@ public:
     if (isHit) {
       // 返回hit_table中第一个，distance最小的那个
       hit_obj = hit_table.begin()->second;
+      // cout << "光线击中物体 \"" << hit_obj.obj_name << "\"  tri_id=" << hit_obj.tri_id << " hit_pos=(" << hit_obj.hit_pos.x << ", " << hit_obj.hit_pos.y << ", " << hit_obj.hit_pos.z << ")" << endl;
     }
 
     return isHit;
   }
 
-  float trace_ray(Ray ray, HitGeometryObj obj, float PR) {
-    // ray.origin 为当前物体表面，ray.dir为从物体表面射出的radiance
+  float trace_ray(Ray ray, HitGeometryObj obj, float PR, uint32_t recursive_depth = 0, shared_ptr<vector<vec3>> vert_buffer = nullptr) {
+    // recursive_depth用以记录该函数的递归深度，同时在可视化光线路径时用于记录顶点数量
+    // recursive_depth=0表示对该函数的“根调用”，其他为递归调用
+
+    // ray.origin 为当前物体表面，ray.dir为从物体表面的出射光方向
     // 这应当是三角面元接收到的其他物体的光，ray.origin为从三角面元出发沿着-ray.dir击中的物体表面
     // 所以应当在调用该函数之前，在处理三角面元时，就要进行一个wi的采样，wi就是-ray.dir，击中的物体的位置就是ray.origin
     // 因此，该函数还需要传入“击中的三角面元所属的几何体”与“击中的三角面元的索引”，这里描述为HitGeometryObj结构体
@@ -1108,18 +1217,15 @@ public:
     float L_dir = 0.0f;
     // 。。。       // 需要做与光源之间的遮挡检测
 
+    // 由于使用了cubemap作为光源，因此对于L_inder中光线没有碰撞的到的物体，仅需在那个方向返回一个对cubemap颜色值的采样
+    // 将这个颜色采样值换算为radiance即可，这里假设cubemap在某一点上的radiance为该像素点的灰度，即将rgb取平均
+
     // 计算间接光贡献
     float L_indir = 0.0f;
-    random_device rd;
-    mt19937 gen(rd());
     uniform_real_distribution<> distr(0.0, 1.0);
 
-    float PR_D = distr(gen);
+    float PR_D = distr(this->random_generator);
     if (PR > PR_D) { // 俄罗斯赌轮盘
-      float theta = acosf(1.0f - distr(gen));
-      float phi = 2.0f * PI * distr(gen);
-      vec3 wi{sinf(theta) * cosf(phi), cosf(theta), sinf(theta) * sinf(phi)}; //  在半球上均匀分布随机做一次采样
-
       assert(this->objs.find(obj.obj_name) != this->objs.end() && "trace_ray hit object cannot found in scene.objs!");
       shared_ptr<GeometryRenderObject> gobj = this->objs[obj.obj_name];
       shared_ptr<Geometry> geom = gobj->geometry;
@@ -1134,14 +1240,35 @@ public:
       vec3 tri_cross = glm::cross(pt[1] - pt[0], pt[2] - pt[0]);
       vec3 norm = glm::normalize(tri_cross);
       float area = glm::length(tri_cross);
-      float cosine = glm::dot(wi, norm);
+      assert(area > 0.0f && "triangle area is equal to zero!");
+
+      // 以norm为上，pt[1]-pt[0]与pt[2]-pt[0]的一组正交基，构成的局部半球上采样出一点wi
+      // 计算pt[1]-pt[0]与pt[2]-pt[0]的一组正交基
+      vec3 &tri_up = norm;
+      vec3 tri_right = glm::normalize(glm::cross(pt[1] - pt[0], tri_up));
+      vec3 tri_front = glm::normalize(glm::cross(tri_up, tri_right));
+      //  在半球上均匀分布随机做一次采样
+      float theta = acosf(1.0f - distr(this->random_generator));
+      float phi = 2.0f * PI * distr(this->random_generator);
+      vec3 wi = glm::normalize(sinf(theta) * cosf(phi) * tri_front + sinf(theta) * sinf(phi) * tri_right + cosf(theta) * tri_up);
+
+      float cosine = glm::dot(ray.dir, norm);
       float BRDF = 1.0f; // 应当根据gobj的材质计算出来，这里先假定为1.0，即光滑镜面反射
       // 以obj.hit_pos为起点，wi为方向，发射光线，与scene.objs中所有物体，包括scene.aux["Ground"]进行求交测试
       // 将求交结果整理为新的HitGeometryObj，即"击中的GeometryRenderObject的name" "对应三角面元的索引" "世界坐标系下的击中位置"
       HitGeometryObj new_obj;
-      // ... 实现求交
-      if(hit_obj({obj.hit_pos, wi}, new_obj))
-        L_indir += trace_ray({new_obj.hit_pos, -wi}, new_obj, PR) * BRDF * cosine / PR;
+      if (hit_obj({obj.hit_pos + 0.01f * norm, wi}, new_obj)) {
+        if (vert_buffer != nullptr)
+          vert_buffer->push_back(new_obj.hit_pos + 0.01f * norm);
+        L_indir += trace_ray({new_obj.hit_pos + 0.01f * norm, -wi}, new_obj, PR, recursive_depth + 1, vert_buffer) * BRDF * cosine / PR;
+      } else {
+        Pixel p = cubemap_sample(this->cubemaps, wi);
+        L_dir += (p.r + p.g + p.b) / 3.0f;
+        if (vert_buffer != nullptr)
+          vert_buffer->push_back(obj.hit_pos + 10.0f * wi);
+        // cout << "" << recursive_depth << endl;
+        printf("cubemap采样辐射率: %.4f  光线递归深度: %d\n", L_dir, recursive_depth);
+      }
       // 虽然传递的参数有重复确实有点怪怪的，但似乎没问题？
     }
 
@@ -1149,18 +1276,67 @@ public:
   }
 
   void compute_radiosity() {
+    uniform_real_distribution<> distr(0.0, 1.0);
 
+    // 遍历每个场景(非aux)物体
     for (auto &[name, cur_obj] : this->objs) {
+      if (cur_obj->isAux)
+        continue;
+      // if (!cur_obj->isSelected) // 暂时只计算被选中目标
+      //   continue;
+
+      mat4 model = cur_obj->transform.getModel();
       shared_ptr<Geometry> geometry = cur_obj->geometry;
       cur_obj->radiosity.radiant_flux.resize(geometry->surfaces.size());
+
       for (int i = 0; i < geometry->surfaces.size(); i++) {
         Surface triangle = geometry->surfaces[i];
+        vec3 tri_center{0.0f, 0.0f, 0.0f};
         vector<vec3> pt(3);
-        for (int j = 0; j < 3; j++)
-          pt[j] = glm::make_vec3(geometry->vertices[triangle.tidx[j]].position);
+        for (int j = 0; j < 3; j++) {
+          pt[j] = vec3(model * vec4(glm::make_vec3(geometry->vertices[triangle.tidx[j]].position), 1.0f));
+          tri_center += pt[j] / 3.0f;
+        }
         vec3 tri_cross = glm::cross(pt[1] - pt[0], pt[2] - pt[0]);
         vec3 norm = glm::normalize(tri_cross);
         float area = glm::length(tri_cross);
+        // 生成一个随机半球采样方向，与场景物体进行全局求交
+        vec3 &tri_up = norm;
+        vec3 tri_right = glm::normalize(glm::cross(pt[1] - pt[0], tri_up));
+        vec3 tri_front = glm::normalize(glm::cross(tri_up, tri_right));
+        float theta = acosf(1.0f - distr(this->random_generator));
+        float phi = 2.0f * PI * distr(this->random_generator);
+        vec3 wi = glm::normalize(sinf(theta) * cosf(phi) * tri_front + sinf(theta) * sinf(phi) * tri_right + cosf(theta) * tri_up);
+
+        HitGeometryObj new_obj;
+        float L_dir = 0.0f;
+        float L_indir = 0.0f;
+        // 这里只计算irradiance，假定这个三角为黑体，吸收全部的辐射。否则，需要结合三角表面材质纹理来计算对irradiance的吸收率
+        // 调用前初始化this->ray_obj->vertices可视化光线路径
+
+        // shared_ptr<RayObject> obj = generate_ray_object();
+        shared_ptr<vector<vec3>> vec_buffer = make_shared<vector<vec3>>();
+        vec_buffer->push_back(tri_center + 0.01f * norm);
+        if (hit_obj({tri_center + 0.01f * norm, wi}, new_obj)) {
+          vec_buffer->push_back(new_obj.hit_pos);
+          L_indir += trace_ray({new_obj.hit_pos, -wi}, new_obj, 0.95, 0, vec_buffer);
+          // L_indir += trace_ray({new_obj.hit_pos, -wi}, new_obj, 0.95, 0, nullptr);
+        } else {
+          vec_buffer->push_back(tri_center + 10.0f * wi); // 没击中就朝着采样方向延伸10单位距离
+          // 检索cubemap返回颜色值作为radiance
+          Pixel p = cubemap_sample(this->cubemaps, wi);
+          L_dir += (p.r + p.g + p.b) / 3.0f;
+        }
+        // 将vec_buffer加入到RayBufferObject中进行渲染
+        this->ray_buffer->push(vec_buffer);
+
+        // 将计算的irradiance的结果存储
+        float Lo = L_dir + L_indir;
+        cur_obj->radiosity.radiant_flux[i] = Lo;
+        printf("物体\"%s\"第(%d/%llu)面元 radiance: %.4f\n", name.c_str(), i, geometry->surfaces.size(), Lo);
+
+        // 暂时只计算一个三角面元
+        // break;
       }
     }
   }
@@ -1347,6 +1523,16 @@ public:
       }
     }
 #endif
+    // 6. 可视化光线追踪
+    cur_shader = this->shaders["line"];
+    cur_shader->use();
+    // for (const shared_ptr<RayObject> &obj : this->ray_objs) {
+    //   cur_shader->set("lineColor", obj->color);
+    //   obj->updateVBO();
+    //   obj->draw();
+    // }
+    this->ray_buffer->updateVBO();
+    this->ray_buffer->draw(cur_shader);
   }
 
   void setWindowSize(float width, float height) {

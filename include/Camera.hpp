@@ -41,7 +41,7 @@ private:
   bool project_is_changed{true};
 
   void updateAttitude() {
-    // 更新姿态属性 theta 和 phi，务必在每次实际旋转的操作后调用
+    // 由改变后的front，更新姿态属性 theta 和 phi，务必在每次实际旋转的操作后调用
     float cos_theta = glm::dot(this->toward, this->upDir);
     this->theta = acos(cos_theta);
 
@@ -81,6 +81,12 @@ public:
 
   void setAnchor(vec3 anchor) { this->surround_info.anchor = anchor; }
 
+  void setAttitude(float theta, float phi) {
+    this->theta_s = theta * 180.0f / PI;
+    this->phi_s = phi * 180.0f / PI;
+    this->updateToward();
+  }
+
   void record() {
     // 配合surround()使用
     // 记录相机当前位置到锚点的距离、theta、phi
@@ -110,7 +116,7 @@ public:
   }
 
   void updateToward() {
-    // 根据phi_s和theta_s更新toward方向向量
+    // 由改变后的theta_s和phi_s更新toward方向向量
     float fx = sin(this->theta_s * PI / 180.0f) * cos(this->phi_s * PI / 180.0f);
     float fy = cos(this->theta_s * PI / 180.0f);
     float fz = sin(this->theta_s * PI / 180.0f) * sin(-this->phi_s * PI / 180.0f);

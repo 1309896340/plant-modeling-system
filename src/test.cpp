@@ -1,5 +1,6 @@
 ﻿// #define ENABLE_NORMAL_VISUALIZATION
 // #define ENBALE_POLYGON_VISUALIZATION
+#include "glm/trigonometric.hpp"
 #define ENABLE_BOUNDINGBOX_VISUALIZATION
 
 #include <memory>
@@ -12,6 +13,7 @@ int main(int argc, char **argv) {
 
   Scene scene;
 
+  scene.setSeed(484);
   scene.showAxis();
   scene.camera.setPosition(glm::vec3(0.0f, 2.0f, -15.0f));
   scene.camera.lookAt({0.0f, 2.0f, 0.0f});
@@ -25,23 +27,26 @@ int main(int argc, char **argv) {
   scene.add("Cone", make_shared<Cone>(2.0f, 3.0f), {0.0f, 0.0f, 6.0f});
   scene.add("Cylinder", make_shared<Cylinder>(2.5f, 5.0f), {5.0f, 0.0f, 0.0f});
 
-  // 对场景中物体进行统一计算，返回一个key相同的map，其value为一个“结果集”
-  scene.addLight("plight_1",
-                 make_shared<ParallelLight>(vec3(1.0f, 1.0f, 1.0f),
-                                            vec3(0.866f, -0.5f, 0.0f), 1.0f));
-
-  scene.compute_radiosity();
-  for (auto &[name, cur_obj] : scene.objs) {
-    float flux_sum = 0.0f;
-    for (int i = 0; i < cur_obj->geometry->surfaces.size(); i++) {
-      flux_sum += cur_obj->radiosity.radiant_flux[i];
-    }
-    cout << name << " : " << flux_sum << endl;
-  }
+  scene.camera.setPosition({4.7f, 15.3f, -28.0f});
+  // scene.camera.lookAt(scene.objs["Cylinder"]->transform.getPosition());
+  scene.camera.setAttitude(glm::radians(112.6f), glm::radians(-101.0f));
 
   // 创建Sphere对象的层次包围盒
   for (auto &obj : scene.objs)
     obj.second->constructBvhTree();
+
+  scene.compute_radiosity();
+  for (auto &[name, cur_obj] : scene.objs) {
+    if (cur_obj->isAux)
+      continue;
+    float flux_sum = 0.0f;
+    for (int i = 0; i < cur_obj->radiosity.radiant_flux.size(); i++) {
+      flux_sum += cur_obj->radiosity.radiant_flux[i];
+    }
+    printf("%s : %.4f\n", name.c_str(), flux_sum);
+  }
+
+  printf("绘制了%llu条光线\n", scene.ray_buffer->v_nums.size());
 
   scene.mainloop();
   return 0;
