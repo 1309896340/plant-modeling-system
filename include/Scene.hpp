@@ -42,7 +42,6 @@
 
 #define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
 #define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.06f
-
 #define TEXT(txt) reinterpret_cast<const char *>(u8##txt)
 
 // 仅用于该文件内的调试
@@ -75,24 +74,26 @@ struct PngImage {
 
 class LineDrawer {
 private:
-  static inline mt19937 random_generator;
-
-public:
   GLuint vao{0};
   GLuint vbo{0};
   vector<vec3> rays;
   vector<uint32_t> v_nums;
   vector<vec3> colors;
 
+public:
   LineDrawer() {
     glGenVertexArrays(1, &this->vao);
     glGenBuffers(1, &this->vbo);
-    // // 随机生成一个颜色
-    // uniform_real_distribution<> distr(0.1f, 0.9f);
-    // this->color = vec3(distr(RayObject::random_generator), distr(RayObject::random_generator), distr(RayObject::random_generator));
   }
 
-  void addLine(vec3 pt1, vec3 pt2){
+  void addLine(vec3 pt1, vec3 pt2, vec3 color) {
+    vector<vec3> minibuf(2);
+    minibuf[0] = pt1;
+    minibuf[1] = pt2;
+    this->addPolygon(minibuf, color);
+  }
+
+  void addLine(vec3 pt1, vec3 pt2) {
     vector<vec3> minibuf(2);
     minibuf[0] = pt1;
     minibuf[1] = pt2;
@@ -103,7 +104,13 @@ public:
     this->rays.insert(this->rays.end(), vert.begin(), vert.end());
     this->v_nums.push_back(vert.size());
     uniform_real_distribution<> distr(0.1f, 0.9f);
-    vec3 color = vec3(distr(LineDrawer::random_generator), distr(LineDrawer::random_generator), distr(LineDrawer::random_generator));
+    vec3 color = vec3(distr(rdgen), distr(rdgen), distr(rdgen));
+    this->colors.push_back(color);
+  }
+
+  void addPolygon(const vector<vec3> &vert, vec3 color) {
+    this->rays.insert(this->rays.end(), vert.begin(), vert.end());
+    this->v_nums.push_back(vert.size());
     this->colors.push_back(color);
   }
 
@@ -119,6 +126,12 @@ public:
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
     glEnableVertexAttribArray(0);
   }
+
+  size_t size() const {
+    // 返回线条数量
+    return this->v_nums.size();
+  }
+
   void draw(Shader *sd) {
     glBindVertexArray(this->vao);
     uint32_t offset = 0u;
@@ -201,9 +214,6 @@ Pixel cubemap_sample(PngImage *cubmaps, vec3 dir) {
 }
 
 class TriangleSampler {
-private:
-  inline static mt19937 rd_gen;
-
 public:
   glm::vec3 pt[3];
   TriangleSampler(const vector<Vertex> &vertices, const Surface &surface, glm::mat4 model) {
@@ -231,21 +241,22 @@ public:
   tuple<glm::vec3, glm::vec3, glm::vec3> calcLocalCoord() const {
     glm::vec3 up = this->calcNorm();
     glm::vec3 right = glm::normalize(glm::cross(pt[1] - pt[0], up));
-    glm::vec3 front = glm::normalize(glm::cross(up, right));
-    return make_tuple(up, right, front);
+    glm::vec3 back = glm::normalize(glm::cross(right, up));
+    return make_tuple(right, up, back);
   }
 
   // 半球均匀分布随机方向采样
   glm::vec3 hemisphereSampleDir() const {
+
     uniform_real_distribution<> distr(0.0f, 1.0f);
 
-    auto [up, right, front] = this->calcLocalCoord();
-    float theta = acos(1.0f - distr(rd_gen));
-    float phi = 2.0f * PI * distr(rd_gen);
+    auto [right, up, back] = this->calcLocalCoord();
+    float theta = acos(1.0f - distr(rdgen));
+    float phi = 2.0f * PI * distr(rdgen);
     float x = sin(theta) * cos(phi);
     float z = sin(theta) * sin(phi);
     float y = cos(theta);
-    return x * right + y * up - z * front;
+    return x * right + y * up + z * back;
   }
 };
 
@@ -483,7 +494,7 @@ private:
   GLuint ubo{0};
   const GLuint PVM_binding_point = 0;
 
-  mt19937 random_generator;
+  // mt19937 random_generator;
 
   // 用于CPU端存储天空盒图片
   PngImage cubemaps[6];
@@ -510,6 +521,8 @@ private:
   bool isShowAxis{true};
   bool isShowLight{true};
   bool isShowRay{false};
+  bool isShowCoord{false};
+  bool isShowWireFrame{false};
 
   // imgui的状态变量
   struct ImguiInfo {
@@ -526,8 +539,9 @@ public:
   map<string, GLuint> textures;
   map<string, shared_ptr<GeometryRenderObject>> objs;
   map<string, shared_ptr<GeometryRenderObject>> aux;
+  map<string, shared_ptr<LineDrawer>> lines;
 
-  shared_ptr<LineDrawer> ray_buffer{nullptr};
+  // shared_ptr<LineDrawer> ray_buffer{nullptr};
 
   // 开发阶段暂时忽略渲染逻辑，实现lights中光源模拟辐照度计算
   vector<shared_ptr<Light>>
@@ -560,12 +574,12 @@ public:
     }
     glEnable(GL_MULTISAMPLE); // 开启MSAA抗锯齿
     glEnable(GL_DEPTH_TEST);  // 开启深度测试
-    // glEnable(GL_CULL_FACE);   // 开启面剔除
-    glFrontFace(GL_CCW); // 逆时针索引顺序为正面
-    glLineWidth(3.0f);
-#ifdef ENBALE_POLYGON_VISUALIZATION
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-#endif
+    glEnable(GL_CULL_FACE);   // 开启面剔除
+    glFrontFace(GL_CCW);      // 逆时针索引顺序为正面
+    glLineWidth(1.5f);
+    // #ifdef ENBALE_POLYGON_VISUALIZATION
+    //     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    // #endif
 
     glfwSetFramebufferSizeCallback(this->window, framebufferResizeCallback);
     glfwSetErrorCallback(errorCallback);
@@ -584,7 +598,7 @@ public:
 
     init_depthmap();
 
-    init_ray_buffer();
+    init_line_buffer();
 
     // init_ray_visualze(); // 创建用于可视化光线路径的线条对象
 
@@ -600,8 +614,9 @@ public:
     // this->aux.clear();
   }
 
-  void init_ray_buffer() {
-    this->ray_buffer = make_shared<LineDrawer>();
+  void init_line_buffer() {
+    this->lines["Ray"] = make_shared<LineDrawer>();
+    this->lines["Coord"] = make_shared<LineDrawer>();
   }
 
   void init_ubo() {
@@ -812,9 +827,9 @@ public:
     }
   }
 
-  void setSeed(uint32_t sd) {
-    this->random_generator.seed(sd);
-  }
+  // void setSeed(uint32_t sd) {
+  //   this->random_generator.seed(sd);
+  // }
 
   Ray cast_ray_from_mouse() {
     // 捕捉鼠标在窗口中的位置，并将其转换为世界坐标系下的一条射线
@@ -1061,15 +1076,30 @@ public:
         ImGui::TreePop();
       }
 
-      if (ImGui::TreeNodeEx("光线追踪")) {
-        if (ImGui::Button(TEXT("投射光线"))) {
+      if (ImGui::TreeNodeEx(TEXT("调试"))) {
+        ImGui::Checkbox(TEXT("光线追踪可视化"), &this->isShowRay);
+        ImGui::SameLine();
+        ImGui::PushID(0);
+        if (ImGui::Button(TEXT("更新"))) {
           this->compute_radiosity();
-          this->isShowRay = true;
           this->printRadiosityInfo();
         }
-        if (ImGui::Button(TEXT("清空"))) {
-          this->isShowRay = false;
+        ImGui::PopID();
+
+        ImGui::Checkbox(TEXT("三角局部坐标可视化"), &this->isShowCoord);
+        ImGui::SameLine();
+        ImGui::PushID(1);
+        if (ImGui::Button(TEXT("更新")))
+          this->test_triangle_coord();
+        ImGui::PopID();
+
+        if (ImGui::Checkbox(TEXT("线框模式"), &this->isShowWireFrame)) {
+          if (this->isShowWireFrame)
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+          else
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         }
+
         ImGui::TreePop();
       }
 
@@ -1159,24 +1189,23 @@ public:
     }
   }
 
-  void test_triangle_norm() {
-    auto line_buffer = make_shared<vector<vec3>>();
-    this->ray_buffer->clear();
+  void test_triangle_coord() {
+    lines["Coord"]->clear();
     for (auto &[name, obj] : this->objs) {
       mat4 model = obj->transform.getModel();
       for (auto &triangle : obj->geometry->surfaces) {
         TriangleSampler tri(obj->geometry->vertices, triangle, model);
         vec3 tri_center = tri.calcCenter();
-        vec3 tri_norm = tri.calcNorm();
+        // vec3 tri_norm = tri.calcNorm();
         // printf("三角中心： (%.2f,%.2f,%.2f)\n", tri_center.x, tri_center.y, tri_center.z);
         // printf("三角法方向： (%.2f,%.2f,%.2f)\n", tri_norm.x, tri_norm.y, tri_norm.z);
-        line_buffer->clear();
-        line_buffer->emplace_back(tri_center);
-        line_buffer->emplace_back(tri_center + tri_norm);
-        this->ray_buffer->addPolygon(*line_buffer);
+        auto [right, up, back] = tri.calcLocalCoord();
+        lines["Coord"]->addLine(tri_center, tri_center + 0.15f * right, {1.0f, 0.0f, 0.0f});
+        lines["Coord"]->addLine(tri_center, tri_center + 0.15f * up, {0.0f, 1.0f, 0.0f});
+        lines["Coord"]->addLine(tri_center, tri_center + 0.15f * back, {0.0f, 0.0f, 1.0f});
       }
     }
-    this->ray_buffer->updateVBO();
+    lines["Coord"]->updateVBO();
   }
 
   void addSceneObject(const string &name, const shared_ptr<GeometryRenderObject> &obj, bool flag = false) {
@@ -1325,9 +1354,9 @@ public:
         // }
       }
     }
-    // if (isHit) {
-    //   hit_obj = target_obj;
-    //   // cout << "光线击中物体 \"" << hit_obj.obj_name << "\"  tri_id=" << hit_obj.tri_id << " hit_pos=(" << hit_obj.hit_pos.x << ", " << hit_obj.hit_pos.y << ", " << hit_obj.hit_pos.z << ")" << endl;
+
+    // if (target_obj.isHit) {
+    //   cout << "光线击中物体 \"" << target_obj.geometry_name << "\"  tri_id=" << target_obj.triangle_idx << " hit_pos=(" << target_obj.hitPos.x << ", " << target_obj.hitPos.y << ", " << target_obj.hitPos.z << ")" << endl;
     // }
 
     return target_obj;
@@ -1339,7 +1368,7 @@ public:
     assert(PR < 1.0f && PR > 0.0f);
     uniform_real_distribution<> distr(0.0, 1.0);
     vec3 L_dir{0.0f, 0.0f, 0.0f}, L_indir{0.0f, 0.0f, 0.0f};
-    float PR_D = distr(this->random_generator);
+    float PR_D = distr(rdgen);
     if (PR > PR_D) { // 俄罗斯赌轮盘
       assert(this->objs.find(obj.geometry_name) != this->objs.end() && "trace_ray hit object cannot found in scene.objs!");
 
@@ -1360,7 +1389,7 @@ public:
       float cosine = glm::dot(ray.dir, tri_norm); // 出射余弦量(三角面元法线与出射光夹角)
       float BRDF = 1.0f;                          // 应当根据gobj的材质计算出来，这里先假定为1.0，即光滑镜面反射
 
-      HitInfo new_obj = hit_obj({obj.hitPos + 0.005f * tri_norm, wi});
+      HitInfo new_obj = hit_obj({obj.hitPos + 0.01f * tri_norm, wi});
       if (new_obj.isHit) {
         if (vert_buffer != nullptr)
           vert_buffer->push_back(new_obj.hitPos);
@@ -1379,13 +1408,13 @@ public:
   void compute_radiosity() {
     uniform_real_distribution<> distr(0.0, 1.0);
 
-    this->ray_buffer->clear();
+    lines["Ray"]->clear();
     // 遍历每个场景(非aux)物体
     for (auto &[name, cur_obj] : this->objs) {
       if (cur_obj->isAux)
         continue;
-      if (!cur_obj->isSelected) // 暂时只计算被选中目标
-        continue;
+      // if (!cur_obj->isSelected) // 暂时只计算被选中目标
+      //   continue;
 
       mat4 model = cur_obj->transform.getModel();
       shared_ptr<Geometry> geometry = cur_obj->geometry;
@@ -1414,7 +1443,7 @@ public:
           Pixel p = cubemap_sample(this->cubemaps, wi);
           L_dir += vec3(p.r, p.g, p.b) / 255.0f;
         }
-        this->ray_buffer->addPolygon(*vec_buffer);
+        lines["Ray"]->addPolygon(*vec_buffer);
 
         // 将计算的irradiance的结果存储
         vec3 Lo = L_dir + L_indir;
@@ -1422,7 +1451,7 @@ public:
         // printf("物体\"%s\"第(%d/%llu)面元 radiance: %.4f\n", name.c_str(), i, geometry->surfaces.size(), Lo);
       }
     }
-    this->ray_buffer->updateVBO(); // 调试
+    lines["Ray"]->updateVBO(); // 调试
   }
 
   void imgui_docking_render(bool *p_open = nullptr) {
@@ -1584,7 +1613,6 @@ public:
     }
 #endif
 
-#ifdef ENABLE_BOUNDINGBOX_VISUALIZATION
     // 5. 渲染包围盒边框
     cur_shader = this->shaders["line"];
     cur_shader->use();
@@ -1606,14 +1634,14 @@ public:
         }
       }
     }
-#endif
+
     // 6. 可视化光线追踪
-    // if (this->isShowRay) {
-    if (true) {
-      cur_shader = this->shaders["line"];
-      cur_shader->use();
-      this->ray_buffer->draw(cur_shader);
-    }
+    if (this->isShowRay)
+      lines["Ray"]->draw(cur_shader);
+    
+    // 6. 可视化三角局部坐标系
+    if (this->isShowCoord)
+      lines["Coord"]->draw(cur_shader);
   }
   void setWindowSize(float width, float height) {
     this->width = width;

@@ -1,17 +1,16 @@
 ﻿// #define ENABLE_NORMAL_VISUALIZATION
-// #define ENBALE_POLYGON_VISUALIZATION
-#define ENABLE_BOUNDINGBOX_VISUALIZATION
+// #define ENABLE_BOUNDINGBOX_VISUALIZATION
 
 #include <memory>
-
 #include "Scene.hpp"
+
+std::mt19937_64 rdgen(42);
 
 using namespace std;
 int main(int argc, char **argv) {
 
   Scene scene;
 
-  scene.setSeed(484);
   scene.showAxis();
   scene.camera.setPosition(glm::vec3(0.0f, 10.0f, 15.0f));
   scene.camera.lookAt({0.0f, 2.0f, 0.0f});
@@ -37,11 +36,10 @@ int main(int argc, char **argv) {
   // scene.printRadiosityInfo();
 
   // 测试每个三角面元的法线是否计算正确
-  scene.test_triangle_norm();
+  scene.test_triangle_coord();
 
 
-
-  printf("绘制了%llu条光线\n", scene.ray_buffer->v_nums.size());
+  printf("绘制了%llu条光线\n", scene.lines["Ray"]->size());
 
   scene.mainloop();
   return 0;
