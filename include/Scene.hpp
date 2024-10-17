@@ -195,6 +195,56 @@ Pixel cubemap_sample(PngImage *cubmaps, vec3 dir) {
   return cubmaps[map_idx].img[col_idx + row_idx * width];
 }
 
+class TriangleSampler {
+private:
+  inline static mt19937 rd_gen;
+
+  glm::vec3 pt[3];
+
+public:
+  TriangleSampler(const vector<Vertex> &vertices, const Surface &surface, glm::mat4 model) {
+    for (int i = 0; i < 3; i++)
+      pt[i] = glm::vec3(model * glm::vec4(glm::make_vec3(vertices[surface.tidx[i]].position), 1.0f));
+  }
+  TriangleSampler(const vector<Vertex> &vertices, const Surface &surface) {
+    for (int i = 0; i < 3; i++)
+      pt[i] = glm::vec3(glm::vec4(glm::make_vec3(vertices[surface.tidx[i]].position), 1.0f));
+  }
+
+  float calcArea() const {
+    return glm::length(glm::cross(pt[1] - pt[0], pt[2] - pt[0]));
+  }
+
+  glm::vec3 calcNorm() const {
+    return glm::normalize(glm::cross(pt[1] - pt[0], pt[2] - pt[0]));
+  }
+
+  glm::vec3 calcCenter() const {
+    return (pt[0] + pt[1] + pt[2]) / 3.0f;
+  }
+
+  // 以法向量为上方向基准，结合pt[1]-pt[0]、pt[2]-pt[1]所成平面构建局部坐标系
+  tuple<glm::vec3, glm::vec3, glm::vec3> calcLocalCoord() const {
+    glm::vec3 up = this->calcNorm();
+    glm::vec3 right = glm::normalize(glm::cross(pt[1] - pt[0], up));
+    glm::vec3 front = glm::normalize(glm::cross(up, right));
+    return make_tuple(up, right, front);
+  }
+
+  // 半球均匀分布随机方向采样
+  glm::vec3 hemisphereSampleDir() const {
+    uniform_real_distribution<> distr(0.0f, 1.0f);
+
+    auto [up, right, front] = this->calcLocalCoord();
+    float theta = acos(1.0f - distr(rd_gen));
+    float phi = 2.0f * PI * distr(rd_gen);
+    float x = sin(theta) * cos(phi);
+    float z = sin(theta) * cos(phi);
+    float y = cos(theta);
+    return x * right + y * up - z * front;
+  }
+};
+
 class BoundingBoxRenderObject {
 public:
   GLuint vao{0};
@@ -1253,39 +1303,25 @@ public:
     if (PR > PR_D) { // 俄罗斯赌轮盘
       assert(this->objs.find(obj.obj_name) != this->objs.end() && "trace_ray hit object cannot found in scene.objs!");
       shared_ptr<GeometryRenderObject> gobj = this->objs[obj.obj_name];
-      shared_ptr<Geometry> geom = gobj->geometry;
+      shared_ptr<Geometry> geometry = gobj->geometry;
       mat4 model = gobj->transform.getModel();
-      Surface triangle = geom->surfaces[obj.tri_id];
-      vec3 tri_center{0.0f, 0.0f, 0.0f};
-      vec3 pt[3];
-      for (int j = 0; j < 3; j++) { // 取出击中三角面元的三个顶点，同时变换到世界坐标系
-        pt[j] = vec3(model * vec4(glm::make_vec3(geom->vertices[triangle.tidx[j]].position), 1.0f));
-        tri_center += pt[j] / 3.0f; // 计算三角形质心
-      }
-      vec3 tri_cross = glm::cross(pt[1] - pt[0], pt[2] - pt[0]);
-      vec3 norm = glm::normalize(tri_cross);
-      float area = glm::length(tri_cross);
-      assert(area > 0.0f && "triangle area is equal to zero!");
 
-      // 以norm为上，pt[1]-pt[0]与pt[2]-pt[0]的一组正交基，构成的局部半球上采样出一点wi
-      // 计算pt[1]-pt[0]与pt[2]-pt[0]的一组正交基
-      vec3 &tri_up = norm;
-      vec3 tri_right = glm::normalize(glm::cross(pt[1] - pt[0], tri_up));
-      vec3 tri_front = glm::normalize(glm::cross(tri_up, tri_right));
-      //  在半球上均匀分布随机做一次采样
-      float theta = acosf(1.0f - distr(this->random_generator));
-      float phi = 2.0f * PI * distr(this->random_generator);
-      vec3 wi = glm::normalize(sinf(theta) * cosf(phi) * tri_front + sinf(theta) * sinf(phi) * tri_right + cosf(theta) * tri_up);
+      TriangleSampler tri(geometry->vertices, geometry->surfaces[obj.tri_id], model);
+      vec3 tri_center = tri.calcCenter();
+      vec3 tri_norm = tri.calcNorm();
+      float tri_area = tri.calcArea();
+      vec3 wi = tri.hemisphereSampleDir();
 
-      float cosine = glm::dot(ray.dir, norm);
+      assert(tri_area > 0.0f && "triangle area is equal to zero!");
+
+      float cosine = glm::dot(ray.dir, tri_norm);   // 出射余弦量(三角面元法线与出射光夹角)
       float BRDF = 1.0f; // 应当根据gobj的材质计算出来，这里先假定为1.0，即光滑镜面反射
-      // 以obj.hit_pos为起点，wi为方向，发射光线，与scene.objs中所有物体，包括scene.aux["Ground"]进行求交测试
-      // 将求交结果整理为新的HitGeometryObj，即"击中的GeometryRenderObject的name" "对应三角面元的索引" "世界坐标系下的击中位置"
+      
       HitGeometryObj new_obj;
-      if (hit_obj({obj.hit_pos + 0.01f * norm, wi}, new_obj)) {
+      if (hit_obj({obj.hit_pos + 0.01f * tri_norm, wi}, new_obj)) {
         if (vert_buffer != nullptr)
-          vert_buffer->push_back(new_obj.hit_pos + 0.01f * norm);
-        L_indir += trace_ray({new_obj.hit_pos + 0.01f * norm, -wi}, new_obj, PR, recursive_depth + 1, vert_buffer) * BRDF * cosine / PR;
+          vert_buffer->push_back(new_obj.hit_pos + 0.01f * tri_norm);
+        L_indir += trace_ray({new_obj.hit_pos + 0.01f * tri_norm, -wi}, new_obj, PR, recursive_depth + 1, vert_buffer) * BRDF * cosine / PR;
       } else {
         Pixel p = cubemap_sample(this->cubemaps, wi);
         L_dir += vec3(p.r, p.g, p.b) / 255.0f;
@@ -1315,23 +1351,10 @@ public:
       cur_obj->radiosity.radiant_flux.resize(geometry->surfaces.size());
 
       for (int i = 0; i < geometry->surfaces.size(); i++) {
-        Surface triangle = geometry->surfaces[i];
-        vec3 tri_center{0.0f, 0.0f, 0.0f};
-        vector<vec3> pt(3);
-        for (int j = 0; j < 3; j++) {
-          pt[j] = vec3(model * vec4(glm::make_vec3(geometry->vertices[triangle.tidx[j]].position), 1.0f));
-          tri_center += pt[j] / 3.0f;
-        }
-        vec3 tri_cross = glm::cross(pt[1] - pt[0], pt[2] - pt[0]);
-        vec3 norm = glm::normalize(tri_cross);
-        float area = glm::length(tri_cross);
-        // 生成一个随机半球采样方向，与场景物体进行全局求交
-        vec3 &tri_up = norm;
-        vec3 tri_right = glm::normalize(glm::cross(pt[1] - pt[0], tri_up));
-        vec3 tri_front = glm::normalize(glm::cross(tri_up, tri_right));
-        float theta = acosf(1.0f - distr(this->random_generator));
-        float phi = 2.0f * PI * distr(this->random_generator);
-        vec3 wi = glm::normalize(sinf(theta) * cosf(phi) * tri_front + sinf(theta) * sinf(phi) * tri_right + cosf(theta) * tri_up);
+        TriangleSampler tri(geometry->vertices, geometry->surfaces[i], model);
+        vec3 tri_center = tri.calcCenter();
+        vec3 tri_norm = tri.calcNorm();
+        vec3 wi = tri.hemisphereSampleDir();
 
         HitGeometryObj new_obj;
         vec3 L_dir{0.0f, 0.0f, 0.0f};
@@ -1340,8 +1363,8 @@ public:
         // 调用前初始化this->ray_obj->vertices可视化光线路径
 
         shared_ptr<vector<vec3>> vec_buffer = make_shared<vector<vec3>>(); // 调试
-        vec_buffer->push_back(tri_center + 0.01f * norm);                  // 调试
-        if (hit_obj({tri_center + 0.01f * norm, wi}, new_obj)) {
+        vec_buffer->push_back(tri_center + 0.01f * tri_norm);              // 调试
+        if (hit_obj({tri_center + 0.01f * tri_norm, wi}, new_obj)) {
           vec_buffer->push_back(new_obj.hit_pos); // 调试
           L_indir += trace_ray({new_obj.hit_pos, -wi}, new_obj, 0.95, 0, vec_buffer);
         } else {

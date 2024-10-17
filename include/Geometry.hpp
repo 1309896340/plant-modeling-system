@@ -4,15 +4,17 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <random>
 #include <string>
 #include <variant>
 #include <vector>
 
+#include "constants.h"
+#include "glm/geometric.hpp"
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "constants.h"
 
 namespace {
 using namespace std;
@@ -50,9 +52,6 @@ struct Vertex {
       float v;
     };
   };
-  // Vertex()
-  //     : position{0.0f, 0.0f, 0.0f}, normal{0.0f, 0.0f, 0.0f},
-  //       color{0.0f, 0.0f, 0.0f}, uv{0u, 0u} {}
 };
 
 struct Edge {
