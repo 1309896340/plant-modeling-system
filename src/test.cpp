@@ -33,16 +33,13 @@ int main(int argc, char **argv) {
   for (auto &obj : scene.objs)
     obj.second->constructBvhTree();
 
-  scene.compute_radiosity();
-  for (auto &[name, cur_obj] : scene.objs) {
-    if (cur_obj->isAux)
-      continue;
-    float flux_sum = 0.0f;
-    for (int i = 0; i < cur_obj->radiosity.radiant_flux.size(); i++) {
-      flux_sum += cur_obj->radiosity.radiant_flux[i];
-    }
-    printf("%s : %.4f\n", name.c_str(), flux_sum);
-  }
+  // scene.compute_radiosity();
+  // scene.printRadiosityInfo();
+
+  // 测试每个三角面元的法线是否计算正确
+  scene.test_triangle_norm();
+
+
 
   printf("绘制了%llu条光线\n", scene.ray_buffer->v_nums.size());
 

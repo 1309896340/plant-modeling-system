@@ -13,7 +13,6 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-
 namespace {
 using namespace std;
 using param_variant = variant<uint32_t, int, float, bool, glm::vec3>;

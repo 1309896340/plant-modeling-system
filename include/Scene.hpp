@@ -73,7 +73,7 @@ struct PngImage {
   int channel;
 };
 
-class RayBufferObject {
+class LineDrawer {
 private:
   static inline mt19937 random_generator;
 
@@ -84,30 +84,35 @@ public:
   vector<uint32_t> v_nums;
   vector<vec3> colors;
 
-  RayBufferObject() {
+  LineDrawer() {
     glGenVertexArrays(1, &this->vao);
     glGenBuffers(1, &this->vbo);
     // // 随机生成一个颜色
     // uniform_real_distribution<> distr(0.1f, 0.9f);
     // this->color = vec3(distr(RayObject::random_generator), distr(RayObject::random_generator), distr(RayObject::random_generator));
   }
-  void push(shared_ptr<vector<vec3>> vert) {
-    this->rays.insert(this->rays.end(), vert->begin(), vert->end());
-    this->v_nums.push_back(vert->size());
+
+  void addLine(vec3 pt1, vec3 pt2){
+    vector<vec3> minibuf(2);
+    minibuf[0] = pt1;
+    minibuf[1] = pt2;
+    this->addPolygon(minibuf);
+  }
+
+  void addPolygon(const vector<vec3> &vert) {
+    this->rays.insert(this->rays.end(), vert.begin(), vert.end());
+    this->v_nums.push_back(vert.size());
     uniform_real_distribution<> distr(0.1f, 0.9f);
-    vec3 color = vec3(distr(RayBufferObject::random_generator), distr(RayBufferObject::random_generator), distr(RayBufferObject::random_generator));
+    vec3 color = vec3(distr(LineDrawer::random_generator), distr(LineDrawer::random_generator), distr(LineDrawer::random_generator));
     this->colors.push_back(color);
   }
+
   void clear() {
     this->rays.clear();
     this->v_nums.clear();
     this->colors.clear();
   }
   void updateVBO() {
-    // for (int i = 0; i < this->rays.size(); i++) {
-    //   all_vertices.insert(all_vertices.begin(), this->rays[i].vertices.begin(), this->rays[i].vertices.end());
-    //   ray_size.push_back(this->rays[i].vertices.size());
-    // }
     glBindVertexArray(this->vao);
     glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
     glBufferData(GL_ARRAY_BUFFER, this->rays.size() * sizeof(vec3), this->rays.data(), GL_DYNAMIC_DRAW);
@@ -123,7 +128,7 @@ public:
       offset += v_nums[i]; // 累加上第i段的顶点数
     }
   }
-  ~RayBufferObject() {
+  ~LineDrawer() {
     glDeleteVertexArrays(1, &this->vao);
     glDeleteBuffers(1, &this->vbo);
   }
@@ -132,7 +137,7 @@ public:
 struct RadiosityResult {
   // float radiant_flux{0.0f};
   // 与GeometryRenderObject::geometry::surfaces的元素一一对应
-  vector<float> radiant_flux;
+  vector<vec3> radiant_flux;
 };
 
 Pixel cubemap_sample(PngImage *cubmaps, vec3 dir) {
@@ -207,7 +212,7 @@ public:
   }
   TriangleSampler(const vector<Vertex> &vertices, const Surface &surface) {
     for (int i = 0; i < 3; i++)
-      pt[i] = glm::vec3(glm::vec4(glm::make_vec3(vertices[surface.tidx[i]].position), 1.0f));
+      pt[i] = glm::make_vec3(vertices[surface.tidx[i]].position);
   }
 
   float calcArea() const {
@@ -238,7 +243,7 @@ public:
     float theta = acos(1.0f - distr(rd_gen));
     float phi = 2.0f * PI * distr(rd_gen);
     float x = sin(theta) * cos(phi);
-    float z = sin(theta) * cos(phi);
+    float z = sin(theta) * sin(phi);
     float y = cos(theta);
     return x * right + y * up - z * front;
   }
@@ -522,7 +527,7 @@ public:
   map<string, shared_ptr<GeometryRenderObject>> objs;
   map<string, shared_ptr<GeometryRenderObject>> aux;
 
-  shared_ptr<RayBufferObject> ray_buffer{nullptr};
+  shared_ptr<LineDrawer> ray_buffer{nullptr};
 
   // 开发阶段暂时忽略渲染逻辑，实现lights中光源模拟辐照度计算
   vector<shared_ptr<Light>>
@@ -555,8 +560,9 @@ public:
     }
     glEnable(GL_MULTISAMPLE); // 开启MSAA抗锯齿
     glEnable(GL_DEPTH_TEST);  // 开启深度测试
-    glEnable(GL_CULL_FACE);   // 开启面剔除
-    glFrontFace(GL_CCW);      // 逆时针索引顺序为正面
+    // glEnable(GL_CULL_FACE);   // 开启面剔除
+    glFrontFace(GL_CCW); // 逆时针索引顺序为正面
+    glLineWidth(3.0f);
 #ifdef ENBALE_POLYGON_VISUALIZATION
     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 #endif
@@ -595,7 +601,7 @@ public:
   }
 
   void init_ray_buffer() {
-    this->ray_buffer = make_shared<RayBufferObject>();
+    this->ray_buffer = make_shared<LineDrawer>();
   }
 
   void init_ubo() {
@@ -794,6 +800,18 @@ public:
     cout << "Graphics Device: " << renderer << endl;
   }
 
+  void printRadiosityInfo() {
+    for (auto &[name, cur_obj] : this->objs) {
+      if (cur_obj->isAux)
+        continue;
+      vec3 flux_sum{0.0f, 0.0f, 0.0f};
+      for (int i = 0; i < cur_obj->radiosity.radiant_flux.size(); i++) {
+        flux_sum += cur_obj->radiosity.radiant_flux[i];
+      }
+      printf("%s : (%.2f, %.2f, %.2f)\n", name.c_str(), flux_sum.r, flux_sum.g, flux_sum.b);
+    }
+  }
+
   void setSeed(uint32_t sd) {
     this->random_generator.seed(sd);
   }
@@ -923,18 +941,23 @@ public:
       }
     }
 
-    if (ImGui::IsKeyDown(ImGuiKey_W)) {
+    if (ImGui::IsKeyDown(ImGuiKey_W))
       this->camera.move_relative({0.0f, 0.0f, -0.1f});
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_S)) {
+
+    if (ImGui::IsKeyDown(ImGuiKey_S))
       this->camera.move_relative({0.0f, 0.0f, 0.1f});
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_A)) {
+
+    if (ImGui::IsKeyDown(ImGuiKey_A))
       this->camera.move_relative({-0.1f, 0.0f, 0.0f});
-    }
-    if (ImGui::IsKeyDown(ImGuiKey_D)) {
+
+    if (ImGui::IsKeyDown(ImGuiKey_D))
       this->camera.move_relative({0.1f, 0.0f, 0.0f});
-    }
+
+    if (ImGui::IsKeyDown(ImGuiKey_Space))
+      this->camera.move_relative({0.0f, 0.1f, 0.0f});
+
+    if (ImGui::IsKeyDown(ImGuiKey_C))
+      this->camera.move_relative({0.0f, -0.1f, 0.0f});
   }
 
   void imgui_menu() {
@@ -1042,6 +1065,7 @@ public:
         if (ImGui::Button(TEXT("投射光线"))) {
           this->compute_radiosity();
           this->isShowRay = true;
+          this->printRadiosityInfo();
         }
         if (ImGui::Button(TEXT("清空"))) {
           this->isShowRay = false;
@@ -1135,6 +1159,26 @@ public:
     }
   }
 
+  void test_triangle_norm() {
+    auto line_buffer = make_shared<vector<vec3>>();
+    this->ray_buffer->clear();
+    for (auto &[name, obj] : this->objs) {
+      mat4 model = obj->transform.getModel();
+      for (auto &triangle : obj->geometry->surfaces) {
+        TriangleSampler tri(obj->geometry->vertices, triangle, model);
+        vec3 tri_center = tri.calcCenter();
+        vec3 tri_norm = tri.calcNorm();
+        // printf("三角中心： (%.2f,%.2f,%.2f)\n", tri_center.x, tri_center.y, tri_center.z);
+        // printf("三角法方向： (%.2f,%.2f,%.2f)\n", tri_norm.x, tri_norm.y, tri_norm.z);
+        line_buffer->clear();
+        line_buffer->emplace_back(tri_center);
+        line_buffer->emplace_back(tri_center + tri_norm);
+        this->ray_buffer->addPolygon(*line_buffer);
+      }
+    }
+    this->ray_buffer->updateVBO();
+  }
+
   void addSceneObject(const string &name, const shared_ptr<GeometryRenderObject> &obj, bool flag = false) {
     // 第三个参数为true时，将obj加入到this->objs中，并将其设置isAux为true，其他对象默认isAux为false
     if (!flag) {
@@ -1223,33 +1267,33 @@ public:
     this->lights.emplace_back(light);
   }
 
-  void compute_radiosity_1() {
-    // 遍历场景中所有objs并计算每个物体对应接收到的辐射通量
+  // void compute_radiosity_1() {
+  //   // 遍历场景中所有objs并计算每个物体对应接收到的辐射通量
 
-    // 实际光源并不只有一个，而且并非只有平行光(后续考虑)
-    shared_ptr<ParallelLight> light =
-        dynamic_pointer_cast<ParallelLight>(this->lights[0]);
+  //   // 实际光源并不只有一个，而且并非只有平行光(后续考虑)
+  //   shared_ptr<ParallelLight> light =
+  //       dynamic_pointer_cast<ParallelLight>(this->lights[0]);
 
-    for (auto &[name, cur_obj] : this->objs) {
-      shared_ptr<Geometry> geometry = cur_obj->geometry;
-      cur_obj->radiosity.radiant_flux.resize(geometry->surfaces.size());
-      for (int i = 0; i < geometry->surfaces.size(); i++) {
-        Surface triangle = geometry->surfaces[i];
-        vector<vec3> pt(3);
-        vec3 norm{0.0f, 0.0f, 0.0f};
-        float area{0.0f};
-        for (int j = 0; j < 3; j++)
-          pt[j] = glm::make_vec3(geometry->vertices[triangle.tidx[j]].position);
-        vec3 tri_cross = glm::cross(pt[1] - pt[0], pt[2] - pt[0]);
-        norm = glm::normalize(tri_cross);
-        area = glm::length(tri_cross) / 2.0f;
-        // 计算辐射通量(每个三角面)
-        cur_obj->radiosity.radiant_flux[i] =
-            light->irradiance * area *
-            glm::max(0.0f, glm::dot(norm, -light->direction));
-      }
-    }
-  }
+  //   for (auto &[name, cur_obj] : this->objs) {
+  //     shared_ptr<Geometry> geometry = cur_obj->geometry;
+  //     cur_obj->radiosity.radiant_flux.resize(geometry->surfaces.size());
+  //     for (int i = 0; i < geometry->surfaces.size(); i++) {
+  //       Surface triangle = geometry->surfaces[i];
+  //       vector<vec3> pt(3);
+  //       vec3 norm{0.0f, 0.0f, 0.0f};
+  //       float area{0.0f};
+  //       for (int j = 0; j < 3; j++)
+  //         pt[j] = glm::make_vec3(geometry->vertices[triangle.tidx[j]].position);
+  //       vec3 tri_cross = glm::cross(pt[1] - pt[0], pt[2] - pt[0]);
+  //       norm = glm::normalize(tri_cross);
+  //       area = glm::length(tri_cross) / 2.0f;
+  //       // 计算辐射通量(每个三角面)
+  //       cur_obj->radiosity.radiant_flux[i] =
+  //           light->irradiance * area *
+  //           glm::max(0.0f, glm::dot(norm, -light->direction));
+  //     }
+  //   }
+  // }
 
   // struct HitGeometryObj {
   //   bool isHit{false};
@@ -1292,20 +1336,11 @@ public:
   vec3 trace_ray(Ray ray, const HitInfo &obj, float PR, uint32_t recursive_depth = 0, shared_ptr<vector<vec3>> vert_buffer = nullptr) {
     // recursive_depth用以记录该函数的递归深度，同时在可视化光线路径时用于记录顶点数量
     // recursive_depth=0表示对该函数的“根调用”，其他为递归调用
-
-    // ray.origin 为当前物体表面，ray.dir为从物体表面的出射光方向
-    // 这应当是三角面元接收到的其他物体的光，ray.origin为从三角面元出发沿着-ray.dir击中的物体表面
-    // 所以应当在调用该函数之前，在处理三角面元时，就要进行一个wi的采样，wi就是-ray.dir，击中的物体的位置就是ray.origin
-    // 因此，该函数还需要传入“击中的三角面元所属的几何体”与“击中的三角面元的索引”，这里描述为HitGeometryObj结构体
-
     assert(PR < 1.0f && PR > 0.0f);
-    vec3 L_dir{0.0f, 0.0f, 0.0f}, L_indir{0.0f, 0.0f, 0.0f};
-
     uniform_real_distribution<> distr(0.0, 1.0);
-
+    vec3 L_dir{0.0f, 0.0f, 0.0f}, L_indir{0.0f, 0.0f, 0.0f};
     float PR_D = distr(this->random_generator);
     if (PR > PR_D) { // 俄罗斯赌轮盘
-      // cout << "geometry name : " << obj.geometry_name << endl;
       assert(this->objs.find(obj.geometry_name) != this->objs.end() && "trace_ray hit object cannot found in scene.objs!");
 
       shared_ptr<GeometryRenderObject> gobj = this->objs[obj.geometry_name];
@@ -1318,22 +1353,18 @@ public:
       float tri_area = tri.calcArea();
       vec3 wi = tri.hemisphereSampleDir();
 
-      // printf("triangle pts: (%.4f,%.4f,%.4f) (%.4f,%.4f,%.4f) (%.4f,%.4f,%.4f)\n", tri.pt[0].x,tri.pt[0].y,tri.pt[0].z,
-      // tri.pt[1].x,tri.pt[1].y,tri.pt[1].z,tri.pt[2].x,tri.pt[2].y,tri.pt[2].z);
-
-      if (tri_area == 0.0f) {
+      if (tri_area == 0.0f)
         // cerr << "Warning : zero area triangle exists! return zero vector." << endl;
         return {0.0f, 0.0f, 0.0f};
-      }
 
       float cosine = glm::dot(ray.dir, tri_norm); // 出射余弦量(三角面元法线与出射光夹角)
       float BRDF = 1.0f;                          // 应当根据gobj的材质计算出来，这里先假定为1.0，即光滑镜面反射
 
-      HitInfo new_obj = hit_obj({obj.hitPos + 0.01f * tri_norm, wi});
+      HitInfo new_obj = hit_obj({obj.hitPos + 0.005f * tri_norm, wi});
       if (new_obj.isHit) {
         if (vert_buffer != nullptr)
-          vert_buffer->push_back(new_obj.hitPos + 0.01f * tri_norm);
-        L_indir += trace_ray({new_obj.hitPos + 0.01f * tri_norm, -wi}, new_obj, PR, recursive_depth + 1, vert_buffer) * BRDF * cosine / PR;
+          vert_buffer->push_back(new_obj.hitPos);
+        L_indir += trace_ray({new_obj.hitPos, -wi}, new_obj, PR, recursive_depth + 1, vert_buffer) * BRDF * cosine / PR;
       } else {
         Pixel p = cubemap_sample(this->cubemaps, wi);
         L_dir += vec3(p.r, p.g, p.b) / 255.0f;
@@ -1353,8 +1384,8 @@ public:
     for (auto &[name, cur_obj] : this->objs) {
       if (cur_obj->isAux)
         continue;
-      // if (!cur_obj->isSelected) // 暂时只计算被选中目标
-      //   continue;
+      if (!cur_obj->isSelected) // 暂时只计算被选中目标
+        continue;
 
       mat4 model = cur_obj->transform.getModel();
       shared_ptr<Geometry> geometry = cur_obj->geometry;
@@ -1372,9 +1403,9 @@ public:
         // 调用前初始化this->ray_obj->vertices可视化光线路径
 
         shared_ptr<vector<vec3>> vec_buffer = make_shared<vector<vec3>>();
-        vec_buffer->push_back(tri_center + 0.01f * tri_norm);
+        vec_buffer->push_back(tri_center + 0.005f * tri_norm);
 
-        HitInfo new_obj = hit_obj({tri_center + 0.01f * tri_norm, wi});
+        HitInfo new_obj = hit_obj({tri_center + 0.005f * tri_norm, wi});
         if (new_obj.isHit) {
           vec_buffer->push_back(new_obj.hitPos);
           L_indir += trace_ray({new_obj.hitPos, -wi}, new_obj, 0.95, 0, vec_buffer);
@@ -1383,11 +1414,11 @@ public:
           Pixel p = cubemap_sample(this->cubemaps, wi);
           L_dir += vec3(p.r, p.g, p.b) / 255.0f;
         }
-        this->ray_buffer->push(vec_buffer);
+        this->ray_buffer->addPolygon(*vec_buffer);
 
         // 将计算的irradiance的结果存储
         vec3 Lo = L_dir + L_indir;
-        cur_obj->radiosity.radiant_flux[i] = (Lo.r + Lo.g + Lo.b) / 3.0f;
+        cur_obj->radiosity.radiant_flux[i] = Lo;
         // printf("物体\"%s\"第(%d/%llu)面元 radiance: %.4f\n", name.c_str(), i, geometry->surfaces.size(), Lo);
       }
     }
@@ -1577,7 +1608,8 @@ public:
     }
 #endif
     // 6. 可视化光线追踪
-    if (this->isShowRay) {
+    // if (this->isShowRay) {
+    if (true) {
       cur_shader = this->shaders["line"];
       cur_shader->use();
       this->ray_buffer->draw(cur_shader);
