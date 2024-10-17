@@ -94,9 +94,10 @@ int findKPosVal(vector<T> arr, int left, int right, int k) {
 // bool hit_triangle(const vec3 &origin, const vec3 &dir, const vec3 &p1,const vec3 &p2, const vec3 &p3, vec3 &hit_pos, float &distance) {
 HitInfo hit_triangle(Ray ray, const vec3 &p1, const vec3 &p2, const vec3 &p3) {
   // 返回(是否击中, 击中位置, 距离)
-  bool isHit{false};
-  vec3 hitPos{ray.origin};
-  float distance{FLT_MAX};
+
+  // bool isHit{false};
+  // vec3 hitPos{ray.origin};
+  // float distance{FLT_MAX};
 
   HitInfo target;
 
@@ -405,7 +406,8 @@ public:
 
       HitInfo tmp_obj = hit_triangle(ray, pt[0], pt[1], pt[2]);
       if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
-          target_obj = tmp_obj;
+        tmp_obj.triangle_idx = cur_node->triangles[0];
+        target_obj = tmp_obj;
       }
     }
 
