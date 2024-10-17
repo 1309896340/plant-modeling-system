@@ -199,9 +199,8 @@ class TriangleSampler {
 private:
   inline static mt19937 rd_gen;
 
-  glm::vec3 pt[3];
-
 public:
+  glm::vec3 pt[3];
   TriangleSampler(const vector<Vertex> &vertices, const Surface &surface, glm::mat4 model) {
     for (int i = 0; i < 3; i++)
       pt[i] = glm::vec3(model * glm::vec4(glm::make_vec3(vertices[surface.tidx[i]].position), 1.0f));
@@ -868,46 +867,49 @@ public:
 
           Ray ray = cast_ray_from_mouse();
 
-          struct HitObj {
+          struct HitInfo_imgui {
+            bool isHit{false};
+            vec3 hitPos{0.0f, 0.0f, 0.0f};
+            float distance{FLT_MAX};
             uint32_t id{0};   // 该物体在Scene::imgui::items中的索引位置
             uint32_t type{0}; // 0为普通包围盒，1为层次包围盒
-            vec3 hitPos{0.0f, 0.0f, 0.0f};
           };
 
-          float min_distance = FLT_MAX;
-          HitObj target_obj;
-          bool isisHit = false;
+          // float min_distance = FLT_MAX;
+          // bool isisHit = false;
+          HitInfo_imgui target_obj;
           for (auto &[name, oobj] : this->objs) {
-            if (oobj->isAux) {
-              // 排除该对象
+            if (oobj->isAux)
               continue;
-            }
-            bool isHit = false;
-            float distance = 0.0f;
-            HitObj obj;
+
+            HitInfo_imgui tmp_obj;
             if (oobj->bvhtree != nullptr) {
               // 层次包围盒求交
-              uint32_t triangle_idx;
-              if (oobj->bvhtree->intersect(ray.origin, ray.dir, obj.hitPos, distance, triangle_idx)) {
-                isHit = true;
-                obj.type = 1;
+              HitInfo hit_obj = oobj->bvhtree->intersect(ray);
+              if (hit_obj.isHit) {
+                tmp_obj.isHit = true;
+                tmp_obj.hitPos = hit_obj.hitPos;
+                tmp_obj.distance = hit_obj.distance;
+                tmp_obj.type = 1;
+                // tmp_obj.id = 0; // 后面统一获取
               }
             } else {
               // 普通外层包围盒求交
-              if (oobj->box->hit(this->camera.getPosition(), ray.dir)) {
-                isHit = true;
-                obj.type = 0;
-                distance = glm::distance(this->camera.getPosition(), oobj->box->getBoxCenter());
+              if (oobj->box->hit(ray)) {
+                tmp_obj.isHit = true;
+                tmp_obj.hitPos = oobj->box->getBoxCenter();
+                tmp_obj.distance = glm::distance(ray.origin, tmp_obj.hitPos);
+                tmp_obj.type = 0;
+                // tmp_obj.id = 0; // 后面统一获取
               }
             }
-            if (isHit && distance < min_distance) {
-              obj.id = std::distance(this->imgui.items.begin(), std::find(this->imgui.items.begin(), this->imgui.items.end(), name));
-              target_obj = obj;
-              min_distance = distance;
-              isisHit = true;
+            if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
+              tmp_obj.id = std::distance(this->imgui.items.begin(), std::find(this->imgui.items.begin(), this->imgui.items.end(), name));
+              target_obj = tmp_obj;
             }
           }
-          if (isisHit) {
+          // 找到最近碰撞目标target_obj
+          if (target_obj.isHit) {
             this->imgui.selected_idx = target_obj.id;
             this->camera.setAnchor(
                 this->objs[this->imgui.items[this->imgui.selected_idx]]
@@ -1037,12 +1039,12 @@ public:
       }
 
       if (ImGui::TreeNodeEx("光线追踪")) {
-        if (ImGui::Button(TEXT("清空"))) {
-          this->isShowRay = false;
-        }
         if (ImGui::Button(TEXT("投射光线"))) {
           this->compute_radiosity();
           this->isShowRay = true;
+        }
+        if (ImGui::Button(TEXT("清空"))) {
+          this->isShowRay = false;
         }
         ImGui::TreePop();
       }
@@ -1249,43 +1251,45 @@ public:
     }
   }
 
-  struct HitGeometryObj {
-    string obj_name; // 击中物体名称
-    uint32_t tri_id; // 击中物体所在三角面元的索引
-    vec3 hit_pos;    // 世界坐标系下的击中位置
-  };
+  // struct HitGeometryObj {
+  //   bool isHit{false};
+  //   string obj_name; // 击中物体名称
+  //   uint32_t tri_id; // 击中物体所在三角面元的索引
+  //   vec3 hit_pos;    // 世界坐标系下的击中位置
+  // };
 
-  bool hit_obj(Ray ray, HitGeometryObj &hit_obj) {
+  HitInfo hit_obj(Ray ray) {
     // 场景物体全局求交
-    // 遍历this->objs所有元素，找到距离最近的相交物体，从引用参数回传 HitGeometryObj
-    // 返回击中物体名称、三角面元索引、击中位置
-    bool isHit = false;
+    // 遍历this->objs所有元素，找到距离最近的相交物体
+    // 返回击中物体名称、击中对象信息
 
-    float min_distance = FLT_MAX;
-    HitGeometryObj target_obj;
+    HitInfo target_obj;
+    // string target_name;
     for (auto &[name, obj] : this->objs) {
-      // 假定都生成了bvh树
-      assert(obj->bvhtree != nullptr && "element in scene.objs must construct bvh-tree!");
-      float distance;
-      HitGeometryObj hobj;
-      if (obj->bvhtree->intersect(ray.origin, ray.dir, hobj.hit_pos, distance, hobj.tri_id)) {
-        hobj.obj_name = name;
-        if (distance < min_distance) {
-          min_distance = distance;
-          target_obj = hobj;
-        }
-        isHit = true;
+      assert(obj->bvhtree != nullptr && "element in scene.objs must construct bvh-tree!"); // 假定都生成了bvh树
+
+      HitInfo tmp_obj = obj->bvhtree->intersect(ray);
+      if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
+        tmp_obj.geometry_name = name;
+        target_obj = tmp_obj;
+        // target_name = name;
+        // hobj.obj_name = name;
+        // hobj.isHit = true;
+        // if (distance < min_distance) {
+        //   min_distance = distance;
+        //   target_obj = hobj;
+        // }
       }
     }
-    if (isHit) {
-      hit_obj = target_obj;
-      // cout << "光线击中物体 \"" << hit_obj.obj_name << "\"  tri_id=" << hit_obj.tri_id << " hit_pos=(" << hit_obj.hit_pos.x << ", " << hit_obj.hit_pos.y << ", " << hit_obj.hit_pos.z << ")" << endl;
-    }
+    // if (isHit) {
+    //   hit_obj = target_obj;
+    //   // cout << "光线击中物体 \"" << hit_obj.obj_name << "\"  tri_id=" << hit_obj.tri_id << " hit_pos=(" << hit_obj.hit_pos.x << ", " << hit_obj.hit_pos.y << ", " << hit_obj.hit_pos.z << ")" << endl;
+    // }
 
-    return isHit;
+    return target_obj;
   }
 
-  vec3 trace_ray(Ray ray, HitGeometryObj obj, float PR, uint32_t recursive_depth = 0, shared_ptr<vector<vec3>> vert_buffer = nullptr) {
+  vec3 trace_ray(Ray ray, const HitInfo &obj, float PR, uint32_t recursive_depth = 0, shared_ptr<vector<vec3>> vert_buffer = nullptr) {
     // recursive_depth用以记录该函数的递归深度，同时在可视化光线路径时用于记录顶点数量
     // recursive_depth=0表示对该函数的“根调用”，其他为递归调用
 
@@ -1301,34 +1305,40 @@ public:
 
     float PR_D = distr(this->random_generator);
     if (PR > PR_D) { // 俄罗斯赌轮盘
-      assert(this->objs.find(obj.obj_name) != this->objs.end() && "trace_ray hit object cannot found in scene.objs!");
-      shared_ptr<GeometryRenderObject> gobj = this->objs[obj.obj_name];
+      // cout << "geometry name : " << obj.geometry_name << endl;
+      assert(this->objs.find(obj.geometry_name) != this->objs.end() && "trace_ray hit object cannot found in scene.objs!");
+
+      shared_ptr<GeometryRenderObject> gobj = this->objs[obj.geometry_name];
       shared_ptr<Geometry> geometry = gobj->geometry;
       mat4 model = gobj->transform.getModel();
 
-      TriangleSampler tri(geometry->vertices, geometry->surfaces[obj.tri_id], model);
+      TriangleSampler tri(geometry->vertices, geometry->surfaces[obj.triangle_idx], model);
       vec3 tri_center = tri.calcCenter();
       vec3 tri_norm = tri.calcNorm();
       float tri_area = tri.calcArea();
       vec3 wi = tri.hemisphereSampleDir();
 
-      assert(tri_area > 0.0f && "triangle area is equal to zero!");
+      // printf("triangle pts: (%.4f,%.4f,%.4f) (%.4f,%.4f,%.4f) (%.4f,%.4f,%.4f)\n", tri.pt[0].x,tri.pt[0].y,tri.pt[0].z,
+      // tri.pt[1].x,tri.pt[1].y,tri.pt[1].z,tri.pt[2].x,tri.pt[2].y,tri.pt[2].z);
 
-      float cosine = glm::dot(ray.dir, tri_norm);   // 出射余弦量(三角面元法线与出射光夹角)
-      float BRDF = 1.0f; // 应当根据gobj的材质计算出来，这里先假定为1.0，即光滑镜面反射
-      
-      HitGeometryObj new_obj;
-      if (hit_obj({obj.hit_pos + 0.01f * tri_norm, wi}, new_obj)) {
+      if (tri_area == 0.0f) {
+        // cerr << "Warning : zero area triangle exists! return zero vector." << endl;
+        return {0.0f, 0.0f, 0.0f};
+      }
+
+      float cosine = glm::dot(ray.dir, tri_norm); // 出射余弦量(三角面元法线与出射光夹角)
+      float BRDF = 1.0f;                          // 应当根据gobj的材质计算出来，这里先假定为1.0，即光滑镜面反射
+
+      HitInfo new_obj = hit_obj({obj.hitPos + 0.01f * tri_norm, wi});
+      if (new_obj.isHit) {
         if (vert_buffer != nullptr)
-          vert_buffer->push_back(new_obj.hit_pos + 0.01f * tri_norm);
-        L_indir += trace_ray({new_obj.hit_pos + 0.01f * tri_norm, -wi}, new_obj, PR, recursive_depth + 1, vert_buffer) * BRDF * cosine / PR;
+          vert_buffer->push_back(new_obj.hitPos + 0.01f * tri_norm);
+        L_indir += trace_ray({new_obj.hitPos + 0.01f * tri_norm, -wi}, new_obj, PR, recursive_depth + 1, vert_buffer) * BRDF * cosine / PR;
       } else {
         Pixel p = cubemap_sample(this->cubemaps, wi);
         L_dir += vec3(p.r, p.g, p.b) / 255.0f;
         if (vert_buffer != nullptr)
-          vert_buffer->push_back(obj.hit_pos + 10.0f * wi);
-        // cout << "" << recursive_depth << endl;
-        // printf("cubemap采样辐射率: %.4f  光线递归深度: %d\n", L_dir, recursive_depth);
+          vert_buffer->push_back(obj.hitPos + 10.0f * wi);
       }
     }
 
@@ -1356,23 +1366,24 @@ public:
         vec3 tri_norm = tri.calcNorm();
         vec3 wi = tri.hemisphereSampleDir();
 
-        HitGeometryObj new_obj;
         vec3 L_dir{0.0f, 0.0f, 0.0f};
         vec3 L_indir{0.0f, 0.0f, 0.0f};
         // 这里只计算irradiance，假定这个三角为黑体，吸收全部的辐射。否则，需要结合三角表面材质纹理来计算对irradiance的吸收率
         // 调用前初始化this->ray_obj->vertices可视化光线路径
 
-        shared_ptr<vector<vec3>> vec_buffer = make_shared<vector<vec3>>(); // 调试
-        vec_buffer->push_back(tri_center + 0.01f * tri_norm);              // 调试
-        if (hit_obj({tri_center + 0.01f * tri_norm, wi}, new_obj)) {
-          vec_buffer->push_back(new_obj.hit_pos); // 调试
-          L_indir += trace_ray({new_obj.hit_pos, -wi}, new_obj, 0.95, 0, vec_buffer);
+        shared_ptr<vector<vec3>> vec_buffer = make_shared<vector<vec3>>();
+        vec_buffer->push_back(tri_center + 0.01f * tri_norm);
+
+        HitInfo new_obj = hit_obj({tri_center + 0.01f * tri_norm, wi});
+        if (new_obj.isHit) {
+          vec_buffer->push_back(new_obj.hitPos);
+          L_indir += trace_ray({new_obj.hitPos, -wi}, new_obj, 0.95, 0, vec_buffer);
         } else {
-          vec_buffer->push_back(tri_center + 10.0f * wi); // 调试
+          vec_buffer->push_back(tri_center + 10.0f * wi);
           Pixel p = cubemap_sample(this->cubemaps, wi);
           L_dir += vec3(p.r, p.g, p.b) / 255.0f;
         }
-        this->ray_buffer->push(vec_buffer); // 调试
+        this->ray_buffer->push(vec_buffer);
 
         // 将计算的irradiance的结果存储
         vec3 Lo = L_dir + L_indir;

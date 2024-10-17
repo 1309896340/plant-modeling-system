@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <cfloat>
 #include <cstdint>
 
 #include <deque>
@@ -31,6 +32,14 @@ using glm::vec4;
 struct Ray {
   vec3 origin{0.0f, 0.0f, 0.0f};
   vec3 dir{0.0f, 0.0f, 0.0f};
+};
+
+struct HitInfo {
+  bool isHit{false};
+  vec3 hitPos{0.0f, 0.0f, 0.0f};
+  uint32_t triangle_idx{0};
+  string geometry_name;
+  float distance{FLT_MAX};
 };
 
 template <typename T>
@@ -82,39 +91,43 @@ int findKPosVal(vector<T> arr, int left, int right, int k) {
   }
 }
 
-bool hit_triangle(const vec3 &origin, const vec3 &dir, const vec3 &p1,
-                  const vec3 &p2, const vec3 &p3, vec3 &hit_pos,
-                  float &distance) {
-  vec3 _dir = glm::normalize(dir);
-  float det_base = glm::determinant(mat3(-_dir, p1 - p3, p2 - p3));
-  if (glm::abs(det_base) < 1e-7) {
-    // 此时光线和三角面为近似平行的情况
-    // 给det限定最小值，这会造成distance被低估
-    // det_base = 1e-7;
-    // cerr << "hit_triangle warning. The determinant goes to 0!" << endl;
+// bool hit_triangle(const vec3 &origin, const vec3 &dir, const vec3 &p1,const vec3 &p2, const vec3 &p3, vec3 &hit_pos, float &distance) {
+HitInfo hit_triangle(Ray ray, const vec3 &p1, const vec3 &p2, const vec3 &p3) {
+  // 返回(是否击中, 击中位置, 距离)
+  bool isHit{false};
+  vec3 hitPos{ray.origin};
+  float distance{FLT_MAX};
 
+  HitInfo target;
+
+  vec3 _dir = glm::normalize(ray.dir);
+  float det_base = glm::determinant(mat3(-_dir, p1 - p3, p2 - p3));
+  if (glm::abs(det_base) < 1e-6) {
     // 平行视作未击中
-    distance = 0;
-    hit_pos = origin;
-    return false;
-  }
-  float t_det = glm::determinant(mat3(origin - p3, p1 - p3, p2 - p3));
-  float a1_det = glm::determinant(mat3(-_dir, origin - p3, p2 - p3));
-  float a2_det = glm::determinant(mat3(-_dir, p1 - p3, origin - p3));
-  float t = t_det / det_base;
-  float a1 = a1_det / det_base;
-  float a2 = a2_det / det_base;
-  if (a1 >= 0 && a1 <= 1 && a2 >= 0 && a2 <= 1 && a1 + a2 <= 1 && t > 0.0f) {
-    // 击中
-    distance = t;
-    hit_pos = origin + t * _dir;
-    return true;
+    target.isHit = false;
+    target.distance = 0;
+    target.hitPos = ray.origin;
   } else {
-    // 未击中
-    distance = 0;
-    hit_pos = origin;
-    return false;
+    float t_det = glm::determinant(mat3(ray.origin - p3, p1 - p3, p2 - p3));
+    float a1_det = glm::determinant(mat3(-_dir, ray.origin - p3, p2 - p3));
+    float a2_det = glm::determinant(mat3(-_dir, p1 - p3, ray.origin - p3));
+    float t = t_det / det_base;
+    float a1 = a1_det / det_base;
+    float a2 = a2_det / det_base;
+    if (a1 >= 0 && a1 <= 1 && a2 >= 0 && a2 <= 1 && a1 + a2 <= 1 && t > 0.0f) {
+      // 击中
+      target.isHit = true;
+      target.distance = t;
+      target.hitPos = ray.origin + t * _dir;
+    } else {
+      // 未击中
+      target.isHit = false;
+      target.distance = 0;
+      target.hitPos = ray.origin;
+    }
   }
+
+  return target;
 }
 
 class BoundingBox {
@@ -188,21 +201,21 @@ public:
                2, 6, 4, 6, 4, 5, 3, 7, 5, 7, 6, 7};
   }
 
-  bool hit(const vec3 &origin, const vec3 &dir) {
+  bool hit(Ray ray) {
     vec3 in_bound = this->min_bound;
     vec3 out_bound = this->max_bound;
 
-    if (dir.x < 0)
+    if (ray.dir.x < 0)
       swap(in_bound.x, out_bound.x);
-    if (dir.y < 0)
+    if (ray.dir.y < 0)
       swap(in_bound.y, out_bound.y);
-    if (dir.z < 0)
+    if (ray.dir.z < 0)
       swap(in_bound.z, out_bound.z);
 
     // 判断求交
-    vec3 ndir = glm::normalize(dir);
-    vec3 t_min_xyz = (in_bound - origin) / ndir;
-    vec3 t_max_xyz = (out_bound - origin) / ndir;
+    vec3 ndir = glm::normalize(ray.dir);
+    vec3 t_min_xyz = (in_bound - ray.origin) / ndir;
+    vec3 t_max_xyz = (out_bound - ray.origin) / ndir;
     float t_enter = glm::max(t_min_xyz.x, glm::max(t_min_xyz.y, t_min_xyz.z));
     float t_exit = glm::min(t_max_xyz.x, glm::min(t_max_xyz.y, t_max_xyz.z));
     if (t_enter <= t_exit && t_exit >= 0)
@@ -357,26 +370,23 @@ public:
     }
   }
 
-  bool intersect(const vec3 &origin, const vec3 &dir, vec3 &hit_pos,
-                 float &distance, uint32_t &triangle_idx) {
+  // tuple<bool, vec3, float, uint32_t> intersect(const vec3 &origin, const vec3 &dir, vec3 &hit_pos,float &distance, uint32_t &triangle_idx) {
+  HitInfo intersect(Ray ray) {
+    // 返回(是否击中, 击中位置, 距离, 三角索引)
 
     deque<BvhNode *> buf{this->root};
     vector<BvhNode *> hit_table; // 所有击中包围盒的叶节点
-    bool isHit = false;
-
     while (!buf.empty()) {
       BvhNode *cur_node = buf.front();
       buf.pop_front();
 
-      if (!cur_node->box->hit(origin, dir))
+      if (!cur_node->box->hit(ray))
         continue;
-
-      // 击中，先判断cur_node是否为叶节点
+      // 击中，判断cur_node是否为叶节点，是则加入hit_table
       if (cur_node->left == nullptr && cur_node->right == nullptr) {
         hit_table.push_back(cur_node);
         continue;
       }
-
       // 击中，但不是叶节点
       if (cur_node->left != nullptr)
         buf.push_back(cur_node->left);
@@ -384,42 +394,22 @@ public:
         buf.push_back(cur_node->right);
     }
 
-    // 遍历hit_table，与所有其中的三角求交，将它们以距离从近到远排序
-    struct HitInfo {
-      vec3 hit_pos{0.0f, 0.0f, 0.0f};
-      uint32_t triangle_idx;
-      float distance;
-    };
-
-    vector<HitInfo> infos; // 与碰撞叶节点中三角形求交成功的结果列表
+    // 从hit_table中寻找最近击中三角
+    HitInfo target_obj;
     for (int i = 0; i < hit_table.size(); i++) {
       BvhNode *cur_node = hit_table[i];
-      Surface tri_idx = this->surfaces[cur_node->triangles[0]];
-      vec3 p1 = this->vertices[tri_idx.tidx[0]];
-      vec3 p2 = this->vertices[tri_idx.tidx[1]];
-      vec3 p3 = this->vertices[tri_idx.tidx[2]];
-      HitInfo info;
-      if (hit_triangle(origin, dir, p1, p2, p3, info.hit_pos, info.distance)) {
-        info.triangle_idx = cur_node->triangles[0];
-        infos.emplace_back(info);
+      Surface triangle = this->surfaces[cur_node->triangles[0]];
+      vec3 pt[3];
+      for (int j = 0; j < 3; j++)
+        pt[j] = this->vertices[triangle.tidx[j]];
+
+      HitInfo tmp_obj = hit_triangle(ray, pt[0], pt[1], pt[2]);
+      if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
+          target_obj = tmp_obj;
       }
     }
-    if (infos.size() == 0) {
-      isHit = false;
-    } else {
-      // cout << "击中 " << infos.size() << " 个三角" << endl;
-      auto min_iter = std::min_element(
-          infos.begin(), infos.end(), [](const HitInfo &h1, const HitInfo &h2) {
-            return h1.distance < h2.distance;
-          });
-      const HitInfo hinfo = *min_iter;
-      hit_pos = hinfo.hit_pos;
-      distance = hinfo.distance;
-      triangle_idx = hinfo.triangle_idx;
-      isHit = true;
-    }
 
-    return isHit;
+    return target_obj;
   }
 
   ~BvhTree() {
