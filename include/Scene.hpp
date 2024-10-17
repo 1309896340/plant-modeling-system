@@ -764,28 +764,8 @@ public:
     return {this->camera.getPosition(), dir};
   }
 
-  void imgui_menu() {
-
-    // ImGui::ShowDemoWindow();
-    imgui_docking_render();
-
-    ImGui::Begin(TEXT("场景"));
-    if (ImGui::TreeNodeEx(TEXT("相机"), ImGuiTreeNodeFlags_Selected |
-                                            ImGuiTreeNodeFlags_DefaultOpen)) {
-      bool is_theta_changed = ImGui::SliderFloat(
-          TEXT("天顶角"), &this->camera.theta_s, 0.0f, 180.0f, "%.1f");
-      bool is_phi_changed = ImGui::SliderFloat(
-          TEXT("方向角"), &this->camera.phi_s, -180.0f, 180.0f, "%.1f");
-      if (is_theta_changed || is_phi_changed)
-        this->camera.updateToward();
-
-      if (ImGui::InputFloat3(TEXT("位置"),
-                             glm::value_ptr(this->camera.position_s), "%.2f",
-                             0)) {
-        this->camera.updatePositionFromShadow();
-      }
-
-      // 鼠标交互动作
+  void imgui_interact(){
+          // 鼠标交互动作
       // 记录下“相机环绕”时的相机球坐标
       if (!io->WantCaptureMouse) {
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
@@ -902,6 +882,29 @@ public:
       if (ImGui::IsKeyDown(ImGuiKey_D)) {
         this->camera.move_relative({0.1f, 0.0f, 0.0f});
       }
+  }
+
+  void imgui_menu() {
+
+    ImGui::ShowDemoWindow();
+    imgui_docking_render();
+
+    ImGui::Begin(TEXT("场景"));
+    if (ImGui::TreeNodeEx(TEXT("相机"), ImGuiTreeNodeFlags_Selected |
+                                            ImGuiTreeNodeFlags_DefaultOpen)) {
+      bool is_theta_changed = ImGui::SliderFloat(
+          TEXT("天顶角"), &this->camera.theta_s, 0.0f, 180.0f, "%.1f");
+      bool is_phi_changed = ImGui::SliderFloat(
+          TEXT("方向角"), &this->camera.phi_s, -180.0f, 180.0f, "%.1f");
+      if (is_theta_changed || is_phi_changed)
+        this->camera.updateToward();
+
+      if (ImGui::InputFloat3(TEXT("位置"),
+                             glm::value_ptr(this->camera.position_s), "%.2f",
+                             0)) {
+        this->camera.updatePositionFromShadow();
+      }
+
       ImGui::TreePop();
     }
 
@@ -1568,6 +1571,7 @@ public:
 
       render();
 
+      imgui_interact();
       imgui_menu();
 
       ImGui::Render();
