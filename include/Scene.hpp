@@ -522,6 +522,7 @@ private:
   bool isShowLight{true};
   bool isShowRay{false};
   bool isShowCoord{false};
+  bool isShowWireFrame{false};
 
   // imgui的状态变量
   struct ImguiInfo {
@@ -573,12 +574,12 @@ public:
     }
     glEnable(GL_MULTISAMPLE); // 开启MSAA抗锯齿
     glEnable(GL_DEPTH_TEST);  // 开启深度测试
-    // glEnable(GL_CULL_FACE);   // 开启面剔除
-    glFrontFace(GL_CCW); // 逆时针索引顺序为正面
-    glLineWidth(1.0f);
-#ifdef ENBALE_POLYGON_VISUALIZATION
-    glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-#endif
+    glEnable(GL_CULL_FACE);   // 开启面剔除
+    glFrontFace(GL_CCW);      // 逆时针索引顺序为正面
+    glLineWidth(1.5f);
+    // #ifdef ENBALE_POLYGON_VISUALIZATION
+    //     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    // #endif
 
     glfwSetFramebufferSizeCallback(this->window, framebufferResizeCallback);
     glfwSetErrorCallback(errorCallback);
@@ -1075,14 +1076,28 @@ public:
         ImGui::TreePop();
       }
 
-      if (ImGui::TreeNodeEx("调试")) {
-        if (ImGui::Checkbox(TEXT("光线追踪可视化"), &this->isShowRay)) {
+      if (ImGui::TreeNodeEx(TEXT("调试"))) {
+        ImGui::Checkbox(TEXT("光线追踪可视化"), &this->isShowRay);
+        ImGui::SameLine();
+        ImGui::PushID(0);
+        if (ImGui::Button(TEXT("更新"))) {
           this->compute_radiosity();
           this->printRadiosityInfo();
         }
+        ImGui::PopID();
 
-        if (ImGui::Checkbox(TEXT("三角局部坐标可视化"), &this->isShowCoord)) {
+        ImGui::Checkbox(TEXT("三角局部坐标可视化"), &this->isShowCoord);
+        ImGui::SameLine();
+        ImGui::PushID(1);
+        if (ImGui::Button(TEXT("更新")))
           this->test_triangle_coord();
+        ImGui::PopID();
+
+        if (ImGui::Checkbox(TEXT("线框模式"), &this->isShowWireFrame)) {
+          if (this->isShowWireFrame)
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+          else
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         }
 
         ImGui::TreePop();
@@ -1598,7 +1613,6 @@ public:
     }
 #endif
 
-#ifdef ENABLE_BOUNDINGBOX_VISUALIZATION
     // 5. 渲染包围盒边框
     cur_shader = this->shaders["line"];
     cur_shader->use();
@@ -1620,12 +1634,12 @@ public:
         }
       }
     }
-#endif
+
     // 6. 可视化光线追踪
-    cur_shader = this->shaders["line"];
-    cur_shader->use();
     if (this->isShowRay)
       lines["Ray"]->draw(cur_shader);
+    
+    // 6. 可视化三角局部坐标系
     if (this->isShowCoord)
       lines["Coord"]->draw(cur_shader);
   }

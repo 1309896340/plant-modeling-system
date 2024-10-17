@@ -271,25 +271,21 @@ public:
     cur_node->parent = nullptr;
 
     this->root = cur_node;
-
     // 开始划分，创建一个队列，以back进front出的顺序，记录待划分节点
     deque<BvhNode *> node_buf{this->root};
-
-    // 处理node_buf直到为空
     while (!node_buf.empty()) {
       cur_node = node_buf.front();
       node_buf.pop_front();
-      // 进行对cur_node的划分，判断聚类维度
+      // 对cur_node的划分，选择分割维度
       vector<float> widths{cur_node->box->getXWidth(),
                            cur_node->box->getYWidth(),
                            cur_node->box->getZWidth()};
       uint32_t dimension_idx = std::distance(
           widths.begin(), std::max_element(widths.begin(), widths.end()));
       vector<float> comp_positions(cur_node->triangles.size());
-      for (int k = 0; k < cur_node->triangles.size();
-           k++) { // 计算cur_node->triangles里每个三角面元质心位置
+      for (int k = 0; k < cur_node->triangles.size(); k++) { // 计算cur_node->triangles里每个三角面元质心位置
         Surface surf = surfaces[cur_node->triangles[k]];
-        // 计算三角的质心的x分量，dimension_idx决定了计算哪个维度的质心位置分量
+        // 计算三角的质心的第i分量，dimension_idx决定按哪个维度的质心位置进行分割
         float center_pos = 0.0f;
         for (int i = 0; i < 3; i++)
           center_pos += glm::value_ptr(vertices[surf.tidx[i]])[dimension_idx];
@@ -301,7 +297,7 @@ public:
       if (comp_positions.size() == 1) {
         // cur_node为叶子节点，不进行划分
       } else if (comp_positions.size() == 2) {
-        // 简单比较comp_positions分成左右节点
+        // 根据comp_positions分成左右节点
         if (comp_positions[0] < comp_positions[1]) {
           left_triangles.push_back(cur_node->triangles[0]);
           right_triangles.push_back(cur_node->triangles[1]);
