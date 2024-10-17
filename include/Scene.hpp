@@ -455,6 +455,7 @@ private:
   bool isShowGround{true};
   bool isShowAxis{true};
   bool isShowLight{true};
+  bool isShowRay{false};
 
   // imgui的状态变量
   struct ImguiInfo {
@@ -764,124 +765,124 @@ public:
     return {this->camera.getPosition(), dir};
   }
 
-  void imgui_interact(){
-          // 鼠标交互动作
-      // 记录下“相机环绕”时的相机球坐标
-      if (!io->WantCaptureMouse) {
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-          if (ImGui::IsKeyDown(ImGuiKey_ModShift)) {
+  void imgui_interact() {
+    // 鼠标交互动作
+    // 记录下“相机环绕”时的相机球坐标
+    if (!io->WantCaptureMouse) {
+      if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        if (ImGui::IsKeyDown(ImGuiKey_ModShift)) {
+          this->camera.record();
+        } else {
+          // 鼠标左击选中场景物体，遍历所有物体的包围盒求交
+          this->imgui.mouse_pos = io->MousePos;
+        }
+      }
+
+      if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
+        if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
+          // 以世界坐标锚点为中心做旋转
+          if (this->imgui.start_record) {
+            // 相机记录当前环绕位置和锚点距离
             this->camera.record();
-          } else {
-            // 鼠标左击选中场景物体，遍历所有物体的包围盒求交
-            this->imgui.mouse_pos = io->MousePos;
+            this->imgui.start_record = false;
           }
+          this->camera.surround(
+              MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x,
+              MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y);
+        } else {
+          // 以相机为中心旋转
+          this->camera.rotate(
+              {MOUSE_VIEW_ROTATE_SENSITIVITY * io->MouseDelta.x,
+               MOUSE_VIEW_ROTATE_SENSITIVITY * io->MouseDelta.y, 0.0});
         }
+      }
+      if (ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f)) {
+        // 沿着相机姿态坐标系的上下左右进行平移
+        this->camera.move_relative(
+            {-MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.x,
+             MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.y, 0.0f});
+      }
 
-        if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 0.0f)) {
-          if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) {
-            // 以世界坐标锚点为中心做旋转
-            if (this->imgui.start_record) {
-              // 相机记录当前环绕位置和锚点距离
-              this->camera.record();
-              this->imgui.start_record = false;
+      if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+        // 相机准备好下一次环绕的启动
+        this->imgui.start_record = true;
+
+        // 鼠标按下不挪动松开，则执行场景物体拾取
+        ImVec2 mouse_pos = io->MousePos;
+        float move_offset =
+            std::sqrt(std::powf(mouse_pos.x - this->imgui.mouse_pos.x, 2.0f) +
+                      std::powf(mouse_pos.y - this->imgui.mouse_pos.y, 2.0f));
+        // cout << "鼠标拖拽距离：" << move_offset << endl;
+        if (move_offset < 8.0f) {
+          // 按下与弹起位置一致，中间没有鼠标大幅拖拽，则进行拾取操作
+
+          Ray ray = cast_ray_from_mouse();
+
+          struct HitObj {
+            uint32_t id{0};   // 该物体在Scene::imgui::items中的索引位置
+            uint32_t type{0}; // 0为普通包围盒，1为层次包围盒
+            vec3 hitPos{0.0f, 0.0f, 0.0f};
+          };
+
+          float min_distance = FLT_MAX;
+          HitObj target_obj;
+          bool isisHit = false;
+          for (auto &[name, oobj] : this->objs) {
+            if (oobj->isAux) {
+              // 排除该对象
+              continue;
             }
-            this->camera.surround(
-                MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.x,
-                MOUSE_VIEW_ROTATE_SENSITIVITY * 0.04 * io->MouseDelta.y);
-          } else {
-            // 以相机为中心旋转
-            this->camera.rotate(
-                {MOUSE_VIEW_ROTATE_SENSITIVITY * io->MouseDelta.x,
-                 MOUSE_VIEW_ROTATE_SENSITIVITY * io->MouseDelta.y, 0.0});
-          }
-        }
-        if (ImGui::IsMouseDragging(ImGuiMouseButton_Right, 0.0f)) {
-          // 沿着相机姿态坐标系的上下左右进行平移
-          this->camera.move_relative(
-              {-MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.x,
-               MOUSE_VIEW_TRANSLATE_SENSITIVITY * io->MouseDelta.y, 0.0f});
-        }
-
-        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-          // 相机准备好下一次环绕的启动
-          this->imgui.start_record = true;
-
-          // 鼠标按下不挪动松开，则执行场景物体拾取
-          ImVec2 mouse_pos = io->MousePos;
-          float move_offset =
-              std::sqrt(std::powf(mouse_pos.x - this->imgui.mouse_pos.x, 2.0f) +
-                        std::powf(mouse_pos.y - this->imgui.mouse_pos.y, 2.0f));
-          // cout << "鼠标拖拽距离：" << move_offset << endl;
-          if (move_offset < 8.0f) {
-            // 按下与弹起位置一致，中间没有鼠标大幅拖拽，则进行拾取操作
-
-            Ray ray = cast_ray_from_mouse();
-
-            struct HitObj {
-              uint32_t id{0};   // 该物体在Scene::imgui::items中的索引位置
-              uint32_t type{0}; // 0为普通包围盒，1为层次包围盒
-              vec3 hitPos{0.0f, 0.0f, 0.0f};
-            };
-
-            float min_distance = FLT_MAX;
-            HitObj target_obj;
-            bool isisHit = false;
-            for (auto &[name, oobj] : this->objs) {
-              if (oobj->isAux) {
-                // 排除该对象
-                continue;
+            bool isHit = false;
+            float distance = 0.0f;
+            HitObj obj;
+            if (oobj->bvhtree != nullptr) {
+              // 层次包围盒求交
+              uint32_t triangle_idx;
+              if (oobj->bvhtree->intersect(ray.origin, ray.dir, obj.hitPos, distance, triangle_idx)) {
+                isHit = true;
+                obj.type = 1;
               }
-              bool isHit = false;
-              float distance = 0.0f;
-              HitObj obj;
-              if (oobj->bvhtree != nullptr) {
-                // 层次包围盒求交
-                uint32_t triangle_idx;
-                if (oobj->bvhtree->intersect(ray.origin, ray.dir, obj.hitPos, distance, triangle_idx)) {
-                  isHit = true;
-                  obj.type = 1;
-                }
-              } else {
-                // 普通外层包围盒求交
-                if (oobj->box->hit(this->camera.getPosition(), ray.dir)) {
-                  isHit = true;
-                  obj.type = 0;
-                  distance = glm::distance(this->camera.getPosition(), oobj->box->getBoxCenter());
-                }
-              }
-              if (isHit && distance < min_distance) {
-                obj.id = std::distance(this->imgui.items.begin(), std::find(this->imgui.items.begin(), this->imgui.items.end(), name));
-                target_obj = obj;
-                min_distance = distance;
-                isisHit = true;
+            } else {
+              // 普通外层包围盒求交
+              if (oobj->box->hit(this->camera.getPosition(), ray.dir)) {
+                isHit = true;
+                obj.type = 0;
+                distance = glm::distance(this->camera.getPosition(), oobj->box->getBoxCenter());
               }
             }
-            if (isisHit) {
-              this->imgui.selected_idx = target_obj.id;
-              this->camera.setAnchor(
-                  this->objs[this->imgui.items[this->imgui.selected_idx]]
-                      ->box->getBoxCenter());
-              if (target_obj.type == 1) {
-                this->aux["Cursor"]->transform.setPosition(target_obj.hitPos);
-                printf("选中点位置：(%.2f, %.2f, %.2f)\n", target_obj.hitPos.x, target_obj.hitPos.y, target_obj.hitPos.z);
-              }
+            if (isHit && distance < min_distance) {
+              obj.id = std::distance(this->imgui.items.begin(), std::find(this->imgui.items.begin(), this->imgui.items.end(), name));
+              target_obj = obj;
+              min_distance = distance;
+              isisHit = true;
+            }
+          }
+          if (isisHit) {
+            this->imgui.selected_idx = target_obj.id;
+            this->camera.setAnchor(
+                this->objs[this->imgui.items[this->imgui.selected_idx]]
+                    ->box->getBoxCenter());
+            if (target_obj.type == 1) {
+              this->aux["Cursor"]->transform.setPosition(target_obj.hitPos);
+              printf("选中点位置：(%.2f, %.2f, %.2f)\n", target_obj.hitPos.x, target_obj.hitPos.y, target_obj.hitPos.z);
             }
           }
         }
       }
+    }
 
-      if (ImGui::IsKeyDown(ImGuiKey_W)) {
-        this->camera.move_relative({0.0f, 0.0f, -0.1f});
-      }
-      if (ImGui::IsKeyDown(ImGuiKey_S)) {
-        this->camera.move_relative({0.0f, 0.0f, 0.1f});
-      }
-      if (ImGui::IsKeyDown(ImGuiKey_A)) {
-        this->camera.move_relative({-0.1f, 0.0f, 0.0f});
-      }
-      if (ImGui::IsKeyDown(ImGuiKey_D)) {
-        this->camera.move_relative({0.1f, 0.0f, 0.0f});
-      }
+    if (ImGui::IsKeyDown(ImGuiKey_W)) {
+      this->camera.move_relative({0.0f, 0.0f, -0.1f});
+    }
+    if (ImGui::IsKeyDown(ImGuiKey_S)) {
+      this->camera.move_relative({0.0f, 0.0f, 0.1f});
+    }
+    if (ImGui::IsKeyDown(ImGuiKey_A)) {
+      this->camera.move_relative({-0.1f, 0.0f, 0.0f});
+    }
+    if (ImGui::IsKeyDown(ImGuiKey_D)) {
+      this->camera.move_relative({0.1f, 0.0f, 0.0f});
+    }
   }
 
   void imgui_menu() {
@@ -985,8 +986,15 @@ public:
         ImGui::TreePop();
       }
 
-      if(ImGui::Button(TEXT("重新投射光线"))){
-        this->compute_radiosity();
+      if (ImGui::TreeNodeEx("光线追踪")) {
+        if (ImGui::Button(TEXT("清空"))) {
+          this->isShowRay = false;
+        }
+        if (ImGui::Button(TEXT("投射光线"))) {
+          this->compute_radiosity();
+          this->isShowRay = true;
+        }
+        ImGui::TreePop();
       }
 
       ImGui::End();
@@ -1227,7 +1235,7 @@ public:
     return isHit;
   }
 
-  float trace_ray(Ray ray, HitGeometryObj obj, float PR, uint32_t recursive_depth = 0, shared_ptr<vector<vec3>> vert_buffer = nullptr) {
+  vec3 trace_ray(Ray ray, HitGeometryObj obj, float PR, uint32_t recursive_depth = 0, shared_ptr<vector<vec3>> vert_buffer = nullptr) {
     // recursive_depth用以记录该函数的递归深度，同时在可视化光线路径时用于记录顶点数量
     // recursive_depth=0表示对该函数的“根调用”，其他为递归调用
 
@@ -1237,15 +1245,8 @@ public:
     // 因此，该函数还需要传入“击中的三角面元所属的几何体”与“击中的三角面元的索引”，这里描述为HitGeometryObj结构体
 
     assert(PR < 1.0f && PR > 0.0f);
-    // 计算光源贡献
-    float L_dir = 0.0f;
-    // 。。。       // 需要做与光源之间的遮挡检测
+    vec3 L_dir{0.0f, 0.0f, 0.0f}, L_indir{0.0f, 0.0f, 0.0f};
 
-    // 由于使用了cubemap作为光源，因此对于L_inder中光线没有碰撞的到的物体，仅需在那个方向返回一个对cubemap颜色值的采样
-    // 将这个颜色采样值换算为radiance即可，这里假设cubemap在某一点上的radiance为该像素点的灰度，即将rgb取平均
-
-    // 计算间接光贡献
-    float L_indir = 0.0f;
     uniform_real_distribution<> distr(0.0, 1.0);
 
     float PR_D = distr(this->random_generator);
@@ -1287,7 +1288,7 @@ public:
         L_indir += trace_ray({new_obj.hit_pos + 0.01f * norm, -wi}, new_obj, PR, recursive_depth + 1, vert_buffer) * BRDF * cosine / PR;
       } else {
         Pixel p = cubemap_sample(this->cubemaps, wi);
-        L_dir += (p.r + p.g + p.b) / 3.0f / 255.0f;
+        L_dir += vec3(p.r, p.g, p.b) / 255.0f;
         if (vert_buffer != nullptr)
           vert_buffer->push_back(obj.hit_pos + 10.0f * wi);
         // cout << "" << recursive_depth << endl;
@@ -1333,35 +1334,30 @@ public:
         vec3 wi = glm::normalize(sinf(theta) * cosf(phi) * tri_front + sinf(theta) * sinf(phi) * tri_right + cosf(theta) * tri_up);
 
         HitGeometryObj new_obj;
-        float L_dir = 0.0f;
-        float L_indir = 0.0f;
+        vec3 L_dir{0.0f, 0.0f, 0.0f};
+        vec3 L_indir{0.0f, 0.0f, 0.0f};
         // 这里只计算irradiance，假定这个三角为黑体，吸收全部的辐射。否则，需要结合三角表面材质纹理来计算对irradiance的吸收率
         // 调用前初始化this->ray_obj->vertices可视化光线路径
 
-        // shared_ptr<RayObject> obj = generate_ray_object();
-        shared_ptr<vector<vec3>> vec_buffer = make_shared<vector<vec3>>();
-        vec_buffer->push_back(tri_center + 0.01f * norm);
+        shared_ptr<vector<vec3>> vec_buffer = make_shared<vector<vec3>>(); // 调试
+        vec_buffer->push_back(tri_center + 0.01f * norm);                  // 调试
         if (hit_obj({tri_center + 0.01f * norm, wi}, new_obj)) {
-          vec_buffer->push_back(new_obj.hit_pos);
+          vec_buffer->push_back(new_obj.hit_pos); // 调试
           L_indir += trace_ray({new_obj.hit_pos, -wi}, new_obj, 0.95, 0, vec_buffer);
-          // L_indir += trace_ray({new_obj.hit_pos, -wi}, new_obj, 0.95, 0, nullptr);
         } else {
-          vec_buffer->push_back(tri_center + 10.0f * wi); // 没击中就朝着采样方向延伸10单位距离
-          // 检索cubemap返回颜色值作为radiance
+          vec_buffer->push_back(tri_center + 10.0f * wi); // 调试
           Pixel p = cubemap_sample(this->cubemaps, wi);
-          L_dir += (p.r + p.g + p.b) / 3.0f / 255.0f;
+          L_dir += vec3(p.r, p.g, p.b) / 255.0f;
         }
-        // 将vec_buffer加入到RayBufferObject中进行渲染
-
-        this->ray_buffer->push(vec_buffer);
+        this->ray_buffer->push(vec_buffer); // 调试
 
         // 将计算的irradiance的结果存储
-        float Lo = L_dir + L_indir;
-        cur_obj->radiosity.radiant_flux[i] = Lo;
+        vec3 Lo = L_dir + L_indir;
+        cur_obj->radiosity.radiant_flux[i] = (Lo.r + Lo.g + Lo.b) / 3.0f;
         // printf("物体\"%s\"第(%d/%llu)面元 radiance: %.4f\n", name.c_str(), i, geometry->surfaces.size(), Lo);
       }
     }
-    this->ray_buffer->updateVBO();
+    this->ray_buffer->updateVBO(); // 调试
   }
 
   void imgui_docking_render(bool *p_open = nullptr) {
@@ -1546,12 +1542,12 @@ public:
       }
     }
 #endif
-#ifdef ENBALE_RAY_VISUALIZATION
     // 6. 可视化光线追踪
-    cur_shader = this->shaders["line"];
-    cur_shader->use();
-    this->ray_buffer->draw(cur_shader);
-#endif
+    if (this->isShowRay) {
+      cur_shader = this->shaders["line"];
+      cur_shader->use();
+      this->ray_buffer->draw(cur_shader);
+    }
   }
   void setWindowSize(float width, float height) {
     this->width = width;

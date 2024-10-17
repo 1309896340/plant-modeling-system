@@ -1,11 +1,9 @@
 ﻿// #define ENABLE_NORMAL_VISUALIZATION
 // #define ENBALE_POLYGON_VISUALIZATION
 #define ENABLE_BOUNDINGBOX_VISUALIZATION
-// #define ENBALE_RAY_VISUALIZATION
 
 #include <memory>
 
-// #include "Bounding.hpp"
 #include "Scene.hpp"
 
 using namespace std;
