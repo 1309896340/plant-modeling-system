@@ -42,6 +42,9 @@
 
 #define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
 #define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.06f
+#define RAY_LENGTH_TO_CUBEMAP 10.0f
+#define SURFACE_NORMAL_OFFSET 0.005f
+
 #define TEXT(txt) reinterpret_cast<const char *>(u8##txt)
 
 // 仅用于该文件内的调试
@@ -204,8 +207,8 @@ Pixel cubemap_sample(PngImage *cubmaps, vec3 dir) {
   // 将(x,y)映射到图片像素上
   uint32_t width = cubmaps[map_idx].width;
   uint32_t height = cubmaps[map_idx].height;
-  uint32_t row_idx = static_cast<uint32_t>(height * (0.5f - y / 2));
-  uint32_t col_idx = static_cast<uint32_t>(width * (0.5f + x / 2));
+  uint32_t row_idx = static_cast<uint32_t>(height * (0.5f - y / 2.0f));
+  uint32_t col_idx = static_cast<uint32_t>(width * (0.5f + x / 2.0f));
 
   row_idx = min(row_idx, height - 1);
   col_idx = min(col_idx, width - 1);
@@ -574,8 +577,8 @@ public:
     }
     glEnable(GL_MULTISAMPLE); // 开启MSAA抗锯齿
     glEnable(GL_DEPTH_TEST);  // 开启深度测试
-    glEnable(GL_CULL_FACE);   // 开启面剔除
-    glFrontFace(GL_CCW);      // 逆时针索引顺序为正面
+    // glEnable(GL_CULL_FACE);   // 开启面剔除
+    glFrontFace(GL_CCW); // 逆时针索引顺序为正面
     glLineWidth(1.5f);
     // #ifdef ENBALE_POLYGON_VISUALIZATION
     //     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -816,6 +819,7 @@ public:
   }
 
   void printRadiosityInfo() {
+    printf("============================output============================\n");
     for (auto &[name, cur_obj] : this->objs) {
       if (cur_obj->isAux)
         continue;
@@ -1362,51 +1366,111 @@ public:
     return target_obj;
   }
 
-  vec3 trace_ray(Ray ray, const HitInfo &obj, float PR, uint32_t recursive_depth = 0, shared_ptr<vector<vec3>> vert_buffer = nullptr) {
-    // recursive_depth用以记录该函数的递归深度，同时在可视化光线路径时用于记录顶点数量
-    // recursive_depth=0表示对该函数的“根调用”，其他为递归调用
-    assert(PR < 1.0f && PR > 0.0f);
+  // // 递归函数版本
+  // vec3 trace_ray(Ray ray, const HitInfo &obj, float PR, uint32_t recursive_depth = 0, shared_ptr<vector<vec3>> vert_buffer = nullptr) {
+  //   // recursive_depth用以记录该函数的递归深度，同时在可视化光线路径时用于记录顶点数量
+  //   // recursive_depth=0表示对该函数的“根调用”，其他为递归调用
+  //   assert(PR < 1.0f && PR > 0.0f);
+  //   uniform_real_distribution<> distr(0.0, 1.0);
+  //   vec3 L_dir{0.0f, 0.0f, 0.0f}, L_indir{0.0f, 0.0f, 0.0f};
+  //   float PR_D = distr(rdgen);
+  //   if (PR > PR_D) { // 俄罗斯赌轮盘
+  //     assert(this->objs.find(obj.geometry_name) != this->objs.end() && "trace_ray hit object cannot found in scene.objs!");
+
+  //     shared_ptr<GeometryRenderObject> gobj = this->objs[obj.geometry_name];
+  //     shared_ptr<Geometry> geometry = gobj->geometry;
+  //     mat4 model = gobj->transform.getModel();
+
+  //     TriangleSampler tri(geometry->vertices, geometry->surfaces[obj.triangle_idx], model);
+  //     vec3 tri_center = tri.calcCenter();
+  //     vec3 tri_norm = tri.calcNorm();
+  //     float tri_area = tri.calcArea();
+  //     vec3 wi = tri.hemisphereSampleDir();
+
+  //     if (tri_area == 0.0f)
+  //       // cerr << "Warning : zero area triangle exists! return zero vector." << endl;
+  //       return {0.0f, 0.0f, 0.0f};
+
+  //     float cosine = glm::dot(ray.dir, tri_norm); // 出射余弦量(三角面元法线与出射光夹角)
+  //     float BRDF = 1.0f;                          // 应当根据gobj的材质计算出来，这里先假定为1.0，即光滑镜面反射
+
+  //     HitInfo new_obj = hit_obj({obj.hitPos + 0.01f * tri_norm, wi});
+  //     if (new_obj.isHit) {
+  //       if (vert_buffer != nullptr)
+  //         vert_buffer->push_back(new_obj.hitPos);
+  //       L_indir += trace_ray({new_obj.hitPos, -wi}, new_obj, PR, recursive_depth + 1, vert_buffer) * BRDF * cosine / PR;
+  //     } else {
+  //       Pixel p = cubemap_sample(this->cubemaps, wi);
+  //       L_dir += vec3(p.r, p.g, p.b) / 255.0f;
+  //       if (vert_buffer != nullptr)
+  //         vert_buffer->push_back(obj.hitPos + 10.0f * wi);
+  //     }
+  //   }
+
+  //   return L_dir + L_indir;
+  // }
+
+  // void compute_radiosity(uint32_t sample_N = 100) {
+  //   uniform_real_distribution<> distr(0.0, 1.0);
+  //   rdgen.seed(42);
+
+  //   lines["Ray"]->clear();
+  //   // 遍历每个场景(非aux)物体
+  //   for (auto &[name, cur_obj] : this->objs) {
+  //     if (cur_obj->isAux)
+  //       continue;
+  //     // if (!cur_obj->isSelected) // 暂时只计算被选中目标
+  //     //   continue;
+
+  //     mat4 model = cur_obj->transform.getModel();
+  //     shared_ptr<Geometry> geometry = cur_obj->geometry;
+  //     cur_obj->radiosity.radiant_flux.resize(geometry->surfaces.size());
+
+  //     for (int i = 0; i < geometry->surfaces.size(); i++) {
+  //       TriangleSampler tri(geometry->vertices, geometry->surfaces[i], model);
+  //       vec3 tri_center = tri.calcCenter();
+  //       vec3 tri_norm = tri.calcNorm();
+
+  //       vec3 L_dir{0.0f, 0.0f, 0.0f};
+  //       vec3 L_indir{0.0f, 0.0f, 0.0f};
+  //       // 这里只计算irradiance，假定这个三角为黑体，吸收全部的辐射。否则，需要结合三角表面材质纹理来计算对irradiance的吸收率
+  //       // 调用前初始化this->ray_obj->vertices可视化光线路径
+
+  //       vec3 wi = tri.hemisphereSampleDir();
+
+  //       shared_ptr<vector<vec3>> vec_buffer = make_shared<vector<vec3>>();
+  //       vec_buffer->push_back(tri_center + 0.005f * tri_norm);
+
+  //       HitInfo new_obj = hit_obj({tri_center + 0.005f * tri_norm, wi});
+  //       if (new_obj.isHit) {
+  //         vec_buffer->push_back(new_obj.hitPos);
+  //         // L_indir += trace_ray({new_obj.hitPos, -wi}, new_obj, 0.95, 0, vec_buffer);
+  //         L_indir += trace_ray({new_obj.hitPos, -wi}, new_obj, 0.95, vec_buffer);
+  //       } else {
+  //         vec_buffer->push_back(tri_center + 10.0f * wi);
+  //         Pixel p = cubemap_sample(this->cubemaps, wi);
+  //         L_dir += vec3(p.r, p.g, p.b) / 255.0f;
+  //       }
+  //       lines["Ray"]->addPolygon(*vec_buffer);
+
+  //       // 将计算的irradiance的结果存储
+  //       vec3 Lo = L_dir + L_indir;
+  //       cur_obj->radiosity.radiant_flux[i] = Lo;
+  //       // printf("物体\"%s\"第(%d/%llu)面元 radiance: %.4f\n", name.c_str(), i, geometry->surfaces.size(), Lo);
+  //     }
+  //   }
+  //   lines["Ray"]->updateVBO(); // 调试
+  // }
+
+  // 路径上每条光线的信息
+  struct RayInfo {
+    vec3 BRDF{1.0f, 1.0f, 1.0f};
+    float cosine{1.0f};
+  };
+
+  void compute_radiosity(uint32_t sample_N = 20) {
     uniform_real_distribution<> distr(0.0, 1.0);
-    vec3 L_dir{0.0f, 0.0f, 0.0f}, L_indir{0.0f, 0.0f, 0.0f};
-    float PR_D = distr(rdgen);
-    if (PR > PR_D) { // 俄罗斯赌轮盘
-      assert(this->objs.find(obj.geometry_name) != this->objs.end() && "trace_ray hit object cannot found in scene.objs!");
-
-      shared_ptr<GeometryRenderObject> gobj = this->objs[obj.geometry_name];
-      shared_ptr<Geometry> geometry = gobj->geometry;
-      mat4 model = gobj->transform.getModel();
-
-      TriangleSampler tri(geometry->vertices, geometry->surfaces[obj.triangle_idx], model);
-      vec3 tri_center = tri.calcCenter();
-      vec3 tri_norm = tri.calcNorm();
-      float tri_area = tri.calcArea();
-      vec3 wi = tri.hemisphereSampleDir();
-
-      if (tri_area == 0.0f)
-        // cerr << "Warning : zero area triangle exists! return zero vector." << endl;
-        return {0.0f, 0.0f, 0.0f};
-
-      float cosine = glm::dot(ray.dir, tri_norm); // 出射余弦量(三角面元法线与出射光夹角)
-      float BRDF = 1.0f;                          // 应当根据gobj的材质计算出来，这里先假定为1.0，即光滑镜面反射
-
-      HitInfo new_obj = hit_obj({obj.hitPos + 0.01f * tri_norm, wi});
-      if (new_obj.isHit) {
-        if (vert_buffer != nullptr)
-          vert_buffer->push_back(new_obj.hitPos);
-        L_indir += trace_ray({new_obj.hitPos, -wi}, new_obj, PR, recursive_depth + 1, vert_buffer) * BRDF * cosine / PR;
-      } else {
-        Pixel p = cubemap_sample(this->cubemaps, wi);
-        L_dir += vec3(p.r, p.g, p.b) / 255.0f;
-        if (vert_buffer != nullptr)
-          vert_buffer->push_back(obj.hitPos + 10.0f * wi);
-      }
-    }
-
-    return L_dir + L_indir;
-  }
-
-  void compute_radiosity() {
-    uniform_real_distribution<> distr(0.0, 1.0);
+    // rdgen.seed(42);
 
     lines["Ray"]->clear();
     // 遍历每个场景(非aux)物体
@@ -1418,40 +1482,126 @@ public:
 
       mat4 model = cur_obj->transform.getModel();
       shared_ptr<Geometry> geometry = cur_obj->geometry;
+
       cur_obj->radiosity.radiant_flux.resize(geometry->surfaces.size());
+      // for(auto &rf: cur_obj->radiosity.radiant_flux)    // 重置清空
+      //   rf = vec3(0.0f,0.0f,0.0f);
+      // std::fill(cur_obj->radiosity.radiant_flux.begin(), cur_obj->radiosity.radiant_flux.end(), vec3(0.0f, 0.0f, 0.0f));
 
       for (int i = 0; i < geometry->surfaces.size(); i++) {
         TriangleSampler tri(geometry->vertices, geometry->surfaces[i], model);
         vec3 tri_center = tri.calcCenter();
         vec3 tri_norm = tri.calcNorm();
-        vec3 wi = tri.hemisphereSampleDir();
+        float tri_area = tri.calcArea();
 
-        vec3 L_dir{0.0f, 0.0f, 0.0f};
-        vec3 L_indir{0.0f, 0.0f, 0.0f};
+        if (tri.calcArea() == 0.0f) // 跳过无面积三角
+          continue;
+
         // 这里只计算irradiance，假定这个三角为黑体，吸收全部的辐射。否则，需要结合三角表面材质纹理来计算对irradiance的吸收率
         // 调用前初始化this->ray_obj->vertices可视化光线路径
 
-        shared_ptr<vector<vec3>> vec_buffer = make_shared<vector<vec3>>();
-        vec_buffer->push_back(tri_center + 0.005f * tri_norm);
+        // 可视化光线颜色
+        uniform_real_distribution<> distr(0.1f, 0.9f);
+        vec3 color = vec3(distr(rdgen), distr(rdgen), distr(rdgen));
+        // 可视化光线颜色
 
-        HitInfo new_obj = hit_obj({tri_center + 0.005f * tri_norm, wi});
-        if (new_obj.isHit) {
-          vec_buffer->push_back(new_obj.hitPos);
-          L_indir += trace_ray({new_obj.hitPos, -wi}, new_obj, 0.95, 0, vec_buffer);
-        } else {
-          vec_buffer->push_back(tri_center + 10.0f * wi);
-          Pixel p = cubemap_sample(this->cubemaps, wi);
-          L_dir += vec3(p.r, p.g, p.b) / 255.0f;
+        vec3 radiance_sum{0.0f, 0.0f, 0.0f}; // 蒙特卡洛积分，累加所有采样点的Radiance
+        for (int k = 0; k < sample_N; k++) {
+          vec3 radiance{0.0f, 0.0f, 0.0f};
+          vector<vec3> vec_buffer;
+          vec3 wi = tri.hemisphereSampleDir();
+          vec_buffer.push_back(tri_center + SURFACE_NORMAL_OFFSET * tri_norm); // 三角起点
+          HitInfo new_obj = hit_obj({tri_center + SURFACE_NORMAL_OFFSET * tri_norm, wi});
+          if (new_obj.isHit) {
+            radiance = trace_ray({new_obj.hitPos, -wi}, new_obj, 0.85, &vec_buffer);
+          } else {
+            vec_buffer.push_back(tri_center + RAY_LENGTH_TO_CUBEMAP * wi); // 直接射到cubemap
+            Pixel p = cubemap_sample(this->cubemaps, wi);
+            radiance = vec3(p.r, p.g, p.b) / 255.0f;
+          }
+          radiance_sum += radiance * glm::dot(tri_norm, wi);
+          lines["Ray"]->addPolygon(vec_buffer, color);
         }
-        lines["Ray"]->addPolygon(*vec_buffer);
-
-        // 将计算的irradiance的结果存储
-        vec3 Lo = L_dir + L_indir;
-        cur_obj->radiosity.radiant_flux[i] = Lo;
-        // printf("物体\"%s\"第(%d/%llu)面元 radiance: %.4f\n", name.c_str(), i, geometry->surfaces.size(), Lo);
+        vec3 irradiance = radiance_sum * (2.0f * PI) / static_cast<float>(sample_N); // 蒙特卡洛积分
+        cur_obj->radiosity.radiant_flux[i] = irradiance * tri_area;
       }
     }
     lines["Ray"]->updateVBO(); // 调试
+  }
+
+  // 迭代版本
+  vec3 trace_ray(Ray ray, const HitInfo &obj, float PR, vector<vec3> *vert_buffer = nullptr) {
+    // 参数：1. 光线  2. 光线源头三角信息  3. 光线存活率  4. 可视化光线的顶点缓存
+
+    assert(PR < 1.0f && PR > 0.0f);
+    uniform_real_distribution<> distr(0.0, 1.0);
+    // vec3 L_dir{0.0f, 0.0f, 0.0f}, L_indir{0.0f, 0.0f, 0.0f};
+    vec3 L_sample{0.0f, 0.0f, 0.0f};
+
+    Ray cur_ray = ray; // 由cur_obj发出的光线cur_ray
+    HitInfo cur_obj = obj;
+
+    // 需要记录下每条光线的信息
+    vector<RayInfo> ray_stack;
+
+    while (true) {
+      float PR_D = distr(rdgen); // 决定新光线的存活概率，若PR>PR_D则存活
+      if (PR_D >= PR)
+        break; // 光线死亡，不再弹射
+
+      shared_ptr<GeometryRenderObject> gobj = this->objs[cur_obj.geometry_name];
+      shared_ptr<Geometry> geometry = gobj->geometry;
+      mat4 model = gobj->transform.getModel();
+
+      TriangleSampler tri(geometry->vertices, geometry->surfaces[cur_obj.triangle_idx], model);
+      vec3 tri_norm = tri.calcNorm();
+      vec3 wi = tri.hemisphereSampleDir();
+
+      vert_buffer->push_back(cur_obj.hitPos + SURFACE_NORMAL_OFFSET * tri_norm); // 可视化光线轨迹
+
+      // ====================计算直接光照========================
+      // （这里算的不正确，应当对光源进行直接采样）
+      // 暂时不考虑该分量
+      // Pixel p = cubemap_sample(this->cubemaps, wi);
+      // cur_L_dir += vec3(p.r, p.g, p.b) / 255.0f;
+
+      // ====================计算间接光照========================
+      Ray new_ray{cur_obj.hitPos + SURFACE_NORMAL_OFFSET * tri_norm, wi}; // 反向追踪上一根入射光线的发出对象
+      HitInfo new_obj = hit_obj(new_ray);
+      if (new_obj.isHit) {
+        // printf("击中物体: %s\n", new_obj.geometry_name.c_str());
+        // 找到光源物体
+        // 累加计算间接辐射率
+        RayInfo ray_info;
+        ray_info.BRDF = {1.0f, 1.0f, 1.0f};                // 假定理想朗伯体，完全漫反射
+        ray_info.cosine = glm::dot(cur_ray.dir, tri_norm); // 出射余弦量(三角面元法线与出射光夹角)
+        if (ray_info.cosine < 0.0f)                        // 跳过本次wi的半球采样
+          continue;
+        ray_stack.emplace_back(ray_info);
+
+      } else {
+        vert_buffer->push_back(cur_obj.hitPos + RAY_LENGTH_TO_CUBEMAP * wi); // 可视化光线轨迹
+
+        // 未找到光源物体，说明光线由cubemap发出，直接采样
+        Pixel p = cubemap_sample(this->cubemaps, wi);
+        L_sample = vec3(p.r, p.g, p.b) / 255.0f;
+        break; // 找到光源，光线不再弹射
+      }
+
+      cur_ray = Ray{new_obj.hitPos, -wi};
+      cur_obj = new_obj;
+    }
+
+    // 反过来，从光线发出位置计算对三角第i(总共投射出N)根光线的radiance的贡献
+    while (!ray_stack.empty()) {
+      RayInfo info = ray_stack.back();
+      ray_stack.pop_back();
+      L_sample *= info.BRDF * info.cosine / (2.0f * PI) / PR;
+    }
+
+    // printf("L_sample = (%.2f, %.2f, %.2f)\n", L_sample.x, L_sample.y, L_sample.z);
+
+    return L_sample;
   }
 
   void imgui_docking_render(bool *p_open = nullptr) {
@@ -1638,7 +1788,7 @@ public:
     // 6. 可视化光线追踪
     if (this->isShowRay)
       lines["Ray"]->draw(cur_shader);
-    
+
     // 6. 可视化三角局部坐标系
     if (this->isShowCoord)
       lines["Coord"]->draw(cur_shader);

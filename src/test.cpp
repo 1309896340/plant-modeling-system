@@ -38,9 +38,6 @@ int main(int argc, char **argv) {
   // 测试每个三角面元的法线是否计算正确
   scene.test_triangle_coord();
 
-
-  printf("绘制了%llu条光线\n", scene.lines["Ray"]->size());
-
   scene.mainloop();
   return 0;
 }
