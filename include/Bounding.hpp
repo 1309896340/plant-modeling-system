@@ -91,16 +91,8 @@ int findKPosVal(vector<T> arr, int left, int right, int k) {
   }
 }
 
-// bool hit_triangle(const vec3 &origin, const vec3 &dir, const vec3 &p1,const vec3 &p2, const vec3 &p3, vec3 &hit_pos, float &distance) {
 HitInfo hit_triangle(Ray ray, const vec3 &p1, const vec3 &p2, const vec3 &p3) {
-  // 返回(是否击中, 击中位置, 距离)
-
-  // bool isHit{false};
-  // vec3 hitPos{ray.origin};
-  // float distance{FLT_MAX};
-
   HitInfo target;
-
   vec3 _dir = glm::normalize(ray.dir);
   float det_base = glm::determinant(mat3(-_dir, p1 - p3, p2 - p3));
   if (glm::abs(det_base) < 1e-6) {

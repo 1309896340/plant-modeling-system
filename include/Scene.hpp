@@ -1085,6 +1085,7 @@ public:
         ImGui::SameLine();
         ImGui::PushID(0);
         if (ImGui::Button(TEXT("更新"))) {
+          // thread tsk(this->compute_radiosity);
           this->compute_radiosity();
           this->printRadiosityInfo();
         }
@@ -1468,7 +1469,7 @@ public:
     float cosine{1.0f};
   };
 
-  void compute_radiosity(uint32_t sample_N = 20) {
+  void compute_radiosity(uint32_t sample_N = 1) {
     uniform_real_distribution<> distr(0.0, 1.0);
     // rdgen.seed(42);
 
@@ -1484,9 +1485,6 @@ public:
       shared_ptr<Geometry> geometry = cur_obj->geometry;
 
       cur_obj->radiosity.radiant_flux.resize(geometry->surfaces.size());
-      // for(auto &rf: cur_obj->radiosity.radiant_flux)    // 重置清空
-      //   rf = vec3(0.0f,0.0f,0.0f);
-      // std::fill(cur_obj->radiosity.radiant_flux.begin(), cur_obj->radiosity.radiant_flux.end(), vec3(0.0f, 0.0f, 0.0f));
 
       for (int i = 0; i < geometry->surfaces.size(); i++) {
         TriangleSampler tri(geometry->vertices, geometry->surfaces[i], model);
@@ -1496,9 +1494,6 @@ public:
 
         if (tri.calcArea() == 0.0f) // 跳过无面积三角
           continue;
-
-        // 这里只计算irradiance，假定这个三角为黑体，吸收全部的辐射。否则，需要结合三角表面材质纹理来计算对irradiance的吸收率
-        // 调用前初始化this->ray_obj->vertices可视化光线路径
 
         // 可视化光线颜色
         uniform_real_distribution<> distr(0.1f, 0.9f);
@@ -1519,7 +1514,7 @@ public:
             Pixel p = cubemap_sample(this->cubemaps, wi);
             radiance = vec3(p.r, p.g, p.b) / 255.0f;
           }
-          radiance_sum += radiance * glm::dot(tri_norm, wi);
+          radiance_sum += radiance * glm::max(0.0f, glm::dot(tri_norm, wi));
           lines["Ray"]->addPolygon(vec_buffer, color);
         }
         vec3 irradiance = radiance_sum * (2.0f * PI) / static_cast<float>(sample_N); // 蒙特卡洛积分
@@ -1573,7 +1568,7 @@ public:
         // 找到光源物体
         // 累加计算间接辐射率
         RayInfo ray_info;
-        ray_info.BRDF = {1.0f, 1.0f, 1.0f};                // 假定理想朗伯体，完全漫反射
+        ray_info.BRDF = vec3(1.0f, 1.0f, 1.0f) / PI;       // 假定理想朗伯体，完全漫反射
         ray_info.cosine = glm::dot(cur_ray.dir, tri_norm); // 出射余弦量(三角面元法线与出射光夹角)
         if (ray_info.cosine < 0.0f)                        // 跳过本次wi的半球采样
           continue;
@@ -1596,7 +1591,7 @@ public:
     while (!ray_stack.empty()) {
       RayInfo info = ray_stack.back();
       ray_stack.pop_back();
-      L_sample *= info.BRDF * info.cosine / (2.0f * PI) / PR;
+      L_sample *= info.BRDF * info.cosine * (2.0f * PI) / PR;
     }
 
     // printf("L_sample = (%.2f, %.2f, %.2f)\n", L_sample.x, L_sample.y, L_sample.z);
