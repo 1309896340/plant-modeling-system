@@ -54,6 +54,7 @@ namespace {
 using namespace std;
 using glm::mat4;
 using glm::quat;
+using glm::vec2;
 using glm::vec3;
 using glm::vec4;
 namespace fs = filesystem;
@@ -842,13 +843,24 @@ public:
     glfwGetCursorPos(this->window, &xpos, &ypos);
     xpos = 2.0f * xpos / this->width - 1.0f;
     ypos = 1.0f - 2.0f * ypos / this->height;
-    vec3 pos = vec3(xpos, ypos, 1.0f);
-    mat4 clip2world =
-        glm::inverse(this->camera.getProject() * this->camera.getView());
-    vec4 pos_world = clip2world * vec4(pos, 1.0f);
-    vec3 dir = glm::normalize(vec3(pos_world / pos_world.w) -
-                              this->camera.getPosition());
+    
+    vec3 dir = screen2world({xpos, ypos});
+
     return {this->camera.getPosition(), dir};
+  }
+
+
+  vec3 screen2world(vec2 pos) {
+    mat4 view = this->camera.getView();
+    auto [fov, near, far, aspect] = this->camera.getProperties();
+    vec4 target_dir = vec4(glm::normalize(vec3(
+                               pos.x * near * tanf(fov / 2.0f) * aspect,
+                               pos.y * near * tanf(fov / 2.0f),
+                               near)),
+                           0.0f);
+    vec4 world_dir = view * target_dir;
+    world_dir.z = - world_dir.z;
+    return vec3(world_dir);
   }
 
   void imgui_interact() {

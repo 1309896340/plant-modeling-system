@@ -1,13 +1,14 @@
 ﻿#pragma once
 
+#include <tuple>
+
 #include "constants.h"
-#include "glm/common.hpp"
-#include "glm/geometric.hpp"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
 namespace {
+using namespace std;
 using glm::mat4;
 using glm::vec3;
 using glm::vec4;
@@ -78,6 +79,11 @@ public:
     view_is_changed = true;
     updateAttitude();
     record();
+  }
+
+  tuple<float, float, float, float> getProperties() const {
+
+    return make_tuple(fov, near, far, aspect);
   }
 
   void setAnchor(vec3 anchor) { this->surround_info.anchor = anchor; }

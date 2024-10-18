@@ -40,10 +40,23 @@ set_languages("c++20")
 --         end
 --     )
 
+-- target("test")
+--     set_kind("binary")
+--     add_includedirs("include")
+--     add_files("src/test.cpp")
+--     add_packages("glm","glfw","glad","glm","imgui","stb","eigen")
+--     after_build(
+--         function (target)
+--             os.cp("assets", path.join(target:targetdir(), "./"))
+--             os.cp("favicon.png", path.join(target:targetdir(), "./"))
+--         end
+--     )
+
+
 target("test")
     set_kind("binary")
     add_includedirs("include")
-    add_files("src/test.cpp")
+    add_files("src/raytracing_image.cpp")
     add_packages("glm","glfw","glad","glm","imgui","stb","eigen")
     after_build(
         function (target)
@@ -51,4 +64,3 @@ target("test")
             os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
-
