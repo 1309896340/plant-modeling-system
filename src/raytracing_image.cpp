@@ -1,6 +1,9 @@
-// #define ENABLE_NORMAL_VISUALIZATION
+﻿// #define ENABLE_NORMAL_VISUALIZATION
 // #define ENABLE_BOUNDINGBOX_VISUALIZATION
+#include <cstdint>
+#include <functional>
 #include <memory>
+#include <thread>
 
 #include <stb_image.h>
 #include <stb_image_write.h>
@@ -22,17 +25,49 @@ vec3 screen2world(vec2 pos, Scene &scene) {
   return vec3(world_dir);
 }
 
-void screen_ray_cast(Scene &scene) {
-  const int width = 1600;
-  const int height = 1200;
-  for (int i = 0; i < height; i++) {
-    for (int j = 0; j < width; j++) {
-      float y = static_cast<float>(i) * 2.0f / height - 1.0f;
-      float x = static_cast<float>(j) * 2.0f / width - 1.0f;
-      // (x, y) 屏幕坐标，转换为世界坐标
+struct RayCastFrame {
+  vector<vec3> radiance;
+  uint32_t width{0};
+  uint32_t height{0};
+};
+
+RayCastFrame screen_ray_cast_init(Scene &scene, int width = 1600, int height = 1200) {
+  RayCastFrame frame;
+  frame.radiance.resize(width * height, vec3(0.0f, 0.0f, 0.0f));
+  frame.width = width;
+  frame.height = height;
+  return frame;
+}
+
+void screen_ray_cast(Scene &scene, RayCastFrame &frame, float PR, uint32_t count) {
+  for (int i = 0; i < frame.height; i++) {
+    for (int j = 0; j < frame.width; j++) {
+      float y = 1.0f - static_cast<float>(i) * 2.0f / frame.height;
+      float x = static_cast<float>(j) * 2.0f / frame.width - 1.0f;
+      // (x, y) 屏幕坐标，转换为世界坐标系下的方向向量
+      vec3 dir = screen2world({x, y}, scene);
+      HitInfo obj = scene.hit_obj({scene.camera.getPosition(), dir});
+      if (!obj.isHit)
+        continue;
+      vec3 res = scene.trace_ray({obj.hitPos, -dir}, obj, PR);
+      vec3 out = (static_cast<float>(count) * frame.radiance[i * frame.width + j] + res) / static_cast<float>(count + 1);
+      out = glm::clamp(out, 0.0f, 1.0f);
+      frame.radiance[i * frame.width + j] = out;
     }
   }
 }
+
+// void screen_ray_cast_parallel(Scene &scene, RayCastFrame &frame, int i, int j) {
+//   float y = 1.0f - static_cast<float>(i) * 2.0f / frame.height;
+//   float x = static_cast<float>(j) * 2.0f / frame.width - 1.0f;
+//   // (x, y) 屏幕坐标，转换为世界坐标系下的方向向量
+//   vec3 dir = screen2world({x, y}, scene);
+//   HitInfo obj = scene.hit_obj({scene.camera.getPosition(), dir});
+//   if (!obj.isHit)
+//     return;
+//   vec3 res = scene.trace_ray({obj.hitPos, -dir}, obj, 0.8f);
+//   frame.radiance[i * frame.width + j] = glm::clamp(res, 0.0f, 1.0f);
+// }
 
 using namespace std;
 int main(int argc, char **argv) {
@@ -56,9 +91,45 @@ int main(int argc, char **argv) {
   for (auto &obj : scene.objs)
     obj.second->constructBvhTree();
 
-  screen_ray_cast(scene);
+  RayCastFrame frame = screen_ray_cast_init(scene, 1600, 1200);
+  for (int k = 0; k < 60; k++) {
+    screen_ray_cast(scene, frame, 0.9f, k);
+    printf("epoch=%d\n", k);
 
-  scene.mainloop();
+    // vector<shared_ptr<thread>> thread_pool;
+    // uint32_t finished_thread_count = 0;
+    // for (int i = 0; i < frame.height; i++) {
+    //   for (int j = 0; j < frame.width; j++) {
+    //     // screen_ray_cast_parallel(scene, frame, i, j);
+    //     uint32_t idx = 0; // 更新列表中线程状态，如果执行结束就移除
+    //     while (idx < thread_pool.size()) {
+    //       if (!thread_pool[idx]->joinable()) {
+    //         finished_thread_count++;
+    //         printf("检查到线程执行完毕，移除 %d\n", finished_thread_count);
+    //         thread_pool[idx]->detach();
+    //         thread_pool.erase(thread_pool.begin() + idx);
+    //       } else
+    //         idx++;
+    //     }
+    //     if (thread_pool.size() < 12) {
+    //       printf("启动线程i=%d,j=%d\n", i, j);
+    //       shared_ptr<thread> pp = make_shared<thread>(screen_ray_cast_parallel, ref(scene), ref(frame), i, j);
+    //       thread_pool.emplace_back(pp);
+    //     }
+    //   }
+    // }
+  }
+  vector<uint8_t> pixels(frame.width * frame.height * 3);
+  for (int k = 0; k < frame.radiance.size(); k++) {
+    pixels[k * 3] = static_cast<uint8_t>(frame.radiance[k].r * 256.0f);
+    pixels[k * 3 + 1] = static_cast<uint8_t>(frame.radiance[k].g * 256.0f);
+    pixels[k * 3 + 2] = static_cast<uint8_t>(frame.radiance[k].b * 256.0f);
+  }
+  stbi_write_jpg("output.jpg", frame.width, frame.height, 3, pixels.data(), 0);
+
+  printf("渲染完毕\n");
+
+  // scene.mainloop();
   return 0;
 }
 

@@ -843,12 +843,11 @@ public:
     glfwGetCursorPos(this->window, &xpos, &ypos);
     xpos = 2.0f * xpos / this->width - 1.0f;
     ypos = 1.0f - 2.0f * ypos / this->height;
-    
+
     vec3 dir = screen2world({xpos, ypos});
 
     return {this->camera.getPosition(), dir};
   }
-
 
   vec3 screen2world(vec2 pos) {
     mat4 view = this->camera.getView();
@@ -859,7 +858,7 @@ public:
                                near)),
                            0.0f);
     vec4 world_dir = view * target_dir;
-    world_dir.z = - world_dir.z;
+    world_dir.z = -world_dir.z;
     return vec3(world_dir);
   }
 
@@ -1541,6 +1540,8 @@ public:
     // 参数：1. 光线  2. 光线源头三角信息  3. 光线存活率  4. 可视化光线的顶点缓存
 
     assert(PR < 1.0f && PR > 0.0f);
+    assert(obj.isHit && "trace_ray() has no target!");
+
     uniform_real_distribution<> distr(0.0, 1.0);
     // vec3 L_dir{0.0f, 0.0f, 0.0f}, L_indir{0.0f, 0.0f, 0.0f};
     vec3 L_sample{0.0f, 0.0f, 0.0f};
@@ -1564,7 +1565,8 @@ public:
       vec3 tri_norm = tri.calcNorm();
       vec3 wi = tri.hemisphereSampleDir();
 
-      vert_buffer->push_back(cur_obj.hitPos + SURFACE_NORMAL_OFFSET * tri_norm); // 可视化光线轨迹
+      if (vert_buffer)
+        vert_buffer->push_back(cur_obj.hitPos + SURFACE_NORMAL_OFFSET * tri_norm); // 可视化光线轨迹
 
       // ====================计算直接光照========================
       // （这里算的不正确，应当对光源进行直接采样）
@@ -1587,7 +1589,8 @@ public:
         ray_stack.emplace_back(ray_info);
 
       } else {
-        vert_buffer->push_back(cur_obj.hitPos + RAY_LENGTH_TO_CUBEMAP * wi); // 可视化光线轨迹
+        if (vert_buffer)
+          vert_buffer->push_back(cur_obj.hitPos + RAY_LENGTH_TO_CUBEMAP * wi); // 可视化光线轨迹
 
         // 未找到光源物体，说明光线由cubemap发出，直接采样
         Pixel p = cubemap_sample(this->cubemaps, wi);
