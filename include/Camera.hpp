@@ -2,10 +2,11 @@
 
 #include <tuple>
 
-#include "constants.h"
-
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+
+#include "constants.h"
+#include "utils.hpp"
 
 namespace {
 using namespace std;
@@ -107,6 +108,7 @@ public:
     // 配合record()使用
     this->surround_info.phi += dx;
     this->surround_info.theta -= dy;
+    this->surround_info.theta = m_clamp(this->surround_info.theta, EPS, PI - EPS);
     vec3 new_pos;
     new_pos.x = this->surround_info.distance * sin(this->surround_info.theta) * cos(this->surround_info.phi);
     new_pos.y = this->surround_info.distance * cos(this->surround_info.theta);

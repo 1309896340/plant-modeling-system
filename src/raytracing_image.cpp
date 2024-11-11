@@ -11,16 +11,16 @@
 std::mt19937_64 rdgen(42);
 
 vec3 screen2world(vec2 pos, Scene &scene) {
-  mat4 view = scene.camera.getView();
-  auto [fov, near, far, aspect] = scene.camera.getProperties();
-  vec4 target_dir = vec4(glm::normalize(vec3(
-                             pos.x * near * tanf(fov / 2.0f) * aspect,
-                             pos.y * near * tanf(fov / 2.0f),
-                             near)),
-                         0.0f);
-  vec4 world_dir = view * target_dir;
-  world_dir.z = -world_dir.z;
-  return vec3(world_dir);
+    pos = - pos;
+    mat4 view = scene.camera.getView();
+    auto [fov, near, far, aspect] = scene.camera.getProperties();
+    vec4 target_dir = vec4(glm::normalize(vec3(
+                               pos.x * near * tanf(fov / 2.0f) * aspect,
+                               pos.y * near * tanf(fov / 2.0f),
+                               near)),
+                           0.0f);
+    vec4 world_dir = glm::transpose(view) * target_dir;
+    return -vec3(world_dir);
 }
 
 struct RayCastFrame {

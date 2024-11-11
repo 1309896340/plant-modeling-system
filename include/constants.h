@@ -1,6 +1,7 @@
 #pragma once
 
 #define PI 3.1415926535f
+#define EPS 1e-5f
 
 #include <glm/glm.hpp>
 

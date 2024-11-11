@@ -2,6 +2,7 @@
 
 // #define NDEBUG
 
+#include "glm/ext/matrix_transform.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -850,6 +851,7 @@ public:
   }
 
   vec3 screen2world(vec2 pos) {
+    pos = - pos;
     mat4 view = this->camera.getView();
     auto [fov, near, far, aspect] = this->camera.getProperties();
     vec4 target_dir = vec4(glm::normalize(vec3(
@@ -857,9 +859,8 @@ public:
                                pos.y * near * tanf(fov / 2.0f),
                                near)),
                            0.0f);
-    vec4 world_dir = view * target_dir;
-    world_dir.z = -world_dir.z;
-    return vec3(world_dir);
+    vec4 world_dir = glm::transpose(view) * target_dir;
+    return -vec3(world_dir);
   }
 
   void imgui_interact() {
@@ -962,9 +963,16 @@ public:
             this->camera.setAnchor(
                 this->objs[this->imgui.items[this->imgui.selected_idx]]
                     ->box->getBoxCenter());
-            if (target_obj.type == 1) {
-              this->aux["Cursor"]->transform.setPosition(target_obj.hitPos);
-              printf("选中点位置：(%.2f, %.2f, %.2f)\n", target_obj.hitPos.x, target_obj.hitPos.y, target_obj.hitPos.z);
+            switch(target_obj.type){
+              case 1:{
+                this->aux["Cursor"]->transform.setPosition(target_obj.hitPos);
+                printf("选中点位置：(%.2f, %.2f, %.2f)\n", target_obj.hitPos.x, target_obj.hitPos.y, target_obj.hitPos.z);
+                break;
+              }
+              case 0:{
+                
+                break;
+              }
             }
           }
         }
