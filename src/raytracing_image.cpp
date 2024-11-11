@@ -78,8 +78,8 @@ int main(int argc, char **argv) {
     obj.second->constructBvhTree();
 
   RayCastFrame frame = screen_ray_cast_init(scene, 1600, 1200);
-  for (int k = 0; k < 60; k++) {
-    screen_ray_cast(scene, frame, 0.9f, k);
+  for (int k = 0; k < 30; k++) {
+    screen_ray_cast(scene, frame, 0.92f, k);
     printf("epoch=%d\n", k);
   }
   vector<uint8_t> pixels(frame.width * frame.height * 3);
