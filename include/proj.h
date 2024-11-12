@@ -3,7 +3,5 @@
 
 #include <random>
 
-#include "utils.hpp"
-
 extern std::mt19937_64 rdgen;
 

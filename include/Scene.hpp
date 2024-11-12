@@ -13,8 +13,6 @@
 #include <memory>
 #include <random>
 #include <stdexcept>
-#include <variant>
-
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>

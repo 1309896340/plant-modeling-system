@@ -1,5 +1,6 @@
 #pragma once
 namespace {
+
 float m_clamp(const float &val, const float &min_v, const float &max_v) {
   if (val < min_v)
     return min_v;
@@ -9,4 +10,5 @@ float m_clamp(const float &val, const float &min_v, const float &max_v) {
     return val;
   ;
 }
+
 } // namespace
