@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "glm/gtc/quaternion.hpp"
 #include "lexy/action/parse.hpp"
 #include "lexy/action/parse_as_tree.hpp"
 #include "lexy/callback.hpp"
@@ -18,6 +19,7 @@
 #include "lexy_ext/report_error.hpp"
 
 #include "Geometry.hpp"
+#include "Skeleton.hpp"
 #include "Transform.hpp"
 
 #include "MathExprParser.hpp"
@@ -28,9 +30,23 @@
 namespace GeometryGenerator {
 namespace dsl = lexy::dsl;
 
-struct GraphicsContext{
-    // 用于LProdCallList的操作中记录几何体生成的中间状态
-    Transform transform;
+struct GraphicsContext {
+  // 用于LProdCallList的操作中的上下文
+  Transform transform;
+  SkNode *cur_node{nullptr};
+  // shared_ptr<Geometry> cur_geometry{nullptr};  // 目前不涉及跨指令影响的Primitive生成，因此注释掉
+  
+  // 用以实现栈操作的上下文保存
+  Transform backup_transform;
+  SkNode *backup_node{nullptr};
+
+  shared_ptr<Skeleton> skeleton{nullptr};
+
+  GraphicsContext() {
+    // skeleton伴随着上下文创建而创建，最终会被作为parse的结果传递出去，由引用计数自动释放
+    this->skeleton = make_shared<Skeleton>();
+    this->cur_node = this->skeleton->root; // 初始指向root节点
+  }
 };
 
 namespace config {
@@ -53,15 +69,23 @@ struct GraphicsControlSym : public LProdCall {
     // 这里涉及到组装一个几何体的操作过程，这个正在被组装的几何体应当可被 LProdCallList 对象访问和操作
     switch (ctrl_char) {
     case '[': {
-      // 入栈操作
-
+      // 入栈操作(保存当前状态)
+      if(context->backup_node!=nullptr)
+        printf("WARNNING: context backup_node is not nullptr! Maybe the brackets are incomplete.");
+      
+      context->backup_transform = context->transform;
+      context->backup_node = context->cur_node;
       break;
     }
     case ']': {
-      // 出栈操作
-
+      // 出栈操作(恢复先前状态)
+      context->transform = context->backup_transform;
+      context->cur_node = context->backup_node;
+      context->backup_node = nullptr;
       break;
     }
+    default:
+      printf("unknown control symbol : \'%c\'\n", ctrl_char);
     }
   }
 };
@@ -78,18 +102,76 @@ struct GraphicsCallSym : public LProdCall {
 
   virtual void exec(shared_ptr<GraphicsContext> context) {
     // 根据name执行对应的几何体生成操作
+    // 暂时先用if else进行粗暴的实现
+    
+    if(name=="Sphere"){
+      // 构造SkNode
+      SkNode *node = new SkNode();
+      node->parent = context->cur_node;
+      context->cur_node->addChild(node);
+      context->cur_node = node;
+      // 创建几何体
+      shared_ptr<Sphere> geometry = make_shared<Sphere>(args[0]);
+      // 设置偏移量（球没有位置偏移）
+    }else if(name=="Cylinder"){
+      // 构造SkNode
+      SkNode *node = new SkNode();
+      node->parent = context->cur_node;
+      context->cur_node->addChild(node);
+      context->cur_node = node;
+      // 创建几何体
+      shared_ptr<Cylinder> geometry = make_shared<Cylinder>(args[0],args[1]);
+      // 设置偏移量
+      vec3 offset = std::get<float>(geometry->parameters["height"]) * _up;
+      context->transform.translate_relative(offset);
+      context->cur_node->setPosition(offset);
+    }else if(name=="F"){   // 不构造几何体，但是会增加节点
+      // 构造SkNode
+      SkNode *node = new SkNode();
+      node->parent = context->cur_node;
+      context->cur_node->addChild(node);
+      context->cur_node = node;
+      // 设置偏移量
+      vec3 offset = _up;
+      if(args.size()>0)
+        offset *= args[0];
+      context->transform.translate_relative(offset);   // 以当前姿态下的_up为默认前进方向
+      context->cur_node->setPosition(offset);
+    }else if(name=="RX"){
+      context->transform.rotate(glm::radians(args[0]), _right);
+      glm::quat attitude = glm::quat_cast(glm::rotate(glm::mat4(1.0f), glm::radians(args[0]), _right));
+      context->cur_node->setAttitude(attitude);
+    }else if(name=="RY"){
+      context->transform.rotate(glm::radians(args[0]), _up);
+      glm::quat attitude = glm::quat_cast(glm::rotate(glm::mat4(1.0f), glm::radians(args[0]), _up));
+      context->cur_node->setAttitude(attitude);
+    }else if(name=="RZ"){
+      context->transform.rotate(glm::radians(args[0]), -_front);
+      glm::quat attitude = glm::quat_cast(glm::rotate(glm::mat4(1.0f), glm::radians(args[0]), -_front));
+      context->cur_node->setAttitude(attitude);
+    }else{
+      printf("unknown graphics symbol : \"%s\"\n", name.c_str());
+      fflush(stdout);
+      return;
+    }
+
   }
 };
 
-struct GraphicsStructure{
-    shared_ptr<GraphicsContext> context{nullptr};
-    vector<shared_ptr<LProdCall>> call_list;
-    GraphicsStructure(vector<shared_ptr<LProdCall>> call_list):context(make_shared<GraphicsContext>()),call_list(LEXY_MOV(call_list)){}
+struct GraphicsStructure {
+  shared_ptr<GraphicsContext> context{nullptr};
+  vector<shared_ptr<LProdCall>> call_list;
 
-    void construct(){
-        for(shared_ptr<LProdCall> cmd : this->call_list)
-            cmd->exec(context);
+  GraphicsStructure(vector<shared_ptr<LProdCall>> call_list) : context(make_shared<GraphicsContext>()), call_list(LEXY_MOV(call_list)) {}
+
+  shared_ptr<Skeleton> construct() const {
+    for (shared_ptr<LProdCall> cmd : this->call_list){
+
+      cmd->exec(context);
     }
+    // 符号序列执行完毕，最后一步将生成的Skeleton返回
+    return context->skeleton;
+  }
 };
 
 }; // namespace config
@@ -141,9 +223,9 @@ struct LProdCallList {
       lexy::as_list<vector<shared_ptr<config::LProdCall>>>;
 };
 
-struct GraphicsStructure{
-    static constexpr auto rule = dsl::p<LProdCallList>;
-    static constexpr auto value = lexy::construct<config::GraphicsStructure>;
+struct GraphicsStructure {
+  static constexpr auto rule = dsl::p<LProdCallList>;
+  static constexpr auto value = lexy::construct<config::GraphicsStructure>;
 };
 
 }; // namespace grammar
