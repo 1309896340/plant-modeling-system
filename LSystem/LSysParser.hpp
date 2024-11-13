@@ -116,7 +116,6 @@ struct LCallSym : public LProdCall {
   vector<float> args; // 在构造时进行计算
   LCallSym(string name, vector<MathParser::ast::expr_ptr> args_expr)
       : name(LEXY_MOV(name)), args(), LProdCall(CALL_SYM) {
-    assert(this->args.size() == 0); // 初始化为空列表
 
     // 初始化中计算表达式值
     MathParser::ast::Environment env;
