@@ -6,13 +6,11 @@
 #include <stdexcept>
 #include <vector>
 
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Geometry.hpp"
 #include "Transform.hpp"
-
 
 namespace {
 using namespace std;
@@ -26,9 +24,9 @@ class SkNode {
   friend class Skeleton;
 
 private:
-  Transform transform;     // 相对parent的位置姿态
-  Transform abs_transform; // 绝对位置姿态
-  // 注意，这两个transform中，attitude代表当前姿态，而position是下一个节点的起始位置
+  // 当前节点相对于上一个节点的位置姿态偏移
+  Transform transform;
+  Transform abs_transform; // 当前节点的起始位置与姿态
 public:
   vector<SkNode *> children;
   SkNode *parent{nullptr};
@@ -65,6 +63,8 @@ public:
   mat4 getAbsModel() const { return this->abs_transform.getModel(); }
 
   Transform getAbsTransform() const { return this->abs_transform; }
+  Transform getTransform() const { return this->transform; }
+  void setTransform(const Transform &transform) { this->transform = transform; }
 };
 
 class Skeleton {
@@ -72,8 +72,8 @@ private:
 public:
   SkNode *root{nullptr};
   Skeleton() : root(new SkNode()) {
-    // 默认生成一个空的根节点
-  };
+                 // 默认生成一个空的根节点
+               };
   // ~Skeleton() {
   //   if (this->root == nullptr)
   //     return;
@@ -109,39 +109,27 @@ public:
       buf.pop_front();
       buf.insert(buf.end(), cur->children.begin(), cur->children.end());
 
-      if (cur->parent == nullptr) {
+      if (cur->parent == nullptr) { // 根节点
         cur->abs_transform = cur->transform;
         continue;
       }
 
-      // 1. 更新姿态
-      quat cur_attitude = cur->transform.getAttitude();
-      quat accum_attitude = cur->parent->abs_transform.getAttitude();   // 这是上一个节点的姿态
-      cur->abs_transform.setAttitude(accum_attitude * cur_attitude);
+      cur->abs_transform = cur->transform * cur->parent->abs_transform;
 
-      // 2. 更新位置
-      vec3 cur_position = cur->transform.getPosition();   // 这是当前节点起始位置，相对于上一个节点起始位置的偏移量
-      vec3 accum_position = cur->parent->abs_transform.getPosition();   // 这是上一个节点的起始位置
-
-      vec3 right = accum_attitude * _right;
-      vec3 up = accum_attitude * _up;
-      vec3 front = accum_attitude * _front;
-
-      vec3 new_cur_position = accum_position +
-                              right * cur_position.x + up * cur_position.y + front * cur_position.z;
-      cur->abs_transform.setPosition(new_cur_position);   // 当前节点的起始位置
+      // vec3 ps = cur->abs_transform.getPosition();
+      // printf("节点%p 起点位置：(%.4f, %.4f, %.4f)\n", cur, ps.x, ps.y, ps.z);
     }
   }
 
-  void traverse(function<void(SkNode *)> visit){
+  void traverse(function<void(SkNode *)> visit) {
     // 广度优先遍历
     deque<SkNode *> buf{this->root};
-    while(!buf.empty()){
+    while (!buf.empty()) {
       SkNode *cur = buf.front();
       buf.pop_front();
-      if(cur != this->root)
+      if (cur != this->root)
         visit(cur);
-      if(cur->children.size() > 0)
+      if (cur->children.size() > 0)
         buf.insert(buf.end(), cur->children.begin(), cur->children.end());
     }
   }

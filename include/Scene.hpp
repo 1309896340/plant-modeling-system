@@ -35,8 +35,8 @@
 #include "Geometry.hpp"
 #include "Light.hpp"
 #include "Shader.hpp"
-#include "Transform.hpp"
 #include "Skeleton.hpp"
+#include "Transform.hpp"
 
 #define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
 #define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.06f
@@ -525,6 +525,7 @@ private:
   bool isShowRay{false};
   bool isShowCoord{false};
   bool isShowWireFrame{false};
+  bool isShowCursor{false};
 
   // imgui的状态变量
   struct ImguiInfo {
@@ -660,6 +661,7 @@ public:
     shared_ptr<GeometryRenderObject> cursor_obj =
         make_shared<GeometryRenderObject>(cursor,
                                           Transform{vec3(0.0f, 2.0f, 0.0f)});
+    cursor_obj->visible = this->isShowCursor;                                          
     this->addSceneObject("Cursor", cursor_obj);
 
     // 地面
@@ -811,6 +813,9 @@ public:
   void showGround() { this->aux["Ground"]->visible = true; }
   void hideGround() { this->aux["Ground"]->visible = false; }
 
+  void showCursor() { this->aux["Cursor"]->visible = true; };
+  void hideCursor() { this->aux["Cursor"]->visible = false; };
+
   void show_info() {
     const GLubyte *vendor = glGetString(GL_VENDOR);
     const GLubyte *renderer = glGetString(GL_RENDERER);
@@ -849,7 +854,7 @@ public:
   }
 
   vec3 screen2world(vec2 pos) {
-    pos = - pos;
+    pos = -pos;
     mat4 view = this->camera.getView();
     auto [fov, near, far, aspect] = this->camera.getProperties();
     vec4 target_dir = vec4(glm::normalize(vec3(
@@ -961,16 +966,16 @@ public:
             this->camera.setAnchor(
                 this->objs[this->imgui.items[this->imgui.selected_idx]]
                     ->box->getBoxCenter());
-            switch(target_obj.type){
-              case 1:{
-                this->aux["Cursor"]->transform.setPosition(target_obj.hitPos);
-                printf("选中点位置：(%.2f, %.2f, %.2f)\n", target_obj.hitPos.x, target_obj.hitPos.y, target_obj.hitPos.z);
-                break;
-              }
-              case 0:{
-                
-                break;
-              }
+            switch (target_obj.type) {
+            case 1: {
+              this->aux["Cursor"]->transform.setPosition(target_obj.hitPos);
+              printf("选中点位置：(%.2f, %.2f, %.2f)\n", target_obj.hitPos.x, target_obj.hitPos.y, target_obj.hitPos.z);
+              break;
+            }
+            case 0: {
+
+              break;
+            }
             }
           }
         }
@@ -1248,24 +1253,39 @@ public:
     }
   }
 
-  void add(const string &name, shared_ptr<Skeleton> skeleton, Transform transform){
+  void add(const string &name, shared_ptr<Skeleton> skeleton, Transform transform) {
     // 加入骨架对象，考虑遍历Skeleton的所有节点并将其中的Geometry加入到this->objs中
-    if(this->skeletons.find(name) != this->skeletons.end()){
+    if (this->skeletons.find(name) != this->skeletons.end()) {
       cout << "scene cannot add \"Skeleton\" with an existed name \"" << name << "\"" << endl;
       return;
     }
+    // 将transform的影响加入到skeleton->root节点的transform中，然后更新整个skeleton
+
+    skeleton->root->setTransform(skeleton->root->getTransform() * transform);
+    skeleton->update();
+
     this->skeletons[name] = skeleton;
     uint32_t geo_id = 1;
     // 遍历skeleton的所有节点并加入到this->objs中
-    skeleton->traverse([=,this,&geo_id](SkNode *node){
+    skeleton->traverse([=, this, &geo_id](SkNode *node) {
       stringstream node_geom_name;
       node_geom_name << name << "_" << geo_id;
-      this->add(node_geom_name.str(), node->obj, transform);
+
+      this->add(node_geom_name.str(), node->obj, node->getAbsTransform());
+
+      // if (!node->children.empty()) {
+      //   // 调试，给每个节点加入一个Axis
+      //   stringstream ass;
+      //   ass << name << "_Axis_" << geo_id;
+      //   shared_ptr<GeometryRenderObject> robj = make_shared<GeometryRenderObject>(make_shared<CoordinateAxis>(0.067, 0.6), node->getAbsTransform());
+      //   this->addSceneObject(ass.str(), robj);
+      // }
+
       geo_id++;
     });
   }
-  
-  void add(const string &name, shared_ptr<Skeleton> skeleton){
+
+  void add(const string &name, shared_ptr<Skeleton> skeleton) {
     this->add(name, skeleton, Transform{});
   }
 
@@ -1826,7 +1846,7 @@ public:
     if (this->isShowRay)
       lines["Ray"]->draw(cur_shader);
 
-    // 6. 可视化三角局部坐标系
+    // 7. 可视化三角局部坐标系
     if (this->isShowCoord)
       lines["Coord"]->draw(cur_shader);
   }

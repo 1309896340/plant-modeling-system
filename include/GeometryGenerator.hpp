@@ -35,10 +35,12 @@ struct GraphicsContext {
   Transform transform;
   SkNode *cur_node{nullptr};
   // shared_ptr<Geometry> cur_geometry{nullptr};  // 目前不涉及跨指令影响的Primitive生成，因此注释掉
-  
+
   // 用以实现栈操作的上下文保存
-  Transform backup_transform;
-  SkNode *backup_node{nullptr};
+  vector<Transform> backup_transforms;
+  vector<SkNode *> backup_nodes;
+  // Transform backup_transform;
+  // SkNode *backup_node{nullptr};
 
   shared_ptr<Skeleton> skeleton{nullptr};
 
@@ -70,18 +72,19 @@ struct GraphicsControlSym : public LProdCall {
     switch (ctrl_char) {
     case '[': {
       // 入栈操作(保存当前状态)
-      if(context->backup_node!=nullptr)
-        printf("WARNNING: context backup_node is not nullptr! Maybe the brackets are incomplete.");
-      
-      context->backup_transform = context->transform;
-      context->backup_node = context->cur_node;
+      context->backup_transforms.emplace_back(context->transform);
+      context->backup_nodes.emplace_back(context->cur_node);
       break;
     }
     case ']': {
       // 出栈操作(恢复先前状态)
-      context->transform = context->backup_transform;
-      context->cur_node = context->backup_node;
-      context->backup_node = nullptr;
+      if (context->backup_nodes.size() <= 0)
+        printf("WARNNING: context backup_node is not nullptr! Maybe the brackets are incomplete.");
+
+      context->transform = context->backup_transforms.back();
+      context->backup_transforms.pop_back();
+      context->cur_node = context->backup_nodes.back();
+      context->backup_nodes.pop_back();
       break;
     }
     default:
@@ -103,61 +106,58 @@ struct GraphicsCallSym : public LProdCall {
   virtual void exec(shared_ptr<GraphicsContext> context) {
     // 根据name执行对应的几何体生成操作
     // 暂时先用if else进行粗暴的实现
-    
-    if(name=="Sphere"){
+
+    if (name == "Sphere") {
+      // 构造SkNode
+      SkNode *node = new SkNode();
+      node->parent = context->cur_node;
+      context->cur_node->addChild(node);
+      context->cur_node = node;
       // 创建几何体
       shared_ptr<Sphere> geometry = make_shared<Sphere>(args[0]);
-      // 设置偏移量（球没有位置偏移）
-      // 构造SkNode
+      context->cur_node->obj = static_pointer_cast<Geometry>(geometry);
+      // 更新偏移量（球没有位置偏移）
+      context->cur_node->setPosition(context->transform.getPosition());
+      context->cur_node->setAttitude(context->transform.getAttitude());
+      // 为新节点重置上下文的transform
+      context->transform = Transform();
+    } else if (name == "Cylinder") {
+      // 构造新节点
       SkNode *node = new SkNode();
       node->parent = context->cur_node;
       context->cur_node->addChild(node);
       context->cur_node = node;
-      context->cur_node->obj = static_pointer_cast<Geometry>(geometry);
-      // 为新节点重置上下文的transform
-      context->transform = Transform();
-    }else if(name=="Cylinder"){
       // 创建几何体
-      shared_ptr<Cylinder> geometry = make_shared<Cylinder>(args[0],args[1]);
-      // 设置偏移量
-      vec3 offset = std::get<float>(geometry->parameters["height"]) * _up;
-      context->transform.translate_relative(offset);
-      context->cur_node->setPosition(context->transform.getPosition());
-      // 构造SkNode
-      SkNode *node = new SkNode();
-      node->parent = context->cur_node;
-      context->cur_node->addChild(node);
-      context->cur_node = node;
+      shared_ptr<Cylinder> geometry = make_shared<Cylinder>(args[0], args[1]);
       context->cur_node->obj = static_pointer_cast<Geometry>(geometry);
+      // 更新偏移量
+      context->cur_node->setAttitude(context->transform.getAttitude());
+      context->cur_node->setPosition(context->transform.getPosition());
       // 为新节点重置上下文的transform
       context->transform = Transform();
-    }else if(name=="F"){   // 不构造几何体，也不生成节点
-      // // 构造SkNode
-      // SkNode *node = new SkNode();
-      // node->parent = context->cur_node;
-      // context->cur_node->addChild(node);
-      // context->cur_node = node;
-      // 设置偏移量
+      // 当前几何体的位置偏移将更新到下一个节点中
+      vec3 offset = std::get<float>(geometry->parameters["height"]) * _up;
+      context->transform.translate(offset);
+    } else if (name == "F") { // 不构造几何体，也不生成节点
       vec3 offset = _up;
-      if(args.size() > 0) // 无参数则前进1个单位
+      if (args.size() > 0) // 无参数则前进1个单位
         offset *= args[0];
-      context->transform.translate_relative(offset);   // 以当前姿态下的_up为默认前进方向
+      context->transform.translate_relative(offset); // 以当前姿态下的_up为默认前进方向
       context->cur_node->setPosition(context->transform.getPosition());
-    }else if(name=="RX"){
+    } else if (name == "RX") {
       context->transform.rotate(glm::radians(args[0]), _right);
-      context->cur_node->setAttitude(context->transform.getAttitude());
-    }else if(name=="RY"){
+      // cout << "绕+x旋转" << args[0] << "度" << endl;
+    } else if (name == "RY") {
       context->transform.rotate(glm::radians(args[0]), _up);
-      context->cur_node->setAttitude(context->transform.getAttitude());
-    }else if(name=="RZ"){
-      context->transform.rotate(glm::radians(args[0]), -_front);
-      context->cur_node->setAttitude(context->transform.getAttitude());
-    }else{
+      // cout << "绕+y旋转" << args[0] << "度" << endl;
+    } else if (name == "RZ") {
+      context->transform.rotate(glm::radians(args[0]), _front);
+      // cout << "绕-z旋转" << args[0] << "度" << endl;
+    } else {
       printf("unknown graphics symbol : \"%s\"\n", name.c_str());
       fflush(stdout);
       return;
     }
-
   }
 };
 
@@ -168,10 +168,10 @@ struct GraphicsStructure {
   GraphicsStructure(vector<shared_ptr<LProdCall>> call_list) : context(make_shared<GraphicsContext>()), call_list(LEXY_MOV(call_list)) {}
 
   shared_ptr<Skeleton> construct() const {
-    for (shared_ptr<LProdCall> cmd : this->call_list){
+    for (shared_ptr<LProdCall> cmd : this->call_list) {
       cmd->exec(context);
     }
-    context->skeleton->update();  // 根据每个节点的相对位置姿态计算绝对位置姿态
+    context->skeleton->update(); // 根据每个节点的相对位置姿态计算绝对位置姿态
     // 符号序列执行完毕，最后一步将生成的Skeleton返回
     return context->skeleton;
   }

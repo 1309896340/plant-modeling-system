@@ -20,6 +20,8 @@ private:
   quat attitude{glm::identity<quat>()};
 
 public:
+  friend Transform operator*(Transform t1, const Transform &t2);
+
   Transform(vec3 position, vec3 attitude_vec, float attitude_angle)
       : position(position),
         attitude(glm::angleAxis(attitude_angle, attitude_vec)) {}
@@ -49,14 +51,15 @@ public:
     vec3 rel_front = rot_mat * _front;
 
     vec3 rel_offset =
-        offset.x * rel_right + offset.y * rel_up - offset.z * rel_front;
+        offset.x * rel_right + offset.y * rel_up + offset.z * rel_front;
 
     this->position += rel_offset;
   }
 
   void rotate(float rot_angle, vec3 rot_axis) {
     quat rot = glm::angleAxis(rot_angle, rot_axis);
-    this->attitude = rot * this->attitude;
+    // this->attitude = rot * this->attitude;
+    this->attitude = this->attitude * rot;    // 为什么这样才是对的？
   }
 
   mat4 getModel() const {
@@ -66,6 +69,24 @@ public:
     mvp = mvp * rot_mat;
     return mvp;
   }
+
 };
+
+
+Transform operator*(Transform t1, const Transform &t2){
+    // 该乘法为 t1 * t2
+    // 变换的顺序默认为，t2先作用，t1后作用
+
+    // t1视作后继节点的相对偏移，t2视作前面节点的累积偏移
+    // vec3 offset = glm::inverse(t2.getAttitude()) * t1.position * t2.getAttitude();
+
+    // 以下operator*被重载为 q*v*q^-1
+    vec3 offset = t2.getAttitude() * t1.position;   // 为什么这么做是对的？
+
+    t1.attitude =  t2.getAttitude() * t1.attitude;   // 为什么这么做是对的？
+    t1.position = t2.position + offset;
+
+    return t1;
+}
 
 } // namespace
