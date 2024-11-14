@@ -112,6 +112,7 @@ struct GraphicsCallSym : public LProdCall {
       context->cur_node = node;
       // 创建几何体
       shared_ptr<Sphere> geometry = make_shared<Sphere>(args[0]);
+      context->cur_node->obj = static_pointer_cast<Geometry>(geometry);
       // 设置偏移量（球没有位置偏移）
     }else if(name=="Cylinder"){
       // 构造SkNode
@@ -121,6 +122,7 @@ struct GraphicsCallSym : public LProdCall {
       context->cur_node = node;
       // 创建几何体
       shared_ptr<Cylinder> geometry = make_shared<Cylinder>(args[0],args[1]);
+      context->cur_node->obj = static_pointer_cast<Geometry>(geometry);
       // 设置偏移量
       vec3 offset = std::get<float>(geometry->parameters["height"]) * _up;
       context->transform.translate_relative(offset);
@@ -166,9 +168,9 @@ struct GraphicsStructure {
 
   shared_ptr<Skeleton> construct() const {
     for (shared_ptr<LProdCall> cmd : this->call_list){
-
       cmd->exec(context);
     }
+    context->skeleton->update();  // 根据每个节点的相对位置姿态计算绝对位置姿态
     // 符号序列执行完毕，最后一步将生成的Skeleton返回
     return context->skeleton;
   }
