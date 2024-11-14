@@ -105,52 +105,53 @@ struct GraphicsCallSym : public LProdCall {
     // 暂时先用if else进行粗暴的实现
     
     if(name=="Sphere"){
-      // 构造SkNode
-      SkNode *node = new SkNode();
-      node->parent = context->cur_node;
-      context->cur_node->addChild(node);
-      context->cur_node = node;
       // 创建几何体
       shared_ptr<Sphere> geometry = make_shared<Sphere>(args[0]);
-      context->cur_node->obj = static_pointer_cast<Geometry>(geometry);
       // 设置偏移量（球没有位置偏移）
-    }else if(name=="Cylinder"){
       // 构造SkNode
       SkNode *node = new SkNode();
       node->parent = context->cur_node;
       context->cur_node->addChild(node);
       context->cur_node = node;
+      context->cur_node->obj = static_pointer_cast<Geometry>(geometry);
+      // 为新节点重置上下文的transform
+      context->transform = Transform();
+    }else if(name=="Cylinder"){
       // 创建几何体
       shared_ptr<Cylinder> geometry = make_shared<Cylinder>(args[0],args[1]);
-      context->cur_node->obj = static_pointer_cast<Geometry>(geometry);
       // 设置偏移量
       vec3 offset = std::get<float>(geometry->parameters["height"]) * _up;
       context->transform.translate_relative(offset);
-      context->cur_node->setPosition(offset);
-    }else if(name=="F"){   // 不构造几何体，但是会增加节点
+      context->cur_node->setPosition(context->transform.getPosition());
       // 构造SkNode
       SkNode *node = new SkNode();
       node->parent = context->cur_node;
       context->cur_node->addChild(node);
       context->cur_node = node;
+      context->cur_node->obj = static_pointer_cast<Geometry>(geometry);
+      // 为新节点重置上下文的transform
+      context->transform = Transform();
+    }else if(name=="F"){   // 不构造几何体，也不生成节点
+      // // 构造SkNode
+      // SkNode *node = new SkNode();
+      // node->parent = context->cur_node;
+      // context->cur_node->addChild(node);
+      // context->cur_node = node;
       // 设置偏移量
       vec3 offset = _up;
-      if(args.size()>0)
+      if(args.size() > 0) // 无参数则前进1个单位
         offset *= args[0];
       context->transform.translate_relative(offset);   // 以当前姿态下的_up为默认前进方向
-      context->cur_node->setPosition(offset);
+      context->cur_node->setPosition(context->transform.getPosition());
     }else if(name=="RX"){
       context->transform.rotate(glm::radians(args[0]), _right);
-      glm::quat attitude = glm::quat_cast(glm::rotate(glm::mat4(1.0f), glm::radians(args[0]), _right));
-      context->cur_node->setAttitude(attitude);
+      context->cur_node->setAttitude(context->transform.getAttitude());
     }else if(name=="RY"){
       context->transform.rotate(glm::radians(args[0]), _up);
-      glm::quat attitude = glm::quat_cast(glm::rotate(glm::mat4(1.0f), glm::radians(args[0]), _up));
-      context->cur_node->setAttitude(attitude);
+      context->cur_node->setAttitude(context->transform.getAttitude());
     }else if(name=="RZ"){
       context->transform.rotate(glm::radians(args[0]), -_front);
-      glm::quat attitude = glm::quat_cast(glm::rotate(glm::mat4(1.0f), glm::radians(args[0]), -_front));
-      context->cur_node->setAttitude(attitude);
+      context->cur_node->setAttitude(context->transform.getAttitude());
     }else{
       printf("unknown graphics symbol : \"%s\"\n", name.c_str());
       fflush(stdout);

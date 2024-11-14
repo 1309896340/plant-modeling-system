@@ -132,6 +132,19 @@ public:
       cur->abs_transform.setPosition(new_cur_position);   // 当前节点的起始位置
     }
   }
+
+  void traverse(function<void(SkNode *)> visit){
+    // 广度优先遍历
+    deque<SkNode *> buf{this->root};
+    while(!buf.empty()){
+      SkNode *cur = buf.front();
+      buf.pop_front();
+      if(cur != this->root)
+        visit(cur);
+      if(cur->children.size() > 0)
+        buf.insert(buf.end(), cur->children.begin(), cur->children.end());
+    }
+  }
 };
 
 } // namespace

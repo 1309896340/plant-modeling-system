@@ -5,6 +5,7 @@
 #include "GeometryGenerator.hpp"
 #include "LSystem.hpp"
 #include "lexy/input/string_input.hpp"
+#include "lexy/visualize.hpp"
 #include "lexy_ext/report_error.hpp"
 
 // 这里尝试将LSystem模块嵌入到当前项目中
@@ -32,10 +33,10 @@ int main(int argc, char **argv) {
   // scene.add("Cylinder", make_shared<Cylinder>(2.5f, 5.0f), {5.0f, 0.0f, 0.0f});
 
   vector<string> productions = {
-    "A(x) -> Cylinder(0.05,x*0.95) [RZ(30)RY(90)Sphere(x*0.8)] [RZ(-30)RY(90)Sphere(x*0.8)]"
+    "Cylinder(r, h) -> Cylinder(r,h*0.8) [RZ(30)RY(90)Sphere(r)] [RZ(-30)RY(90)Sphere(r)]"
   };
 
-  LSystem::D0L_System lsys("A(1)", productions);
+  LSystem::D0L_System lsys("Cylinder(0.05, 1)", productions);
 
   string lsys_cmds = lsys.next(1);
   cout << lsys_cmds << endl;
@@ -45,12 +46,17 @@ int main(int argc, char **argv) {
   auto res = lexy::parse<GeometryGenerator::grammar::GraphicsStructure>(s_input, lexy_ext::report_error);
   assert(res.is_success());
   const GeometryGenerator::config::GraphicsStructure &gs = res.value();
-
   shared_ptr<Skeleton> skeleton = gs.construct();
+  scene.add("skeleton", skeleton, Transform{vec3(0.0f,0.0f,0.0f)});
 
 
-  printf("break\n");
+  
+  // auto s_input = lexy::zstring_input(lsys_cmds.c_str());
+  // lexy::parse_tree_for<decltype(s_input)> tree;
+  // auto result = lexy::parse_as_tree<GeometryGenerator::grammar::GraphicsStructure>(tree, s_input, lexy_ext::report_error);
+  // lexy::visualize(stdout, tree, {lexy::visualize_fancy});
 
-  // scene.mainloop();
+
+  scene.mainloop();
   return 0;
 }

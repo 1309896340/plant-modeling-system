@@ -1,8 +1,6 @@
 ﻿#pragma once
 
 // #define NDEBUG
-
-#include "glm/ext/matrix_transform.hpp"
 #include <algorithm>
 #include <cassert>
 #include <cmath>
@@ -38,6 +36,7 @@
 #include "Light.hpp"
 #include "Shader.hpp"
 #include "Transform.hpp"
+#include "Skeleton.hpp"
 
 #define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
 #define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.06f
@@ -543,6 +542,7 @@ public:
   map<string, shared_ptr<GeometryRenderObject>> objs;
   map<string, shared_ptr<GeometryRenderObject>> aux;
   map<string, shared_ptr<LineDrawer>> lines;
+  map<string, shared_ptr<Skeleton>> skeletons;
 
   // shared_ptr<LineDrawer> ray_buffer{nullptr};
 
@@ -1234,13 +1234,13 @@ public:
     // 第三个参数为true时，将obj加入到this->objs中，并将其设置isAux为true，其他对象默认isAux为false
     if (!flag) {
       if (this->aux.find(name) != this->aux.end()) {
-        cout << "scene cannot add object with an existed name \"" << name << "\"" << endl;
+        cout << "scene cannot add \"SceneObject aux\" with an existed name \"" << name << "\"" << endl;
         return;
       }
       this->aux[name] = obj;
     } else {
       if (this->objs.find(name) != this->objs.end()) {
-        cout << "scene cannot add object with an existed name \"" << name << "\"" << endl;
+        cout << "scene cannot add \"SceneObject obj\" with an existed name \"" << name << "\"" << endl;
         return;
       }
       obj->isAux = true;
@@ -1248,10 +1248,31 @@ public:
     }
   }
 
+  void add(const string &name, shared_ptr<Skeleton> skeleton, Transform transform){
+    // 加入骨架对象，考虑遍历Skeleton的所有节点并将其中的Geometry加入到this->objs中
+    if(this->skeletons.find(name) != this->skeletons.end()){
+      cout << "scene cannot add \"Skeleton\" with an existed name \"" << name << "\"" << endl;
+      return;
+    }
+    this->skeletons[name] = skeleton;
+    uint32_t geo_id = 1;
+    // 遍历skeleton的所有节点并加入到this->objs中
+    skeleton->traverse([=,this,&geo_id](SkNode *node){
+      stringstream node_geom_name;
+      node_geom_name << name << "_" << geo_id;
+      this->add(node_geom_name.str(), node->obj, transform);
+      geo_id++;
+    });
+  }
+  
+  void add(const string &name, shared_ptr<Skeleton> skeleton){
+    this->add(name, skeleton, Transform{});
+  }
+
   void add(const string &name, const shared_ptr<Geometry> &geometry,
            Transform transform) {
     if (this->objs.find(name) != this->objs.end()) {
-      cout << "scene cannot add object with an existed name \"" << name << "\"" << endl;
+      cout << "scene cannot add \"Geometry\" with an existed name \"" << name << "\"" << endl;
       return;
     }
     this->objs[name] = make_shared<GeometryRenderObject>(geometry, transform);

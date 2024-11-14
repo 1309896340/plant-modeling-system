@@ -1,4 +1,7 @@
 #include "LSystem.h"
+#include "lexy/dsl/capture.hpp"
+#include "lexy/encoding.hpp"
+#include "lexy/lexeme.hpp"
 #ifndef __WIND_MATHEXPR
 #define __WIND_MATHEXPR
 
@@ -46,13 +49,25 @@ struct Expr_literal : Expr {
     float val;
     Expr_literal(float val)
         : val(val) {}
-    Expr_literal(const int a, const optional<int>& b)
+    // Expr_literal(const int a, const optional<int>& b)
+    //     : val(static_cast<float>(a)) {  // 初始化的时候就计算
+    //     if (b.has_value()) {
+    //         float tmp = static_cast<float>(b.value());
+    //         while (tmp >= 1.0f)
+    //             tmp /= 10.0f;
+    //         val += tmp;
+    //     }
+    // }
+    Expr_literal(const int a, const optional<string>& b)
         : val(static_cast<float>(a)) {  // 初始化的时候就计算
-        if (b.has_value()) {
-            float tmp = static_cast<float>(b.value());
-            while (tmp >= 1.0f)
-                tmp /= 10.0f;
-            val += tmp;
+        // 计算分数
+        if(b.has_value()){
+            float p = 0.1f;
+            string frac = b.value();
+            for(uint8_t i=0; i<frac.size(); i++){
+                val += p*(frac[i]-'0');
+                p /= 10.0f;
+            }
         }
     }
     virtual float evaluate(ast::Environment& env) const { return this->val; }
@@ -133,11 +148,21 @@ namespace grammar {  // 语法解析============================================
 namespace dsl = lexy::dsl;
 constexpr auto escaped_newline = dsl::backslash >> dsl::newline;
 
+struct NFraction{
+    // 消耗digit序列，生成string
+    static constexpr auto rule = dsl::capture(dsl::digits<>);
+    static constexpr auto value = lexy::callback<string>(
+        [](lexy::string_lexeme<lexy::ascii_encoding> lex){
+            return string(lex.begin(), lex.end());
+        } 
+    );
+};
+
 struct Number {
     static constexpr auto rule = [] {
         auto prefix = dsl::peek(dsl::ascii::digit);
         auto number = dsl::integer<int>;
-        auto fraction = dsl::opt(dsl::lit_c<'.'> >> dsl::integer<int>);
+        auto fraction = dsl::opt(dsl::lit_c<'.'> >> dsl::p<NFraction>);
         return prefix >> number + fraction;
     }();
     static constexpr auto value = lexy::construct<ast::Expr_literal>;
