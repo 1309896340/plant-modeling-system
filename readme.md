@@ -40,7 +40,39 @@
 
 
 10月5日：
-1. 实现骨架中对每个骨骼节点姿态位置的更新计算（完成）
+实现骨架中对每个骨骼节点姿态位置的更新计算（完成）
 
 10月6日：
 初步使用计算着色器，思考在计算着色器中实现对光的积分
+
+11月19日：
+优化Camera中的属性更新逻辑
+
+```mermaid
+graph TB
+attitude_shadow["theta_s 和 phi_s"]
+attitude["theta 和 phi"]
+toward[toward]
+
+setAttitude[["setAttitude(float theta, float phi)"]]
+rotate[["rotate(vec3 offset)"]]
+lookAt[["lookAt(vec3 target)"]]
+updateToward[["updateToward()"]]
+updateAttitude[["updateAttitude()"]]
+updateAttitudeFromShadow[["updateAttitudeFromShadow()"]]
+
+rotate --> attitude_shadow
+setAttitude--> attitude
+lookAt --> toward
+
+attitude --> updateToward --> toward --> updateAttitude --"回传"--> attitude 
+updateAttitude --"回传"--> attitude_shadow --> updateAttitudeFromShadow --> attitude
+```
+
+如上图所示，多个更新方法之间存在链式调用：
+1. `rotate()`在设置`theta_s`和`phi_s`之后会自动调用`updateAttitudeFromShadow()` 
+2. `updateAttitudeFromShadow()`在更新`theta`和`phi`后会自动调用`updateToward()` 
+3. `lookAt()`在设置`toward`后会自动调用`updateAttitude()`，
+4. `updateToward()`在更新`toward`后会自动调用`updateAttitude()` 
+5. `updateAttitude()`会计算姿态角并更新`theta`、`phi`、`theta_s`、`phi_s` 但不会继续调用(否则会产生递归死循环)
+
