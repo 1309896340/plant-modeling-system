@@ -39,7 +39,7 @@ int main(int argc, char **argv) {
 
   LSystem::D0L_System lsys("Sphere(0.03, 3)", productions);
 
-  string lsys_cmds = lsys.next(9);
+  string lsys_cmds = lsys.next(4);
   // cout << lsys_cmds << endl;
 
   // 生成，渲染

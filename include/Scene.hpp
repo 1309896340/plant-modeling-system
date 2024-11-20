@@ -364,6 +364,7 @@ class GeometryRenderObject {
     }
 
   public:
+    string name;
     shared_ptr<Geometry> geometry;
     Transform transform;
 
@@ -389,20 +390,24 @@ class GeometryRenderObject {
     //   GLuint output_texture;   // 计算着色器输出结果
     // } ctx;
 
-    bool isSelected{false};
+    // 用于分组的属性
+    bool selected{false};
     bool visible{true};
+    bool collided{false};
+    bool listed{true};
+    bool lighted{true};
+
     // 暂时只是为了处理Ground作为aux元素却需要做光线碰撞的问题
     // 仅仅为了能将Ground从objs的其他对象中区分出来
-    bool isAux{false};
 
     GeometryRenderObject() = default;
-    GeometryRenderObject(const shared_ptr<Geometry> &geometry,
+    GeometryRenderObject(const string &name, const shared_ptr<Geometry> &geometry,
                          Transform transform)
-        : geometry(geometry), transform(transform) {
+        : name(name), geometry(geometry), transform(transform) {
         initVBO();
     }
-    GeometryRenderObject(const shared_ptr<Geometry> &geometry)
-        : GeometryRenderObject(geometry, Transform()) {}
+    GeometryRenderObject(const string &name, const shared_ptr<Geometry> &geometry)
+        : GeometryRenderObject(name, geometry, Transform()) {}
 
     void constructBvhTree() {
         if (this->bvhtree != nullptr) {
@@ -540,8 +545,9 @@ class Scene {
   public:
     map<string, Shader *> shaders;
     map<string, GLuint> textures;
-    map<string, shared_ptr<GeometryRenderObject>> objs;
-    map<string, shared_ptr<GeometryRenderObject>> aux;
+    vector<shared_ptr<GeometryRenderObject>> objs;
+    // map<string, shared_ptr<GeometryRenderObject>> aux;
+
     map<string, shared_ptr<LineDrawer>> lines;
     map<string, shared_ptr<Skeleton>> skeletons;
 
@@ -644,50 +650,50 @@ class Scene {
         // 光源
         shared_ptr<Geometry> lightBall = make_shared<Sphere>(0.07f, 36, 72);
         shared_ptr<GeometryRenderObject> obj1 =
-            make_shared<GeometryRenderObject>(lightBall);
+            make_shared<GeometryRenderObject>("Light", lightBall);
         obj1->geometry->setColor(1.0f, 1.0f, 1.0f);
         obj1->updateVBO();
-        this->addSceneObject("Light", obj1);
+        this->addSceneObject(obj1, true, false, false, false);
 
         // 坐标轴
         shared_ptr<Geometry> axis = make_shared<CoordinateAxis>();
         shared_ptr<GeometryRenderObject> obj2 =
-            make_shared<GeometryRenderObject>(axis);
-        this->addSceneObject("Axis", obj2);
+            make_shared<GeometryRenderObject>("Axis", axis);
+        this->addSceneObject(obj2, true, false, false, false);
 
         // 游标
         shared_ptr<Geometry> cursor = make_shared<Sphere>(0.05, 36, 72);
         cursor->setColor(1.0f, 1.0f, 0.0f);
         shared_ptr<GeometryRenderObject> cursor_obj =
-            make_shared<GeometryRenderObject>(cursor,
+            make_shared<GeometryRenderObject>("Cursor", cursor,
                                               Transform{vec3(0.0f, 2.0f, 0.0f)});
         cursor_obj->visible = this->isShowCursor;
-        this->addSceneObject("Cursor", cursor_obj);
+        this->addSceneObject(cursor_obj, true, false, false, false);
 
         // 地面
         shared_ptr<Geometry> ground = make_shared<Ground>(20.0f, 20.0f);
         // 为了让光线不在两个重叠面上抖动进而穿透，将Ground下移一个微小距离
-        shared_ptr<GeometryRenderObject> obj3 = make_shared<GeometryRenderObject>(ground, Transform({0.0f, -0.1f, 0.0f}));
+        shared_ptr<GeometryRenderObject> obj3 = make_shared<GeometryRenderObject>("Ground", ground, Transform({0.0f, -0.1f, 0.0f}));
         obj3->texture = this->textures["fabric"];
-        this->addSceneObject("Ground", obj3, true); // 第三个参数表示是否作为特殊对象加入到this->objs中
+        this->addSceneObject(obj3, true, false, true, true);
 
         // 左侧面
         shared_ptr<Geometry> side_left = make_shared<Plane>(20.0f, 20.0f);
         side_left->setColor(0.0f, 0.0f, 1.0f);
-        shared_ptr<GeometryRenderObject> side_left_obj = make_shared<GeometryRenderObject>(side_left, Transform({-10.0f, 9.9f, 0.0f}, _front, glm::radians(90.0f)));
-        this->addSceneObject("Side_left", side_left_obj, true);
+        shared_ptr<GeometryRenderObject> side_left_obj = make_shared<GeometryRenderObject>("Side_left", side_left, Transform({-10.0f, 9.9f, 0.0f}, _front, glm::radians(90.0f)));
+        this->addSceneObject(side_left_obj, true, false, true, true);
 
         // 后侧面
         shared_ptr<Geometry> side_back = make_shared<Plane>(20.0f, 20.0f);
         side_back->setColor(0.0f, 1.0f, 0.0f);
-        shared_ptr<GeometryRenderObject> side_back_obj = make_shared<GeometryRenderObject>(side_back, Transform({0.0f, 9.9f, -10.0f}, _right, glm::radians(90.0f)));
-        this->addSceneObject("Side_back", side_back_obj, true);
+        shared_ptr<GeometryRenderObject> side_back_obj = make_shared<GeometryRenderObject>("Side_back", side_back, Transform({0.0f, 9.9f, -10.0f}, _right, glm::radians(90.0f)));
+        this->addSceneObject(side_back_obj, true, false, true, true);
 
         // 上侧面
         shared_ptr<Geometry> side_top = make_shared<Plane>(20.0f, 20.0f);
         side_top->setColor(1.0f, 0.0f, 0.0f);
-        shared_ptr<GeometryRenderObject> side_top_obj = make_shared<GeometryRenderObject>(side_top, Transform({0.0f, 19.9f, 0.0f}, _right, glm::radians(180.0f)));
-        this->addSceneObject("Side_top", side_top_obj, true);
+        shared_ptr<GeometryRenderObject> side_top_obj = make_shared<GeometryRenderObject>("Side_top", side_top, Transform({0.0f, 19.9f, 0.0f}, _right, glm::radians(180.0f)));
+        this->addSceneObject(side_top_obj, true, false, true, true);
     }
 
     void init_skybox() {
@@ -808,13 +814,31 @@ class Scene {
     //   glBufferData(GL_ARRAY_BUFFER, ray_obj.vertices.size() * sizeof(vec3), ray_obj.vertices.data(), GL_DYNAMIC_DRAW);
     // }
 
-    void showAxis() { this->aux["Axis"]->visible = true; }
-    void hideAxis() { this->aux["Axis"]->visible = false; }
-    void showGround() { this->aux["Ground"]->visible = true; }
-    void hideGround() { this->aux["Ground"]->visible = false; }
-
-    void showCursor() { this->aux["Cursor"]->visible = true; };
-    void hideCursor() { this->aux["Cursor"]->visible = false; };
+    void showAxis() {
+        shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName("Axis");
+        if (ptr)
+            ptr->visible = true;
+    }
+    void hideAxis() {
+        shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName("Axis");
+        ptr->visible = false;
+    }
+    void showGround() {
+        shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName("Ground");
+        ptr->visible = true;
+    }
+    void hideGround() {
+        shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName("Ground");
+        ptr->visible = false;
+    }
+    void showCursor() {
+        shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName("Cursor");
+        ptr->visible = true;
+    };
+    void hideCursor() {
+        shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName("Cursor");
+        ptr->visible = false;
+    };
 
     void show_info() {
         const GLubyte *vendor = glGetString(GL_VENDOR);
@@ -825,15 +849,25 @@ class Scene {
 
     void printRadiosityInfo() {
         printf("============================output============================\n");
-        for (auto &[name, cur_obj] : this->objs) {
-            if (cur_obj->isAux)
+        for (auto &cur_obj : this->objs) {
+            if (!cur_obj->listed)
                 continue;
             vec3 flux_sum{0.0f, 0.0f, 0.0f};
             for (int i = 0; i < cur_obj->radiosity.radiant_flux.size(); i++) {
                 flux_sum += cur_obj->radiosity.radiant_flux[i];
             }
-            printf("%s : (%.2f, %.2f, %.2f)\n", name.c_str(), flux_sum.r, flux_sum.g, flux_sum.b);
+            printf("%s : (%.2f, %.2f, %.2f)\n", cur_obj->name.c_str(), flux_sum.r, flux_sum.g, flux_sum.b);
         }
+    }
+
+    shared_ptr<GeometryRenderObject> findGeometryRenderObjectByName(const string &name) {
+        auto iter = find_if(this->objs.begin(), this->objs.end(),
+                            [&](shared_ptr<GeometryRenderObject> gro) {
+                                return gro->name.compare(name) == 0;
+                            });
+        if (iter == this->objs.end())
+            return nullptr;
+        return *iter;
     }
 
     // void setSeed(uint32_t sd) {
@@ -930,14 +964,14 @@ class Scene {
                     // float min_distance = FLT_MAX;
                     // bool isisHit = false;
                     HitInfo_imgui target_obj;
-                    for (auto &[name, oobj] : this->objs) {
-                        if (oobj->isAux)
+                    for (auto &cur_obj : this->objs) {
+                        if (!cur_obj->listed)
                             continue;
 
                         HitInfo_imgui tmp_obj;
-                        if (oobj->bvhtree != nullptr) {
+                        if (cur_obj->bvhtree != nullptr) {
                             // 层次包围盒求交
-                            HitInfo hit_obj = oobj->bvhtree->intersect(ray);
+                            HitInfo hit_obj = cur_obj->bvhtree->intersect(ray);
                             if (hit_obj.isHit) {
                                 tmp_obj.isHit = true;
                                 tmp_obj.hitPos = hit_obj.hitPos;
@@ -947,28 +981,30 @@ class Scene {
                             }
                         } else {
                             // 普通外层包围盒求交
-                            if (oobj->box->hit(ray)) {
+                            if (cur_obj->box->hit(ray)) {
                                 tmp_obj.isHit = true;
-                                tmp_obj.hitPos = oobj->box->getBoxCenter();
+                                tmp_obj.hitPos = cur_obj->box->getBoxCenter();
                                 tmp_obj.distance = glm::distance(ray.origin, tmp_obj.hitPos);
                                 tmp_obj.type = 0;
                                 // tmp_obj.id = 0; // 后面统一获取
                             }
                         }
                         if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
-                            tmp_obj.id = std::distance(this->imgui.items.begin(), std::find(this->imgui.items.begin(), this->imgui.items.end(), name));
+                            tmp_obj.id = std::distance(this->imgui.items.begin(), std::find(this->imgui.items.begin(), this->imgui.items.end(), cur_obj->name));
                             target_obj = tmp_obj;
                         }
                     }
                     // 找到最近碰撞目标target_obj
                     if (target_obj.isHit) {
                         this->imgui.selected_idx = target_obj.id;
-                        this->camera.setAnchor(
-                            this->objs[this->imgui.items[this->imgui.selected_idx]]
-                                ->box->getBoxCenter());
+                        shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName(this->imgui.items[this->imgui.selected_idx]);
+                        if (ptr)
+                            this->camera.setAnchor(ptr->box->getBoxCenter());
                         switch (target_obj.type) {
                         case 1: {
-                            this->aux["Cursor"]->transform.setPosition(target_obj.hitPos);
+                            shared_ptr<GeometryRenderObject> ptr1 = findGeometryRenderObjectByName("Cursor");
+                            if (ptr1)
+                                ptr1->transform.setPosition(target_obj.hitPos);
                             printf("选中点位置：(%.2f, %.2f, %.2f)\n", target_obj.hitPos.x, target_obj.hitPos.y, target_obj.hitPos.z);
                             break;
                         }
@@ -1025,7 +1061,9 @@ class Scene {
             ImGui::SliderFloat3(TEXT("位置"), glm::value_ptr(this->light.position),
                                 -20.0f, 20.f);
             // 暂时这么写
-            this->aux["Light"]->transform.setPosition(light.position);
+            shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName("Light");
+            if (ptr)
+                ptr->transform.setPosition(light.position);
             ImGui::TreePop();
         }
 
@@ -1037,12 +1075,12 @@ class Scene {
         if (ImGui::TreeNodeEx(TEXT("几何管理"), ImGuiTreeNodeFlags_DefaultOpen)) {
             bool is_hightlight = true;
             this->imgui.items.clear();
-            for (auto &obj : this->objs) {
-                if (obj.second->isAux) {
+            for (auto &cur_obj : this->objs) {
+                if (!cur_obj->listed) {
                     // 排除该对象
                     continue;
                 }
-                this->imgui.items.push_back(obj.first);
+                this->imgui.items.push_back(cur_obj->name);
             }
             if (ImGui::BeginListBox(TEXT("物体"))) {
                 for (int i = 0; i < this->imgui.items.size(); i++) {
@@ -1052,15 +1090,20 @@ class Scene {
                     if (is_hightlight && ImGui::IsItemHovered())
                         imgui.highlighted_idx = i;
                     if (is_selected) {
-                        imgui.cur_obj = this->objs[this->imgui.items[i]];
+                        imgui.cur_obj = findGeometryRenderObjectByName(this->imgui.items[i]);
                         ImGui::SetItemDefaultFocus();
                     }
                 }
                 // 回传选中状态
                 for (int i = 0; i < this->imgui.items.size(); i++) {
-                    this->objs[this->imgui.items[i]]->isSelected = false;
-                    if (imgui.selected_idx == i)
-                        this->objs[this->imgui.items[i]]->isSelected = true;
+                    shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName(this->imgui.items[i]);
+                    if (ptr)
+                        ptr->selected = false;
+                    if (imgui.selected_idx == i) {
+                        shared_ptr<GeometryRenderObject> ptr1 = findGeometryRenderObjectByName(this->imgui.items[i]);
+                        if (ptr1)
+                            ptr1->selected = true;
+                    }
                 }
                 ImGui::EndListBox();
             }
@@ -1214,10 +1257,10 @@ class Scene {
 
     void test_triangle_coord() {
         lines["Coord"]->clear();
-        for (auto &[name, obj] : this->objs) {
-            mat4 model = obj->transform.getModel();
-            for (auto &triangle : obj->geometry->surfaces) {
-                TriangleSampler tri(obj->geometry->vertices, triangle, model);
+        for (auto &cur_obj : this->objs) {
+            mat4 model = cur_obj->transform.getModel();
+            for (auto &triangle : cur_obj->geometry->surfaces) {
+                TriangleSampler tri(cur_obj->geometry->vertices, triangle, model);
                 vec3 tri_center = tri.calcCenter();
                 // vec3 tri_norm = tri.calcNorm();
                 // printf("三角中心： (%.2f,%.2f,%.2f)\n", tri_center.x, tri_center.y, tri_center.z);
@@ -1231,22 +1274,35 @@ class Scene {
         lines["Coord"]->updateVBO();
     }
 
-    void addSceneObject(const string &name, const shared_ptr<GeometryRenderObject> &obj, bool flag = false) {
-        // 第三个参数为true时，将obj加入到this->objs中，并将其设置isAux为true，其他对象默认isAux为false
-        if (!flag) {
-            if (this->aux.find(name) != this->aux.end()) {
-                cout << "scene cannot add \"SceneObject aux\" with an existed name \"" << name << "\"" << endl;
-                return;
-            }
-            this->aux[name] = obj;
-        } else {
-            if (this->objs.find(name) != this->objs.end()) {
-                cout << "scene cannot add \"SceneObject obj\" with an existed name \"" << name << "\"" << endl;
-                return;
-            }
-            obj->isAux = true;
-            this->objs[name] = obj;
+    void addSceneObject(const shared_ptr<GeometryRenderObject> &obj,
+                        bool visible = true, bool listed = false,
+                        bool collided = false, bool lighted = false) {
+
+        shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName(obj->name);
+        if (ptr != nullptr) {
+            cout << "scene cannot add \"SceneObject aux\" with an existed name \"" << obj->name << "\"" << endl;
+            return;
         }
+        obj->visible = visible;
+        obj->listed = listed;
+        obj->collided = collided;
+        obj->lighted = lighted;
+        this->objs.emplace_back(obj);
+
+        // if (!flag) {
+        //     if (this->aux.find(name) != this->aux.end()) {
+        //         cout << "scene cannot add \"SceneObject aux\" with an existed name \"" << name << "\"" << endl;
+        //         return;
+        //     }
+        //     this->aux[name] = obj;
+        // } else {
+        //     if (this->objs.find(name) != this->objs.end()) {
+        //         cout << "scene cannot add \"SceneObject obj\" with an existed name \"" << name << "\"" << endl;
+        //         return;
+        //     }
+        //     obj->isAux = true;
+        //     this->objs[name] = obj;
+        // }
     }
 
     void add(const string &name, shared_ptr<Skeleton> skeleton, Transform transform) {
@@ -1286,31 +1342,67 @@ class Scene {
     }
 
     void add(const string &name, const shared_ptr<Geometry> &geometry,
-             Transform transform) {
-        if (this->objs.find(name) != this->objs.end()) {
-            cout << "scene cannot add \"Geometry\" with an existed name \"" << name << "\"" << endl;
+             Transform transform, bool visible = true, bool listed = true,
+             bool collided = true, bool lighted = true) {
+
+        shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName(name);
+        if (ptr != nullptr) {
+            cout << "scene cannot add \"SceneObject aux\" with an existed name \"" << name << "\"" << endl;
             return;
         }
-        this->objs[name] = make_shared<GeometryRenderObject>(geometry, transform);
+
+        ptr = make_shared<GeometryRenderObject>(name, geometry, transform);
+        ptr->visible = visible;
+        ptr->listed = listed;
+        ptr->collided = collided;
+        ptr->lighted = lighted;
+        this->objs.emplace_back(ptr);
 
         // 加入对场景元素的默认选择，总是选中最后加入的物体，并取消选择其他物体
-        for (auto &[name, obj] : this->objs) {
-            if (obj->isAux)
+        for (auto &cur_obj : this->objs) {
+            if (!cur_obj->listed)
                 continue;
-            obj->isSelected = false;
+            cur_obj->selected = false;
         }
-        this->objs[name]->isSelected = true;
         // 初始化Scene::imgui::selected_idx
         this->imgui.items.clear();
-        for (auto &[name, obj] : this->objs) {
-            if (obj->isAux)
+        for (auto &cur_obj : this->objs) {
+            if (!cur_obj->listed)
                 continue;
             this->imgui.items.emplace_back(name); // 初始化 this->imgui.items
         }
         for (int i = 0; i < this->imgui.items.size(); i++) {
-            if (this->objs[this->imgui.items[i]]->isSelected)
+            shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName(this->imgui.items[i]);
+            if (ptr && ptr->selected)
                 this->imgui.selected_idx = i; // 初始化 this->imgui.selected_idx
         }
+
+        // ==========================================
+
+        // if (this->objs.find(name) != this->objs.end()) {
+        //     cout << "scene cannot add \"Geometry\" with an existed name \"" << name << "\"" << endl;
+        //     return;
+        // }
+        // this->objs[name] = make_shared<GeometryRenderObject>(geometry, transform);
+
+        // // 加入对场景元素的默认选择，总是选中最后加入的物体，并取消选择其他物体
+        // for (auto &[name, obj] : this->objs) {
+        //     if (obj->isAux)
+        //         continue;
+        //     obj->isSelected = false;
+        // }
+        // this->objs[name]->isSelected = true;
+        // // 初始化Scene::imgui::selected_idx
+        // this->imgui.items.clear();
+        // for (auto &[name, obj] : this->objs) {
+        //     if (obj->isAux)
+        //         continue;
+        //     this->imgui.items.emplace_back(name); // 初始化 this->imgui.items
+        // }
+        // for (int i = 0; i < this->imgui.items.size(); i++) {
+        //     if (this->objs[this->imgui.items[i]]->isSelected)
+        //         this->imgui.selected_idx = i; // 初始化 this->imgui.selected_idx
+        // }
     }
 
     void add(const string &name, const shared_ptr<Geometry> &geometry) {
@@ -1323,17 +1415,19 @@ class Scene {
     }
 
     void addLight(const string &name, const shared_ptr<Light> &light) {
-        if (this->objs.find(name) != this->objs.end()) {
+        shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName(name);
+        if (ptr != nullptr) {
             cerr << "scene cannot add object with an existed name!" << endl;
             return;
         }
         this->lights.emplace_back(light);
+
         // 建立渲染对象，加入到aux中，不同子类建立的可视化对象不一样
         shared_ptr<GeometryRenderObject> render_obj = nullptr;
         switch (light->type) {
         case Light::LightType::POINT: {
             render_obj =
-                make_shared<GeometryRenderObject>(make_shared<Sphere>(0.03, 36, 72));
+                make_shared<GeometryRenderObject>("Light", make_shared<Sphere>(0.03, 36, 72));
             break;
         }
         case Light::LightType::PARALLEL: {
@@ -1347,12 +1441,9 @@ class Scene {
         }
 
         if (render_obj != nullptr) {
-            this->aux[name] = render_obj;
+            this->objs.emplace_back(render_obj);
         } else
             cerr << "该光源类型的渲染对象未在Scene::addLight()中实现！" << endl;
-
-        // 即使无法可视化，也会将对象加入
-        this->lights.emplace_back(light);
     }
 
     // void compute_radiosity_1() {
@@ -1397,12 +1488,12 @@ class Scene {
 
         HitInfo target_obj;
         // string target_name;
-        for (auto &[name, obj] : this->objs) {
-            assert(obj->bvhtree != nullptr && "element in scene.objs must construct bvh-tree!"); // 假定都生成了bvh树
+        for (auto &cur_obj : this->objs) {
+            assert(cur_obj->bvhtree != nullptr && "element in scene.objs must construct bvh-tree!"); // 假定都生成了bvh树
 
-            HitInfo tmp_obj = obj->bvhtree->intersect(ray);
+            HitInfo tmp_obj = cur_obj->bvhtree->intersect(ray);
             if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
-                tmp_obj.geometry_name = name;
+                tmp_obj.geometry_name = cur_obj->name;
                 target_obj = tmp_obj;
                 // target_name = name;
                 // hobj.obj_name = name;
@@ -1529,8 +1620,8 @@ class Scene {
 
         lines["Ray"]->clear();
         // 遍历每个场景(非aux)物体
-        for (auto &[name, cur_obj] : this->objs) {
-            if (cur_obj->isAux)
+        for (auto &cur_obj : this->objs) {
+            if (!cur_obj->listed)
                 continue;
             // if (!cur_obj->isSelected) // 暂时只计算被选中目标
             //   continue;
@@ -1600,7 +1691,9 @@ class Scene {
             if (PR_D >= PR)
                 break; // 光线死亡，不再弹射
 
-            shared_ptr<GeometryRenderObject> gobj = this->objs[cur_obj.geometry_name];
+            shared_ptr<GeometryRenderObject> gobj = findGeometryRenderObjectByName(cur_obj.geometry_name);
+            assert(gobj != nullptr && "hit geometry not found!");
+
             shared_ptr<Geometry> geometry = gobj->geometry;
             mat4 model = gobj->transform.getModel();
 
@@ -1746,43 +1839,55 @@ class Scene {
         // 1. 常规物体渲染
         cur_shader = this->shaders["default"];
         cur_shader->use();
-        cur_shader->set("lightPos", this->light.position);
-        cur_shader->set("lightColor", this->light.color);
-        cur_shader->set("eyePos", this->camera.getPosition());
-        cur_shader->set("ambientStrength", 0.2f);
-        cur_shader->set("diffuseStrength", 1.0f);
-        cur_shader->set("specularStrength", 1.0f);
-        for (auto &[name, cur_obj] : this->objs) {
+        for (auto &cur_obj : this->objs) {
+            if (!cur_obj->visible)
+                continue;
+            if (cur_obj->lighted) {
+                cur_shader->set("useLight", true);
+                cur_shader->set("lightPos", this->light.position);
+                cur_shader->set("lightColor", this->light.color);
+                cur_shader->set("eyePos", this->camera.getPosition());
+                cur_shader->set("ambientStrength", 0.2f);
+                cur_shader->set("diffuseStrength", 1.0f);
+                cur_shader->set("specularStrength", 1.0f);
+            } else {
+                cur_shader->set("useLight", false);
+            }
+            if (cur_obj->texture != 0) {
+                cur_shader->set("useTexture", true);
+            } else {
+                cur_shader->set("useTexture", false);
+            }
+
             mat4 model = cur_obj->transform.getModel();
             cur_shader->set("model", model);
             // 启用材质，设置材质属性
             glBindTexture(GL_TEXTURE_2D, cur_obj->texture);
-            cur_shader->set("useTexture", (cur_obj->texture != 0) ? true : false);
-            cur_shader->set("useLight", true);
             // 绘制
             glBindVertexArray(cur_obj->vao);
             glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3,
-                           GL_UNSIGNED_INT, (void *)0);
-        }
-        // 2. 场景辅助元素
-        for (auto &[name, obj] : this->aux) {
-            if (!obj->visible)
-                continue;
-            cur_shader->set("model", obj->transform.getModel());
-            if (obj->texture != 0) {
-                cur_shader->set("useTexture", true);
-                cur_shader->set("useLight", true);
-            } else {
-                cur_shader->set("useTexture", false);
-                cur_shader->set("useLight", false);
-            }
-            glBindTexture(GL_TEXTURE_2D, obj->texture);
-            glBindVertexArray(obj->vao);
-            glDrawElements(GL_TRIANGLES, obj->geometry->surfaces.size() * 3,
                            GL_UNSIGNED_INT, nullptr);
-            glBindVertexArray(0);
-            glBindTexture(GL_TEXTURE_2D, 0);
         }
+        // // 2. 场景辅助元素
+        // for (auto &[name, obj] : this->aux) {
+        //     if (!obj->visible)
+        //         continue;
+        //     cur_shader->set("model", obj->transform.getModel());
+        //     if (obj->texture != 0) {
+        //         cur_shader->set("useTexture", true);
+        //         cur_shader->set("useLight", true);
+        //     } else {
+        //         cur_shader->set("useTexture", false);
+        //         cur_shader->set("useLight", false);
+        //     }
+        //     glBindTexture(GL_TEXTURE_2D, obj->texture);
+        //     glBindVertexArray(obj->vao);
+        //     glDrawElements(GL_TRIANGLES, obj->geometry->surfaces.size() * 3,
+        //                    GL_UNSIGNED_INT, nullptr);
+        //     glBindVertexArray(0);
+        //     glBindTexture(GL_TEXTURE_2D, 0);
+        // }
+
         // 3. 从有向光视角生成深度缓存
         cur_shader = this->shaders["lightDepth"];
         cur_shader->use();
@@ -1794,10 +1899,10 @@ class Scene {
                         glm::lookAt(this->light.position, {0.0f, 0.0f, 0.0f}, _up));
         glBindFramebuffer(GL_FRAMEBUFFER, this->depthmap.fbo);
         glClear(GL_DEPTH_BUFFER_BIT);
-        for (auto &[name, obj] : this->objs) {
-            cur_shader->set("model", obj->transform.getModel());
-            glBindVertexArray(obj->vao);
-            glDrawElements(GL_TRIANGLES, obj->geometry->surfaces.size() * 3,
+        for (auto &cur_obj : this->objs) {
+            cur_shader->set("model", cur_obj->transform.getModel());
+            glBindVertexArray(cur_obj->vao);
+            glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3,
                            GL_UNSIGNED_INT, nullptr);
         }
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
@@ -1820,8 +1925,8 @@ class Scene {
         cur_shader = this->shaders["line"];
         cur_shader->use();
         cur_shader->set("lineColor", glm::vec3(0.0f, 1.0f, 1.0f));
-        for (auto &[name, cur_obj] : this->objs) {
-            if (cur_obj->isSelected) {
+        for (auto &cur_obj : this->objs) {
+            if (cur_obj->selected) {
                 if (cur_obj->bvhtree != nullptr) {
                     // 渲染层次包围盒
                     for (const shared_ptr<BoundingBoxRenderObject> &bb_obj :
