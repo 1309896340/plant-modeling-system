@@ -18,6 +18,18 @@ target("demo")
             os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
+
+-- target("demo")
+--     set_kind("binary")
+--     add_includedirs("include")
+--     add_files("src/imgui_test.cpp")
+--     add_packages("glm","glfw","glad","glm","imgui","stb","eigen")
+--     after_build(
+--         function (target)
+--             os.cp("assets", path.join(target:targetdir(), "./"))
+--             os.cp("favicon.png", path.join(target:targetdir(), "./"))
+--         end
+--     )
     
     
 -- target("demo")

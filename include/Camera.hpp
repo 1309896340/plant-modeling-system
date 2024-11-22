@@ -152,7 +152,7 @@ class Camera {
         new_pos.y = this->surround_info.distance * cos(this->surround_info.theta);
         new_pos.z = this->surround_info.distance * sin(this->surround_info.theta) * sin(this->surround_info.phi);
         this->getPosition() = new_pos + this->surround_info.anchor;
-        this->lookAt(this->surround_info.anchor);
+        this->rotate(vec3(dx*180.0f/PI, dy*180.0f/PI, 0.0f));
     }
 
     void setAnchor(vec3 anchor) { this->surround_info.anchor = anchor; }
