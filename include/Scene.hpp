@@ -11,6 +11,7 @@
 #include <map>
 #include <memory>
 #include <random>
+#include <ranges>
 #include <stdexcept>
 
 
@@ -547,12 +548,15 @@ private:
 
     // imgui的状态变量
     struct ImguiInfo {
-        shared_ptr<GeometryRenderObject> cur_obj{nullptr};
-        int                              selected_idx    = 0;
-        int                              highlighted_idx = 0;
-        bool                             start_record{true};
-        ImVec2                           mouse_pos{0, 0};
-        vector<string>                   items;
+        bool   start_record{true};
+        ImVec2 mouse_pos{0, 0};
+        // vector<string> items;
+        // shared_ptr<GeometryRenderObject> cur_obj{nullptr};
+        // int                              highlighted_idx = 0;
+        int                                      selected_idx = 0;
+        vector<shared_ptr<GeometryRenderObject>> list_items;
+        bool                                     changeGeometryListView{true};
+        // ranges::filter_view<input_range Vw, indirect_unary_predicate<iterator_t<Vw>> Pr>
     } imgui;
 
 public:
@@ -992,17 +996,25 @@ public:
                                 // tmp_obj.id = 0; // 后面统一获取
                             }
                         }
-                        if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
-                            tmp_obj.id = std::distance(this->imgui.items.begin(), std::find(this->imgui.items.begin(), this->imgui.items.end(), cur_obj->name));
-                            target_obj = tmp_obj;
+                        if (tmp_obj.isHit &&
+                            tmp_obj.distance < target_obj.distance) {
+                            auto tmp_ptr =
+                                find(this->imgui.list_items.begin(),
+                                     this->imgui.list_items.end(),
+                                     cur_obj);
+                            if (tmp_ptr != this->imgui.list_items.end()) {
+                                tmp_obj.id =
+                                    std::distance(this->imgui.list_items.begin(),
+                                                  tmp_ptr);
+                                target_obj = tmp_obj;
+                            }
                         }
                     }
                     // 找到最近碰撞目标target_obj
                     if (target_obj.isHit) {
-                        this->imgui.selected_idx             = target_obj.id;
-                        shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName(this->imgui.items[this->imgui.selected_idx]);
-                        if (ptr)
-                            this->camera.setAnchor(ptr->box->getBoxCenter());
+                        this->imgui.selected_idx = target_obj.id;
+                        if (!imgui.list_items.empty())
+                            this->camera.setAnchor(imgui.list_items[imgui.selected_idx]->box->getBoxCenter());
                         switch (target_obj.type) {
                         case 1: {
                             shared_ptr<GeometryRenderObject> ptr1 = findGeometryRenderObjectByName("Cursor");
@@ -1040,6 +1052,14 @@ public:
             this->camera.move_relative({0.0f, -0.1f, 0.0f});
     }
 
+    void updateGeometryListView() {
+        auto tmp_item_view = this->objs | ranges::views::filter(
+                                              [](shared_ptr<GeometryRenderObject> obj) {
+                                                  return obj->listed;
+                                              });
+        this->imgui.list_items = vector<shared_ptr<GeometryRenderObject>>(tmp_item_view.begin(), tmp_item_view.end());
+    }
+
     void imgui_menu() {
 
         ImGui::ShowDemoWindow();
@@ -1072,48 +1092,34 @@ public:
             return;
         }
 
+        if (this->imgui.changeGeometryListView) {
+            updateGeometryListView();   // 初始化列表
+            this->imgui.changeGeometryListView = false;
+        }
+
         if (ImGui::TreeNodeEx(TEXT("几何管理"), ImGuiTreeNodeFlags_DefaultOpen)) {
-            bool is_hightlight = true;
-            this->imgui.items.clear();
-            for (auto& cur_obj : this->objs) {
-                if (!cur_obj->listed) {
-                    // 排除该对象
-                    continue;
-                }
-                this->imgui.items.push_back(cur_obj->name);
-            }
             if (ImGui::BeginListBox(TEXT("物体"))) {
-                for (int i = 0; i < this->imgui.items.size(); i++) {
+                for (int i = 0; i < this->imgui.list_items.size(); i++) {
                     const bool is_selected = (imgui.selected_idx == i);
-                    if (ImGui::Selectable(this->imgui.items[i].c_str(),
-                                          is_selected)) {
-                        printf("选择对象从 %d 变为 %d \n", imgui.selected_idx, i);
+                    if (ImGui::Selectable(this->imgui.list_items[i]->name.c_str(),
+                                          is_selected))
                         imgui.selected_idx = i;
-                    }
-                    if (is_hightlight && ImGui::IsItemHovered()) {
-                        imgui.highlighted_idx = i;
-                    }
-                    if (is_selected) {
-                        imgui.cur_obj = findGeometryRenderObjectByName(this->imgui.items[i]);
-                        // ImGui::SetItemDefaultFocus();
-                    }
                 }
                 // 回传选中状态
-                for (int i = 0; i < this->imgui.items.size(); i++) {
-                    shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName(this->imgui.items[i]);
-                    if (ptr)
-                        ptr->selected = false;
-                    if (imgui.selected_idx == i) {
-                        shared_ptr<GeometryRenderObject> ptr1 = findGeometryRenderObjectByName(this->imgui.items[i]);
-                        if (ptr1)
-                            ptr1->selected = true;
-                    }
+                if (!this->imgui.list_items.empty()) {
+                    for (int i = 0; i < this->imgui.list_items.size(); i++)
+                        this->imgui.list_items[i]->selected = false;
+                    this->imgui.list_items[this->imgui.selected_idx]->selected = true;
                 }
+
                 ImGui::EndListBox();
             }
 
             // 显示参数
-            if (imgui.cur_obj != nullptr && !imgui.cur_obj->geometry->parameters.empty()) {
+            if (imgui.list_items.empty()) {
+                ImGui::TreePop();
+            }
+            else if (imgui.list_items[imgui.selected_idx] != nullptr && !imgui.list_items[imgui.selected_idx]->geometry->parameters.empty()) {
 
                 ImGui::Text(TEXT("形体参数"));
                 struct visitor {
@@ -1124,8 +1130,8 @@ public:
                         , context(context) {}
                     void operator()(float& arg) {
                         if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
-                            context->imgui.cur_obj->geometry->update();
-                            context->imgui.cur_obj->updateVBO();
+                            context->imgui.list_items[context->imgui.selected_idx]->geometry->update();
+                            context->imgui.list_items[context->imgui.selected_idx]->updateVBO();
                             // context->compute_radiosity();
                         }
                     }
@@ -1134,8 +1140,8 @@ public:
                                              reinterpret_cast<int*>(&arg),
                                              2,
                                              50)) {
-                            context->imgui.cur_obj->geometry->update();
-                            context->imgui.cur_obj->updateVBO();
+                            context->imgui.list_items[context->imgui.selected_idx]->geometry->update();
+                            context->imgui.list_items[context->imgui.selected_idx]->updateVBO();
                             // context->compute_radiosity();
                         }
                     }
@@ -1143,7 +1149,7 @@ public:
                     void operator()(int& arg) {}
                     void operator()(vec3& arg) {}
                 };
-                for (auto& [name, arg_val] : imgui.cur_obj->geometry->parameters)
+                for (auto& [name, arg_val] : imgui.list_items[imgui.selected_idx]->geometry->parameters)
                     std::visit(visitor(name, this), arg_val);
 
                 ImGui::TreePop();
@@ -1297,20 +1303,7 @@ public:
         obj->lighted  = lighted;
         this->objs.emplace_back(obj);
 
-        // if (!flag) {
-        //     if (this->aux.find(name) != this->aux.end()) {
-        //         cout << "scene cannot add \"SceneObject aux\" with an existed name \"" << name << "\"" << endl;
-        //         return;
-        //     }
-        //     this->aux[name] = obj;
-        // } else {
-        //     if (this->objs.find(name) != this->objs.end()) {
-        //         cout << "scene cannot add \"SceneObject obj\" with an existed name \"" << name << "\"" << endl;
-        //         return;
-        //     }
-        //     obj->isAux = true;
-        //     this->objs[name] = obj;
-        // }
+        updateGeometryListView();
     }
 
     void add(const string& name, shared_ptr<Skeleton> skeleton, Transform transform) {
@@ -1331,7 +1324,7 @@ public:
             stringstream node_geom_name;
             node_geom_name << name << "_" << geo_id;
 
-            this->add(node_geom_name.str(), node->obj, node->getAbsTransform());
+            this->add(node_geom_name.str(), node->obj, node->getAbsTransform(), true, true, true, true);
 
             // if (!node->children.empty()) {
             //   // 调试，给每个节点加入一个Axis
@@ -1343,6 +1336,7 @@ public:
 
             geo_id++;
         });
+        updateGeometryListView();
     }
 
     void add(const string& name, shared_ptr<Skeleton> skeleton) {
@@ -1371,44 +1365,12 @@ public:
             cur_obj->selected = false;
         }
         // 初始化Scene::imgui::selected_idx
-        this->imgui.items.clear();
-        for (auto& cur_obj : this->objs) {
-            if (!cur_obj->listed)
-                continue;
-            this->imgui.items.emplace_back(name);   // 初始化 this->imgui.items
-        }
-        for (int i = 0; i < this->imgui.items.size(); i++) {
-            shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName(this->imgui.items[i]);
-            if (ptr && ptr->selected)
-                this->imgui.selected_idx = i;   // 初始化 this->imgui.selected_idx
-        }
+        updateGeometryListView();
+        auto fptr = find_if(
+            this->imgui.list_items.begin(), this->imgui.list_items.end(), [](shared_ptr<GeometryRenderObject> obj) { return obj->selected; });
+        if (fptr != this->imgui.list_items.end())
+            this->imgui.selected_idx = std::distance(this->imgui.list_items.begin(), fptr);
 
-        // ==========================================
-
-        // if (this->objs.find(name) != this->objs.end()) {
-        //     cout << "scene cannot add \"Geometry\" with an existed name \"" << name << "\"" << endl;
-        //     return;
-        // }
-        // this->objs[name] = make_shared<GeometryRenderObject>(geometry, transform);
-
-        // // 加入对场景元素的默认选择，总是选中最后加入的物体，并取消选择其他物体
-        // for (auto &[name, obj] : this->objs) {
-        //     if (obj->isAux)
-        //         continue;
-        //     obj->isSelected = false;
-        // }
-        // this->objs[name]->isSelected = true;
-        // // 初始化Scene::imgui::selected_idx
-        // this->imgui.items.clear();
-        // for (auto &[name, obj] : this->objs) {
-        //     if (obj->isAux)
-        //         continue;
-        //     this->imgui.items.emplace_back(name); // 初始化 this->imgui.items
-        // }
-        // for (int i = 0; i < this->imgui.items.size(); i++) {
-        //     if (this->objs[this->imgui.items[i]]->isSelected)
-        //         this->imgui.selected_idx = i; // 初始化 this->imgui.selected_idx
-        // }
     }
 
     void add(const string& name, const shared_ptr<Geometry>& geometry) {
@@ -1501,13 +1463,6 @@ public:
             if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
                 tmp_obj.geometry_name = cur_obj->name;
                 target_obj            = tmp_obj;
-                // target_name = name;
-                // hobj.obj_name = name;
-                // hobj.isHit = true;
-                // if (distance < min_distance) {
-                //   min_distance = distance;
-                //   target_obj = hobj;
-                // }
             }
         }
 
@@ -1876,27 +1831,8 @@ public:
             glBindVertexArray(cur_obj->vao);
             glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3, GL_UNSIGNED_INT, nullptr);
         }
-        // // 2. 场景辅助元素
-        // for (auto &[name, obj] : this->aux) {
-        //     if (!obj->visible)
-        //         continue;
-        //     cur_shader->set("model", obj->transform.getModel());
-        //     if (obj->texture != 0) {
-        //         cur_shader->set("useTexture", true);
-        //         cur_shader->set("useLight", true);
-        //     } else {
-        //         cur_shader->set("useTexture", false);
-        //         cur_shader->set("useLight", false);
-        //     }
-        //     glBindTexture(GL_TEXTURE_2D, obj->texture);
-        //     glBindVertexArray(obj->vao);
-        //     glDrawElements(GL_TRIANGLES, obj->geometry->surfaces.size() * 3,
-        //                    GL_UNSIGNED_INT, nullptr);
-        //     glBindVertexArray(0);
-        //     glBindTexture(GL_TEXTURE_2D, 0);
-        // }
 
-        // 3. 从有向光视角生成深度缓存
+        // 2. 从有向光视角生成深度缓存
         cur_shader = this->shaders["lightDepth"];
         cur_shader->use();
         cur_shader->set("projection",
@@ -1913,7 +1849,7 @@ public:
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 #ifdef ENABLE_NORMAL_VISUALIZATION
-        // 4. 渲染法向量
+        // 3. 渲染法向量
         for (auto& [name, cur_obj] : this->objs) {
             if (cur_obj->isSelected) {
                 cur_shader = this->shaders["normal"];
@@ -1926,7 +1862,7 @@ public:
         }
 #endif
 
-        // 5. 渲染包围盒边框
+        // 4. 渲染包围盒边框
         cur_shader = this->shaders["line"];
         cur_shader->use();
         cur_shader->set("lineColor", glm::vec3(0.0f, 1.0f, 1.0f));
@@ -1948,11 +1884,11 @@ public:
             }
         }
 
-        // 6. 可视化光线追踪
+        // 5. 可视化光线追踪
         if (this->isShowRay)
             lines["Ray"]->draw(cur_shader);
 
-        // 7. 可视化三角局部坐标系
+        // 6. 可视化三角局部坐标系
         if (this->isShowCoord)
             lines["Coord"]->draw(cur_shader);
     }
@@ -1996,11 +1932,6 @@ public:
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-            // end = chrono::system_clock::now();
-            // duration_microsec = chrono::duration_cast<chrono::milliseconds>(end - start);
-            // printf("");
-
-
             // imgui实现外部窗口的必要配置
             if (io->ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
                 ImGui::UpdatePlatformWindows();
@@ -2018,7 +1949,6 @@ public:
         glfwTerminate();
     }
 
-    // void showSceneObject() { this->isShowSceneObject = true; }
 };
 
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
