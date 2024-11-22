@@ -3,6 +3,7 @@
 // #define NDEBUG
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
@@ -11,6 +12,8 @@
 #include <memory>
 #include <random>
 #include <stdexcept>
+
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -46,8 +49,7 @@
 #define TEXT(txt) reinterpret_cast<const char*>(u8##txt)
 
 // 仅用于该文件内的调试
-static void BK(int n)
-{
+static void BK(int n) {
     printf("break %d\n", n);
 }
 
@@ -62,8 +64,7 @@ namespace fs = filesystem;
 
 void framebufferResizeCallback(GLFWwindow* window, int width, int height);
 
-struct Pixel
-{
+struct Pixel {
     // 用于解析stb_load加载的png图片
     uint8_t r;
     uint8_t g;
@@ -71,16 +72,14 @@ struct Pixel
     uint8_t a;
 };
 
-struct PngImage
-{
+struct PngImage {
     Pixel* img;
     int    width;
     int    height;
     int    channel;
 };
 
-class LineDrawer
-{
+class LineDrawer {
 private:
     GLuint           vao{0};
     GLuint           vbo{0};
@@ -89,30 +88,26 @@ private:
     vector<vec3>     colors;
 
 public:
-    LineDrawer()
-    {
+    LineDrawer() {
         glGenVertexArrays(1, &this->vao);
         glGenBuffers(1, &this->vbo);
     }
 
-    void addLine(vec3 pt1, vec3 pt2, vec3 color)
-    {
+    void addLine(vec3 pt1, vec3 pt2, vec3 color) {
         vector<vec3> minibuf(2);
         minibuf[0] = pt1;
         minibuf[1] = pt2;
         this->addPolygon(minibuf, color);
     }
 
-    void addLine(vec3 pt1, vec3 pt2)
-    {
+    void addLine(vec3 pt1, vec3 pt2) {
         vector<vec3> minibuf(2);
         minibuf[0] = pt1;
         minibuf[1] = pt2;
         this->addPolygon(minibuf);
     }
 
-    void addPolygon(const vector<vec3>& vert)
-    {
+    void addPolygon(const vector<vec3>& vert) {
         this->rays.insert(this->rays.end(), vert.begin(), vert.end());
         this->v_nums.push_back(vert.size());
         uniform_real_distribution<> distr(0.1f, 0.9f);
@@ -120,21 +115,18 @@ public:
         this->colors.push_back(color);
     }
 
-    void addPolygon(const vector<vec3>& vert, vec3 color)
-    {
+    void addPolygon(const vector<vec3>& vert, vec3 color) {
         this->rays.insert(this->rays.end(), vert.begin(), vert.end());
         this->v_nums.push_back(vert.size());
         this->colors.push_back(color);
     }
 
-    void clear()
-    {
+    void clear() {
         this->rays.clear();
         this->v_nums.clear();
         this->colors.clear();
     }
-    void updateVBO()
-    {
+    void updateVBO() {
         glBindVertexArray(this->vao);
         glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
         glBufferData(GL_ARRAY_BUFFER, this->rays.size() * sizeof(vec3), this->rays.data(), GL_DYNAMIC_DRAW);
@@ -142,14 +134,12 @@ public:
         glEnableVertexAttribArray(0);
     }
 
-    size_t size() const
-    {
+    size_t size() const {
         // 返回线条数量
         return this->v_nums.size();
     }
 
-    void draw(Shader* sd)
-    {
+    void draw(Shader* sd) {
         glBindVertexArray(this->vao);
         uint32_t offset = 0u;
         for (int i = 0; i < this->v_nums.size(); i++) {
@@ -158,22 +148,19 @@ public:
             offset += v_nums[i];   // 累加上第i段的顶点数
         }
     }
-    ~LineDrawer()
-    {
+    ~LineDrawer() {
         glDeleteVertexArrays(1, &this->vao);
         glDeleteBuffers(1, &this->vbo);
     }
 };
 
-struct RadiosityResult
-{
+struct RadiosityResult {
     // float radiant_flux{0.0f};
     // 与GeometryRenderObject::geometry::surfaces的元素一一对应
     vector<vec3> radiant_flux;
 };
 
-Pixel cubemap_sample(PngImage* cubmaps, vec3 dir)
-{
+Pixel cubemap_sample(PngImage* cubmaps, vec3 dir) {
     dir = glm::normalize(dir);
     // cubmaps顺序 px nx py ny pz nz
     uint8_t map_idx{0};
@@ -238,39 +225,32 @@ Pixel cubemap_sample(PngImage* cubmaps, vec3 dir)
     return cubmaps[map_idx].img[col_idx + row_idx * width];
 }
 
-class TriangleSampler
-{
+class TriangleSampler {
 public:
     glm::vec3 pt[3];
-    TriangleSampler(const vector<Vertex>& vertices, const Surface& surface, glm::mat4 model)
-    {
+    TriangleSampler(const vector<Vertex>& vertices, const Surface& surface, glm::mat4 model) {
         for (int i = 0; i < 3; i++)
             pt[i] = glm::vec3(model * glm::vec4(glm::make_vec3(vertices[surface.tidx[i]].position), 1.0f));
     }
-    TriangleSampler(const vector<Vertex>& vertices, const Surface& surface)
-    {
+    TriangleSampler(const vector<Vertex>& vertices, const Surface& surface) {
         for (int i = 0; i < 3; i++)
             pt[i] = glm::make_vec3(vertices[surface.tidx[i]].position);
     }
 
-    float calcArea() const
-    {
+    float calcArea() const {
         return glm::length(glm::cross(pt[1] - pt[0], pt[2] - pt[0]));
     }
 
-    glm::vec3 calcNorm() const
-    {
+    glm::vec3 calcNorm() const {
         return glm::normalize(glm::cross(pt[1] - pt[0], pt[2] - pt[0]));
     }
 
-    glm::vec3 calcCenter() const
-    {
+    glm::vec3 calcCenter() const {
         return (pt[0] + pt[1] + pt[2]) / 3.0f;
     }
 
     // 以法向量为上方向基准，结合pt[1]-pt[0]、pt[2]-pt[1]所成平面构建局部坐标系
-    tuple<glm::vec3, glm::vec3, glm::vec3> calcLocalCoord() const
-    {
+    tuple<glm::vec3, glm::vec3, glm::vec3> calcLocalCoord() const {
         glm::vec3 up    = this->calcNorm();
         glm::vec3 right = glm::normalize(glm::cross(pt[1] - pt[0], up));
         glm::vec3 back  = glm::normalize(glm::cross(right, up));
@@ -278,8 +258,7 @@ public:
     }
 
     // 半球均匀分布随机方向采样
-    glm::vec3 hemisphereSampleDir() const
-    {
+    glm::vec3 hemisphereSampleDir() const {
 
         uniform_real_distribution<> distr(0.0f, 1.0f);
 
@@ -293,8 +272,7 @@ public:
     }
 };
 
-class BoundingBoxRenderObject
-{
+class BoundingBoxRenderObject {
 public:
     GLuint vao{0};
     GLuint vbo{0};
@@ -303,8 +281,7 @@ public:
 
     BoundingBoxRenderObject() = default;
     BoundingBoxRenderObject(const vector<vec3>&     vertices,
-                            const vector<uint32_t>& indices)
-    {
+                            const vector<uint32_t>& indices) {
         glGenVertexArrays(1, &this->vao);
         glBindVertexArray(this->vao);
 
@@ -320,8 +297,7 @@ public:
 
         this->draw_size = indices.size();
     }
-    void update(const vector<vec3>& vertices, const vector<uint32_t>& indices)
-    {
+    void update(const vector<vec3>& vertices, const vector<uint32_t>& indices) {
         // 仅更新vbo和ebo
 
         glBindVertexArray(this->vao);
@@ -330,26 +306,22 @@ public:
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
         glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, indices.size() * sizeof(uint32_t), indices.data());
     }
-    void update(const vector<Vertex>& vertices)
-    {
+    void update(const vector<Vertex>& vertices) {
         // 仅更新vbo
         glBindVertexArray(this->vao);
         glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
         glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(vec3), vertices.data());
     }
-    ~BoundingBoxRenderObject()
-    {
+    ~BoundingBoxRenderObject() {
         glDeleteBuffers(1, &this->ebo);
         glDeleteBuffers(1, &this->vbo);
         glDeleteVertexArrays(1, &this->vao);
     }
 };
 
-class GeometryRenderObject
-{
+class GeometryRenderObject {
 private:
-    void initVBO()
-    {
+    void initVBO() {
         glGenVertexArrays(1, &this->vao);
         glBindVertexArray(this->vao);
 
@@ -436,20 +408,16 @@ public:
     // 仅仅为了能将Ground从objs的其他对象中区分出来
 
     GeometryRenderObject() = default;
-    GeometryRenderObject(const string& name, const shared_ptr<Geometry>& geometry,
-                         Transform transform)
+    GeometryRenderObject(const string& name, const shared_ptr<Geometry>& geometry, Transform transform)
         : name(name)
         , geometry(geometry)
-        , transform(transform)
-    {
+        , transform(transform) {
         initVBO();
     }
     GeometryRenderObject(const string& name, const shared_ptr<Geometry>& geometry)
-        : GeometryRenderObject(name, geometry, Transform())
-    {}
+        : GeometryRenderObject(name, geometry, Transform()) {}
 
-    void constructBvhTree()
-    {
+    void constructBvhTree() {
         if (this->bvhtree != nullptr) {
             // 销毁当前的tree，完全重构
             this->bvhtree.reset();
@@ -467,16 +435,14 @@ public:
         });
     }
 
-    void destroyBvhTree()
-    {
+    void destroyBvhTree() {
         if (this->bvhtree != nullptr) {
             this->bvhtree.reset();
             this->bvhbox_objs.clear();
         }
     }
 
-    void updateVBO()
-    {
+    void updateVBO() {
         glBindVertexArray(this->vao);
         glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
         glBufferData(GL_ARRAY_BUFFER,
@@ -522,23 +488,22 @@ public:
             });
         }
     }
-    ~GeometryRenderObject()
-    {
+    ~GeometryRenderObject() {
         glDeleteBuffers(1, &this->vbo);
         glDeleteBuffers(1, &this->ebo);
         glDeleteVertexArrays(1, &this->vao);
     }
 };
 
-void errorCallback(int code, const char* msg)
-{
+void errorCallback(int code, const char* msg) {
     cerr << "errors occured! error code: " << code << endl;
     cout << msg << endl;
 }
 
-class Scene
-{
+class Scene {
 private:
+    const float FPS_SHOW_SPAN = 1.0f;   // 大约每过1秒显示一下fps
+
     int width  = 1600;
     int height = 1200;
 
@@ -553,8 +518,7 @@ private:
     // 用于CPU端存储天空盒图片
     PngImage cubemaps[6];
 
-    struct SkyboxInfo
-    {
+    struct SkyboxInfo {
         GLuint vao{0};
         GLuint vbo{0};
         GLuint ebo{0};
@@ -582,8 +546,7 @@ private:
     bool isShowCursor{false};
 
     // imgui的状态变量
-    struct ImguiInfo
-    {
+    struct ImguiInfo {
         shared_ptr<GeometryRenderObject> cur_obj{nullptr};
         int                              selected_idx    = 0;
         int                              highlighted_idx = 0;
@@ -611,8 +574,7 @@ public:
                      1.0f};   // 用于OpenGL可视化渲染的光源
 
     Camera camera{vec3(0.0f, 0.0f, 20.0f), vec3{0.0f, 0.0f, 0.0f}, static_cast<float>(width) / static_cast<float>(height)};
-    Scene()
-    {
+    Scene() {
         if (glfwInit() == GLFW_FALSE) {
             string msg = "failed to init glfw!";
             cerr << msg << endl;
@@ -665,8 +627,7 @@ public:
         // test_cubemap();
     }
     Scene(const Scene& sc) = delete;
-    ~Scene()
-    {
+    ~Scene() {
         for (const pair<string, Shader*>& sd : this->shaders)
             delete sd.second;
         for (int i = 0; i < 6; i++)
@@ -675,14 +636,12 @@ public:
         // this->aux.clear();
     }
 
-    void init_line_buffer()
-    {
+    void init_line_buffer() {
         this->lines["Ray"]   = make_shared<LineDrawer>();
         this->lines["Coord"] = make_shared<LineDrawer>();
     }
 
-    void init_ubo()
-    {
+    void init_ubo() {
         glGenBuffers(1, &this->ubo);
         glBindBuffer(GL_UNIFORM_BUFFER, this->ubo);
         glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4) * 2, nullptr, GL_STATIC_DRAW);
@@ -696,8 +655,7 @@ public:
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
     }
 
-    void init_scene_obj()
-    {
+    void init_scene_obj() {
         // 光源
         shared_ptr<Geometry>             lightBall = make_shared<Sphere>(0.07f, 36, 72);
         shared_ptr<GeometryRenderObject> obj1 =
@@ -746,8 +704,7 @@ public:
         this->addSceneObject(side_top_obj, true, false, true, true);
     }
 
-    void init_skybox()
-    {
+    void init_skybox() {
         // 与前面的GL_TEXTURE_2D纹理目标不同，天空盒使用GL_TEXTURE_CUBE_MAP_XXX作为纹理目标
 
         // 1. 加载VBO
@@ -804,8 +761,7 @@ public:
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
     }
 
-    void test_cubemap()
-    {
+    void test_cubemap() {
         cout << "开始测试" << endl;
         vector<Pixel> buf;
 
@@ -827,8 +783,7 @@ public:
         stbi_write_png("output.png", phi_num, theta_num, 4, buf.data(), 0);
     }
 
-    void init_depthmap()
-    {
+    void init_depthmap() {
         glGenTextures(1, &this->depthmap.texture);
         glBindTexture(GL_TEXTURE_2D, this->depthmap.texture);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, nullptr);
@@ -858,48 +813,40 @@ public:
     //   glBufferData(GL_ARRAY_BUFFER, ray_obj.vertices.size() * sizeof(vec3), ray_obj.vertices.data(), GL_DYNAMIC_DRAW);
     // }
 
-    void showAxis()
-    {
+    void showAxis() {
         shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName("Axis");
         if (ptr)
             ptr->visible = true;
     }
-    void hideAxis()
-    {
+    void hideAxis() {
         shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName("Axis");
         ptr->visible                         = false;
     }
-    void showGround()
-    {
+    void showGround() {
         shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName("Ground");
         ptr->visible                         = true;
     }
-    void hideGround()
-    {
+    void hideGround() {
         shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName("Ground");
         ptr->visible                         = false;
     }
-    void showCursor()
-    {
+    void showCursor() {
         shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName("Cursor");
         ptr->visible                         = true;
     };
-    void hideCursor()
-    {
+    void hideCursor() {
         shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName("Cursor");
         ptr->visible                         = false;
     };
 
-    void show_info()
-    {
+    void show_info() {
         const GLubyte* vendor   = glGetString(GL_VENDOR);
         const GLubyte* renderer = glGetString(GL_RENDERER);
         cout << "Vendor: " << vendor << endl;
         cout << "Graphics Device: " << renderer << endl;
     }
 
-    void printRadiosityInfo()
-    {
+    void printRadiosityInfo() {
         printf("============================output============================\n");
         for (auto& cur_obj : this->objs) {
             if (!cur_obj->listed)
@@ -912,8 +859,7 @@ public:
         }
     }
 
-    shared_ptr<GeometryRenderObject> findGeometryRenderObjectByName(const string& name)
-    {
+    shared_ptr<GeometryRenderObject> findGeometryRenderObjectByName(const string& name) {
         auto iter = find_if(this->objs.begin(), this->objs.end(), [&](shared_ptr<GeometryRenderObject> gro) {
             return gro->name.compare(name) == 0;
         });
@@ -926,8 +872,7 @@ public:
     //   this->random_generator.seed(sd);
     // }
 
-    Ray cast_ray_from_mouse()
-    {
+    Ray cast_ray_from_mouse() {
         // 捕捉鼠标在窗口中的位置，并将其转换为世界坐标系下的一条射线
 
         double xpos, ypos;
@@ -940,8 +885,7 @@ public:
         return {this->camera.getPosition(), dir};
     }
 
-    vec3 screen2world(vec2 pos)
-    {
+    vec3 screen2world(vec2 pos) {
         pos                           = -pos;
         mat4 view                     = this->camera.getView();
         auto [fov, near, far, aspect] = this->camera.getProperties();
@@ -954,8 +898,7 @@ public:
         return -vec3(world_dir);
     }
 
-    void imgui_interact()
-    {
+    void imgui_interact() {
         // 鼠标交互动作
         // 记录下“相机环绕”时的相机球坐标
         if (!io->WantCaptureMouse) {
@@ -1012,8 +955,7 @@ public:
 
                     Ray ray = cast_ray_from_mouse();
 
-                    struct HitInfo_imgui
-                    {
+                    struct HitInfo_imgui {
                         bool     isHit{false};
                         vec3     hitPos{0.0f, 0.0f, 0.0f};
                         float    distance{FLT_MAX};
@@ -1062,16 +1004,14 @@ public:
                         if (ptr)
                             this->camera.setAnchor(ptr->box->getBoxCenter());
                         switch (target_obj.type) {
-                        case 1:
-                        {
+                        case 1: {
                             shared_ptr<GeometryRenderObject> ptr1 = findGeometryRenderObjectByName("Cursor");
                             if (ptr1)
                                 ptr1->transform.setPosition(target_obj.hitPos);
                             printf("选中点位置：(%.2f, %.2f, %.2f)\n", target_obj.hitPos.x, target_obj.hitPos.y, target_obj.hitPos.z);
                             break;
                         }
-                        case 0:
-                        {
+                        case 0: {
 
                             break;
                         }
@@ -1100,8 +1040,7 @@ public:
             this->camera.move_relative({0.0f, -0.1f, 0.0f});
     }
 
-    void imgui_menu()
-    {
+    void imgui_menu() {
 
         ImGui::ShowDemoWindow();
         imgui_docking_render();
@@ -1146,8 +1085,11 @@ public:
             if (ImGui::BeginListBox(TEXT("物体"))) {
                 for (int i = 0; i < this->imgui.items.size(); i++) {
                     const bool is_selected = (imgui.selected_idx == i);
-                    if (ImGui::Selectable(this->imgui.items[i].c_str(), is_selected))
+                    if (ImGui::Selectable(this->imgui.items[i].c_str(),
+                                          is_selected)) {
+                        printf("选择对象从 %d 变为 %d \n", imgui.selected_idx, i);
                         imgui.selected_idx = i;
+                    }
                     if (is_hightlight && ImGui::IsItemHovered()) {
                         imgui.highlighted_idx = i;
                     }
@@ -1174,24 +1116,20 @@ public:
             if (imgui.cur_obj != nullptr && !imgui.cur_obj->geometry->parameters.empty()) {
 
                 ImGui::Text(TEXT("形体参数"));
-                struct visitor
-                {
+                struct visitor {
                     string pname;
                     Scene* context{nullptr};
                     visitor(string name, Scene* context)
                         : pname(name)
-                        , context(context)
-                    {}
-                    void operator()(float& arg)
-                    {
+                        , context(context) {}
+                    void operator()(float& arg) {
                         if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
                             context->imgui.cur_obj->geometry->update();
                             context->imgui.cur_obj->updateVBO();
                             // context->compute_radiosity();
                         }
                     }
-                    void operator()(uint32_t& arg)
-                    {
+                    void operator()(uint32_t& arg) {
                         if (ImGui::SliderInt(this->pname.c_str(),
                                              reinterpret_cast<int*>(&arg),
                                              2,
@@ -1243,16 +1181,14 @@ public:
         }
     }
 
-    void loadIcon()
-    {
+    void loadIcon() {
         GLFWimage image;
         image.pixels =
             stbi_load("favicon.png", &image.width, &image.height, nullptr, 4);
         glfwSetWindowIcon(this->window, 1, &image);
         stbi_image_free(image.pixels);
     }
-    void initImgui()
-    {
+    void initImgui() {
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
 
@@ -1277,8 +1213,7 @@ public:
         ImGui_ImplGlfw_InitForOpenGL(this->window, true);
         ImGui_ImplOpenGL3_Init();
     }
-    void load_all_shader()
-    {
+    void load_all_shader() {
         shaders["default"]    = new Shader("default.vert", "default.frag");
         shaders["normal"]     = new Shader("normal.vert", "normal.geom", "normal.frag");
         shaders["skybox"]     = new Shader("skybox.vert", "skybox.frag");
@@ -1287,8 +1222,7 @@ public:
         shaders["line"] = new Shader("line.vert", "line.frag");
     }
 
-    void load_all_texture()
-    {
+    void load_all_texture() {
         fs::path texture_dir = "assets/textures";
         for (auto& file : fs::directory_iterator(texture_dir)) {
             if (file.is_regular_file()) {
@@ -1327,8 +1261,7 @@ public:
         }
     }
 
-    void test_triangle_coord()
-    {
+    void test_triangle_coord() {
         lines["Coord"]->clear();
         for (auto& cur_obj : this->objs) {
             mat4 model = cur_obj->transform.getModel();
@@ -1348,9 +1281,10 @@ public:
     }
 
     void addSceneObject(const shared_ptr<GeometryRenderObject>& obj,
-                        bool visible = true, bool listed = false,
-                        bool collided = false, bool lighted = false)
-    {
+                        bool                                    visible  = true,
+                        bool                                    listed   = false,
+                        bool                                    collided = false,
+                        bool                                    lighted  = false) {
 
         shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName(obj->name);
         if (ptr != nullptr) {
@@ -1379,8 +1313,7 @@ public:
         // }
     }
 
-    void add(const string& name, shared_ptr<Skeleton> skeleton, Transform transform)
-    {
+    void add(const string& name, shared_ptr<Skeleton> skeleton, Transform transform) {
         // 加入骨架对象，考虑遍历Skeleton的所有节点并将其中的Geometry加入到this->objs中
         if (this->skeletons.find(name) != this->skeletons.end()) {
             cout << "scene cannot add \"Skeleton\" with an existed name \"" << name << "\"" << endl;
@@ -1412,15 +1345,11 @@ public:
         });
     }
 
-    void add(const string& name, shared_ptr<Skeleton> skeleton)
-    {
+    void add(const string& name, shared_ptr<Skeleton> skeleton) {
         this->add(name, skeleton, Transform{});
     }
 
-    void add(const string& name, const shared_ptr<Geometry>& geometry,
-             Transform transform, bool visible = true, bool listed = true,
-             bool collided = true, bool lighted = true)
-    {
+    void add(const string& name, const shared_ptr<Geometry>& geometry, Transform transform, bool visible = true, bool listed = true, bool collided = true, bool lighted = true) {
 
         shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName(name);
         if (ptr != nullptr) {
@@ -1482,19 +1411,15 @@ public:
         // }
     }
 
-    void add(const string& name, const shared_ptr<Geometry>& geometry)
-    {
+    void add(const string& name, const shared_ptr<Geometry>& geometry) {
         this->add(name, geometry, Transform());
     }
 
-    void add(const string& name, const shared_ptr<Geometry>& geometry,
-             vec3 position)
-    {
+    void add(const string& name, const shared_ptr<Geometry>& geometry, vec3 position) {
         this->add(name, geometry, Transform(position));
     }
 
-    void addLight(const string& name, const shared_ptr<Light>& light)
-    {
+    void addLight(const string& name, const shared_ptr<Light>& light) {
         shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName(name);
         if (ptr != nullptr) {
             cerr << "scene cannot add object with an existed name!" << endl;
@@ -1505,19 +1430,16 @@ public:
         // 建立渲染对象，加入到aux中，不同子类建立的可视化对象不一样
         shared_ptr<GeometryRenderObject> render_obj = nullptr;
         switch (light->type) {
-        case Light::LightType::POINT:
-        {
+        case Light::LightType::POINT: {
             render_obj =
                 make_shared<GeometryRenderObject>("Light", make_shared<Sphere>(0.03, 36, 72));
             break;
         }
-        case Light::LightType::PARALLEL:
-        {
+        case Light::LightType::PARALLEL: {
             // 未实现
             break;
         }
-        case Light::LightType::SPOT:
-        {
+        case Light::LightType::SPOT: {
             // 未实现
             break;
         }
@@ -1565,8 +1487,7 @@ public:
     //   vec3 hit_pos;    // 世界坐标系下的击中位置
     // };
 
-    HitInfo hit_obj(Ray ray)
-    {
+    HitInfo hit_obj(Ray ray) {
         // 场景物体全局求交
         // 遍历this->objs所有元素，找到距离最近的相交物体
         // 返回击中物体名称、击中对象信息
@@ -1694,14 +1615,12 @@ public:
     // }
 
     // 路径上每条光线的信息
-    struct RayInfo
-    {
+    struct RayInfo {
         vec3  BRDF{1.0f, 1.0f, 1.0f};
         float cosine{1.0f};
     };
 
-    void compute_radiosity(uint32_t sample_N = 1)
-    {
+    void compute_radiosity(uint32_t sample_N = 1) {
         uniform_real_distribution<> distr(0.0, 1.0);
         // rdgen.seed(42);
 
@@ -1758,8 +1677,7 @@ public:
     }
 
     // 迭代版本
-    vec3 trace_ray(Ray ray, const HitInfo& obj, float PR, vector<vec3>* vert_buffer = nullptr)
-    {
+    vec3 trace_ray(Ray ray, const HitInfo& obj, float PR, vector<vec3>* vert_buffer = nullptr) {
         // 参数：1. 光线  2. 光线源头三角信息  3. 光线存活率  4. 可视化光线的顶点缓存
 
         assert(PR < 1.0f && PR > 0.0f);
@@ -1839,8 +1757,7 @@ public:
         return L_sample;
     }
 
-    void imgui_docking_render(bool* p_open = nullptr)
-    {
+    void imgui_docking_render(bool* p_open = nullptr) {
         // Variables to configure the Dockspace example.
         static bool opt_fullscreen = true;    // Is the Dockspace full-screen?
         static bool opt_padding    = false;   // Is there padding (a blank space) between
@@ -1897,8 +1814,7 @@ public:
         ImGui::End();
     }
 
-    void render()
-    {
+    void render() {
 
         mat4 view       = this->camera.getView();
         mat4 projection = this->camera.getProject();
@@ -2040,20 +1956,34 @@ public:
         if (this->isShowCoord)
             lines["Coord"]->draw(cur_shader);
     }
-    void setWindowSize(float width, float height)
-    {
+    void setWindowSize(float width, float height) {
         this->width  = width;
         this->height = height;
     }
 
-    void mainloop()
-    {
+    void mainloop() {
+        chrono::time_point<chrono::system_clock> start =
+            chrono::system_clock::now();
+        uint32_t frame_count = 0;
+        float    duration_sec;
         glfwShowWindow(this->window);
         while (!glfwWindowShouldClose(this->window)) {
             glfwPollEvents();
             ImGui_ImplOpenGL3_NewFrame();
             ImGui_ImplGlfw_NewFrame();
             ImGui::NewFrame();
+
+            duration_sec = static_cast<float>(chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now() - start).count()) * chrono::milliseconds::period::num / chrono::milliseconds::period::den;
+            if (duration_sec > FPS_SHOW_SPAN) {
+                auto duration_milisec =
+                    chrono::duration_cast<chrono::milliseconds>(
+                        chrono::system_clock::now() - start);
+                float fps = static_cast<float>(frame_count) / duration_sec;
+                printf("fps: %.2f\n", fps);
+                start        = chrono::system_clock::now();
+                duration_sec = 0;
+                frame_count  = 0;
+            }
 
             glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -2066,14 +1996,19 @@ public:
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
+            // end = chrono::system_clock::now();
+            // duration_microsec = chrono::duration_cast<chrono::milliseconds>(end - start);
+            // printf("");
+
+
             // imgui实现外部窗口的必要配置
             if (io->ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
                 ImGui::UpdatePlatformWindows();
                 ImGui::RenderPlatformWindowsDefault();
                 glfwMakeContextCurrent(this->window);
             }
-
             glfwSwapBuffers(window);
+            frame_count++;
         }
         ImGui_ImplOpenGL3_Shutdown();
         ImGui_ImplGlfw_Shutdown();
@@ -2086,8 +2021,7 @@ public:
     // void showSceneObject() { this->isShowSceneObject = true; }
 };
 
-void framebufferResizeCallback(GLFWwindow* window, int width, int height)
-{
+void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
     Scene* scene = (Scene*)glfwGetWindowUserPointer(window);
     assert(scene != nullptr && "scene is nullptr");
     scene->setWindowSize(width, height);
