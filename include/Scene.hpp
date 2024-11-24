@@ -1060,12 +1060,28 @@ public:
         this->imgui.list_items = vector<shared_ptr<GeometryRenderObject>>(tmp_item_view.begin(), tmp_item_view.end());
     }
 
-    void imgui_menu() {
+    bool imgui_menu() {
 
-        ImGui::ShowDemoWindow();
-        imgui_docking_render();
+        // imgui_docking_render();
+        // ImGui::ShowExampleAppDockSpace();
+        // ImGui::ShowDemoWindow();
 
-        ImGui::Begin(TEXT("场景"));
+        if (ImGui::BeginMainMenuBar()) {
+            if (ImGui::BeginMenu(TEXT("File"))) {
+                ImGui::MenuItem(TEXT("Open"), NULL);
+                ImGui::MenuItem(TEXT("Save As"), NULL);
+                if (ImGui::MenuItem(TEXT("Exit"), NULL))
+                    return true;
+                ImGui::EndMenu();
+            }
+            if (ImGui::BeginMenu("Edit")) {
+
+                ImGui::EndMenu();
+            }
+            ImGui::EndMainMenuBar();
+        }
+
+        ImGui::Begin(TEXT("场景"), NULL, ImGuiWindowFlags_AlwaysAutoResize);
         if (ImGui::TreeNodeEx(TEXT("相机"), ImGuiTreeNodeFlags_Selected | ImGuiTreeNodeFlags_DefaultOpen)) {
             if (ImGui::SliderFloat(TEXT("天顶角"), &this->camera.getTheta(), 0.0f, 180.0f, "%.1f"))
                 this->camera.updateAttitudeFromShadow();
@@ -1089,7 +1105,7 @@ public:
 
         if (this->objs.empty()) {
             ImGui::End();
-            return;
+            return false;
         }
 
         if (this->imgui.changeGeometryListView) {
@@ -1185,6 +1201,7 @@ public:
 
             ImGui::End();
         }
+        return false;
     }
 
     void loadIcon() {
@@ -1370,7 +1387,6 @@ public:
             this->imgui.list_items.begin(), this->imgui.list_items.end(), [](shared_ptr<GeometryRenderObject> obj) { return obj->selected; });
         if (fptr != this->imgui.list_items.end())
             this->imgui.selected_idx = std::distance(this->imgui.list_items.begin(), fptr);
-
     }
 
     void add(const string& name, const shared_ptr<Geometry>& geometry) {
@@ -1714,16 +1730,15 @@ public:
 
     void imgui_docking_render(bool* p_open = nullptr) {
         // Variables to configure the Dockspace example.
-        static bool opt_fullscreen = true;    // Is the Dockspace full-screen?
-        static bool opt_padding    = false;   // Is there padding (a blank space) between
+        static bool opt_padding    = true;   // Is there padding (a blank space) between
                                               // the window edge and the Dockspace?
         static ImGuiDockNodeFlags dockspace_flags =
             ImGuiDockNodeFlags_None;   // Config flags for the Dockspace
-        dockspace_flags |= ImGuiDockNodeFlags_PassthruCentralNode;
+        dockspace_flags |= ImGuiDockNodeFlags_PassthruCentralNode | ImGuiDockNodeFlags_AutoHideTabBar;
 
-        ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
+        // ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
+        ImGuiWindowFlags window_flags = ImGuiWindowFlags_None;
 
-        if (opt_fullscreen) {
             const ImGuiViewport* viewport = ImGui::GetMainViewport();
 
             ImGui::SetNextWindowPos(viewport->WorkPos);
@@ -1735,13 +1750,9 @@ public:
 
             window_flags |= ImGuiWindowFlags_NoTitleBar |
                             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
-                            ImGuiWindowFlags_NoMove;
+                            ImGuiWindowFlags_NoMove ;
             window_flags |=
                 ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-        }
-        else {
-            dockspace_flags &= ~ImGuiDockNodeFlags_PassthruCentralNode;
-        }
 
         if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode)
             window_flags |= ImGuiWindowFlags_NoBackground;
@@ -1754,12 +1765,11 @@ public:
         if (!opt_padding)
             ImGui::PopStyleVar();
 
-        if (opt_fullscreen)
-            ImGui::PopStyleVar(2);
+        ImGui::PopStyleVar(2);
 
         ImGuiIO& io = ImGui::GetIO();
         if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
-            ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+            ImGuiID dockspace_id = ImGui::GetID("Docking Space");
             ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
         }
         else {
@@ -1769,8 +1779,16 @@ public:
         ImGui::End();
     }
 
-    void render() {
+    void imgui_docking_config() {
+      ImGuiIO &io = ImGui::GetIO();
+      io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+      // 声明一个DockSpace ID
+      ImGuiID dockspace_id = ImGui::GetID("MainDockSpace");
+      // 拆分这个dockspace
+      
+    }
 
+    void render() {
         mat4 view       = this->camera.getView();
         mat4 projection = this->camera.getProject();
 
@@ -1901,7 +1919,8 @@ public:
         chrono::time_point<chrono::system_clock> start =
             chrono::system_clock::now();
         uint32_t frame_count = 0;
-        float    duration_sec;
+        float duration_sec;
+        // imgui_docking_config();
         glfwShowWindow(this->window);
         while (!glfwWindowShouldClose(this->window)) {
             glfwPollEvents();
@@ -1927,7 +1946,9 @@ public:
             render();
 
             imgui_interact();
-            imgui_menu();
+            imgui_docking_render();
+            if (imgui_menu())
+                break;
 
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
@@ -1948,7 +1969,6 @@ public:
         glfwDestroyWindow(window);
         glfwTerminate();
     }
-
 };
 
 void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
