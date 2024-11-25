@@ -14,9 +14,14 @@ layout(std140, binding=0) uniform PV{
     mat4 view;
 };
 uniform mat4 model;
+uniform bool disable_view;
 
 void main(){
-    gl_Position = projection * view * model * vec4(aPos, 1.0f);
+    if(disable_view){
+        gl_Position = projection * model * vec4(aPos, 1.0f);
+    }else{
+        gl_Position = projection * view * model * vec4(aPos, 1.0f);
+    }
     vertPos = vec3(model * vec4(aPos, 1.0f));
     vertColor = aColor;
     // vertColor = clamp(aPos, 0.2f, 1.0f);

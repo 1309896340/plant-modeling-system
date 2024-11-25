@@ -1,6 +1,8 @@
 ﻿#pragma once
 
 // #define NDEBUG
+#include "glm/ext/matrix_clip_space.hpp"
+#include "glm/ext/matrix_transform.hpp"
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -538,6 +540,15 @@ private:
         GLuint fbo{0};
     } depthmap;
 
+    struct {
+        GLuint fbo{0};
+        GLuint texture{0};
+        GLuint rbo{0};
+        GLuint vbo{0};
+        GLuint vao{0};
+        GLuint ebo{0};
+    } framebuffer;
+
     bool isShowGround{true};
     bool isShowAxis{true};
     bool isShowLight{true};
@@ -567,6 +578,8 @@ public:
 
     map<string, shared_ptr<LineDrawer>> lines;
     map<string, shared_ptr<Skeleton>>   skeletons;
+
+    // shared_ptr<GeometryRenderObject> axis{nullptr};
 
     // shared_ptr<LineDrawer> ray_buffer{nullptr};
 
@@ -622,6 +635,8 @@ public:
         init_scene_obj();
         init_skybox();
 
+        init_framebuffer();
+
         init_depthmap();
 
         init_line_buffer();
@@ -669,7 +684,7 @@ public:
         this->addSceneObject(obj1, true, false, false, false);
 
         // 坐标轴
-        shared_ptr<Geometry>             axis = make_shared<CoordinateAxis>();
+        shared_ptr<Geometry>             axis = make_shared<CoordinateAxis>(0.1, 1.0f);
         shared_ptr<GeometryRenderObject> obj2 =
             make_shared<GeometryRenderObject>("Axis", axis);
         this->addSceneObject(obj2, true, false, false, false);
@@ -785,6 +800,70 @@ public:
         cout << "测试结束，写出图像" << endl;
 
         stbi_write_png("output.png", phi_num, theta_num, 4, buf.data(), 0);
+    }
+
+    void resize_framebuffer() {
+        glBindFramebuffer(GL_FRAMEBUFFER, this->framebuffer.fbo);
+        glBindTexture(GL_TEXTURE_2D, this->framebuffer.texture);
+        // 重新分配帧缓冲区大小
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, this->width, this->height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+        // 重新分配渲染缓冲区大小
+        glBindRenderbuffer(GL_RENDERBUFFER, this->framebuffer.rbo);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, this->width, this->height);
+        glBindRenderbuffer(GL_RENDERBUFFER, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
+
+    void init_framebuffer() {
+        // 深度缓冲
+        glGenFramebuffers(1, &this->framebuffer.fbo);
+        glBindFramebuffer(GL_FRAMEBUFFER, this->framebuffer.fbo);
+
+        // 创建纹理附件
+        glGenTextures(1, &this->framebuffer.texture);
+        glBindTexture(GL_TEXTURE_2D, this->framebuffer.texture);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, this->width, this->height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        // 将“颜色附件”附着给fbo
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, this->framebuffer.texture, 0);
+
+        // 创建渲染缓冲用于缓存“深度、模板”
+        glGenRenderbuffers(1, &this->framebuffer.rbo);
+        glBindRenderbuffer(GL_RENDERBUFFER, this->framebuffer.rbo);
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, this->width, this->height);
+        glBindRenderbuffer(GL_RENDERBUFFER, 0);
+        // 将“深度、模板附件”附着给fbo
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, this->framebuffer.rbo);
+        // 检查FBO完整性
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+            std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!"
+                      << std::endl;
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        // 手动绘制一个矩形框，直接配置顶点缓冲区
+        vec4 vertices[4] = {
+            {-1.0f, -1.0f, 0.0f, 0.0f},
+            {1.0f, -1.0f, 1.0f, 0.0f},
+            {1.0f, 1.0f, 1.0f, 1.0f},
+            {-1.0f, 1.0f, 0.0f, 1.0f},
+        };
+        GLuint indices[6] = {1, 0, 2, 2, 0, 3};
+
+        glGenVertexArrays(1, &this->framebuffer.vao);
+        glBindVertexArray(this->framebuffer.vao);
+
+        glGenBuffers(1, &this->framebuffer.vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, this->framebuffer.vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+        glGenBuffers(1, &this->framebuffer.ebo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->framebuffer.ebo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+        glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), nullptr);
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+        glEnableVertexAttribArray(0);
+        glEnableVertexAttribArray(1);
     }
 
     void init_depthmap() {
@@ -1242,7 +1321,8 @@ public:
         shaders["skybox"]     = new Shader("skybox.vert", "skybox.frag");
         shaders["lightDepth"] = new Shader("lightDepth.vert", "lightDepth.frag");
         // shaders["compute"] = new Shader("compute.comp");
-        shaders["line"] = new Shader("line.vert", "line.frag");
+        shaders["line"]   = new Shader("line.vert", "line.frag");
+        shaders["screen"] = new Shader("screen.vert", "screen.frag");
     }
 
     void load_all_texture() {
@@ -1730,8 +1810,8 @@ public:
 
     void imgui_docking_render(bool* p_open = nullptr) {
         // Variables to configure the Dockspace example.
-        static bool opt_padding    = true;   // Is there padding (a blank space) between
-                                              // the window edge and the Dockspace?
+        static bool opt_padding = true;   // Is there padding (a blank space) between
+                                          // the window edge and the Dockspace?
         static ImGuiDockNodeFlags dockspace_flags =
             ImGuiDockNodeFlags_None;   // Config flags for the Dockspace
         dockspace_flags |= ImGuiDockNodeFlags_PassthruCentralNode | ImGuiDockNodeFlags_AutoHideTabBar;
@@ -1739,20 +1819,20 @@ public:
         // ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoDocking;
         ImGuiWindowFlags window_flags = ImGuiWindowFlags_None;
 
-            const ImGuiViewport* viewport = ImGui::GetMainViewport();
+        const ImGuiViewport* viewport = ImGui::GetMainViewport();
 
-            ImGui::SetNextWindowPos(viewport->WorkPos);
-            ImGui::SetNextWindowSize(viewport->WorkSize);
-            ImGui::SetNextWindowViewport(viewport->ID);
+        ImGui::SetNextWindowPos(viewport->WorkPos);
+        ImGui::SetNextWindowSize(viewport->WorkSize);
+        ImGui::SetNextWindowViewport(viewport->ID);
 
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-            ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
 
-            window_flags |= ImGuiWindowFlags_NoTitleBar |
-                            ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
-                            ImGuiWindowFlags_NoMove ;
-            window_flags |=
-                ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+        window_flags |= ImGuiWindowFlags_NoTitleBar |
+                        ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize |
+                        ImGuiWindowFlags_NoMove;
+        window_flags |=
+            ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
 
         if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode)
             window_flags |= ImGuiWindowFlags_NoBackground;
@@ -1780,17 +1860,20 @@ public:
     }
 
     void imgui_docking_config() {
-      ImGuiIO &io = ImGui::GetIO();
-      io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
-      // 声明一个DockSpace ID
-      ImGuiID dockspace_id = ImGui::GetID("MainDockSpace");
-      // 拆分这个dockspace
-      
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+        // 声明一个DockSpace ID
+        ImGuiID dockspace_id = ImGui::GetID("MainDockSpace");
+        // 拆分这个dockspace
     }
 
     void render() {
         mat4 view       = this->camera.getView();
         mat4 projection = this->camera.getProject();
+
+        // 启用帧缓冲进行预渲染
+        glBindFramebuffer(GL_FRAMEBUFFER, this->framebuffer.fbo);
+        glEnable(GL_DEPTH_TEST);
 
         // 更新P,V矩阵
         glBindBuffer(GL_UNIFORM_BUFFER, this->ubo);
@@ -1806,6 +1889,8 @@ public:
         Shader* cur_shader{nullptr};
 
         glViewport(0, 0, width, height);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // 场景辅助元素（天空盒）
         glDepthMask(GL_FALSE);
@@ -1820,6 +1905,8 @@ public:
         cur_shader = this->shaders["default"];
         cur_shader->use();
         for (auto& cur_obj : this->objs) {
+            glViewport(0, 0, width, height);
+            cur_shader->set("disable_view", false);
             if (!cur_obj->visible)
                 continue;
             if (cur_obj->lighted) {
@@ -1840,15 +1927,38 @@ public:
             else {
                 cur_shader->set("useTexture", false);
             }
-
             mat4 model = cur_obj->transform.getModel();
+            if (cur_obj->name == "Axis") {
+                // 只记录view中的姿态，不记录位置偏移
+                // 因此需要关闭view，在这里转为model表示
+                cur_shader->set("disable_view", true);
+                float phi   = this->camera.getPhi() / 180.0f * PI;
+                float theta = this->camera.getTheta() / 180.0f * PI;
+                vec3  from  = {
+                    2.0f * sinf(PI - theta) * cosf(PI - phi),
+                    2.0f * cosf(PI - theta),
+                    2.0f * sinf(PI - theta) * sinf(PI - phi)};
+                model             = glm::lookAt(from, vec3(0.0f, 0.0f, 0.0f), _up);
+                mat4 orth_project = glm::ortho(-2.0f, 2.0f, -2.0f, 2.0f, 0.0f, 10.0f);
+                glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(orth_project));   // 使用正交投影矩阵
+                glViewport(10, this->height - 210, 200, 200);
+            }
+
             cur_shader->set("model", model);
             // 启用材质，设置材质属性
             glBindTexture(GL_TEXTURE_2D, cur_obj->texture);
             // 绘制
             glBindVertexArray(cur_obj->vao);
-            glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3, GL_UNSIGNED_INT, nullptr);
+            glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3,
+                           GL_UNSIGNED_INT, nullptr);
+            
+            if (cur_obj->name == "Axis") {   // 恢复透视矩阵
+                glBufferSubData(
+                    GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4),
+                    glm::value_ptr(this->camera.getProject()));
+            }
         }
+        glViewport(0, 0, width, height);
 
         // 2. 从有向光视角生成深度缓存
         cur_shader = this->shaders["lightDepth"];
@@ -1909,6 +2019,19 @@ public:
         // 6. 可视化三角局部坐标系
         if (this->isShowCoord)
             lines["Coord"]->draw(cur_shader);
+
+        // 7. 进行最后的帧缓冲处理
+
+        // 8. 解绑自定义帧缓冲，返回默认帧缓冲进行绘制
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glViewport(0, 0, width, height);
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        this->shaders["screen"]->use();
+        glBindVertexArray(this->framebuffer.vao);
+        glDisable(GL_DEPTH_TEST);
+        glBindTexture(GL_TEXTURE_2D, this->framebuffer.texture);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
     }
     void setWindowSize(float width, float height) {
         this->width  = width;
@@ -1919,7 +2042,7 @@ public:
         chrono::time_point<chrono::system_clock> start =
             chrono::system_clock::now();
         uint32_t frame_count = 0;
-        float duration_sec;
+        float    duration_sec;
         // imgui_docking_config();
         glfwShowWindow(this->window);
         while (!glfwWindowShouldClose(this->window)) {
@@ -1939,9 +2062,6 @@ public:
                 duration_sec = 0;
                 frame_count  = 0;
             }
-
-            glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
             render();
 
@@ -1977,6 +2097,10 @@ void framebufferResizeCallback(GLFWwindow* window, int width, int height) {
     scene->setWindowSize(width, height);
     scene->camera.getAspect() = static_cast<float>(width) / height;
     glViewport(0, 0, width, height);
+
+
+    // 同时会更新scene的framebuffer
+    scene->resize_framebuffer();
 }
 
 }   // namespace
