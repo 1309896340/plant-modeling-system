@@ -26,6 +26,7 @@
 #include <imgui.h>
 #include <imgui_impl_glfw.h>
 #include <imgui_impl_opengl3.h>
+#include <misc/cpp/imgui_stdlib.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -39,10 +40,14 @@
 #include "Bounding.hpp"
 #include "Camera.hpp"
 #include "Geometry.hpp"
+#include "GeometryGenerator.hpp"
+#include "LSystem.hpp"
 #include "Light.hpp"
 #include "Shader.hpp"
 #include "Skeleton.hpp"
 #include "Transform.hpp"
+
+
 
 #define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
 #define MOUSE_VIEW_TRANSLATE_SENSITIVITY 0.06f
@@ -80,6 +85,12 @@ struct PngImage {
     int    width;
     int    height;
     int    channel;
+};
+
+struct SkeletonObject {
+    string               name;
+    uint32_t             num{0};
+    shared_ptr<Skeleton> skeleton{nullptr};
 };
 
 class LineDrawer {
@@ -492,6 +503,7 @@ public:
         }
     }
     ~GeometryRenderObject() {
+        printf("GeometryRenderObject : %s 被析构\n", this->name.c_str());
         glDeleteBuffers(1, &this->vbo);
         glDeleteBuffers(1, &this->ebo);
         glDeleteVertexArrays(1, &this->vao);
@@ -570,6 +582,15 @@ private:
         // ranges::filter_view<input_range Vw, indirect_unary_predicate<iterator_t<Vw>> Pr>
     } imgui;
 
+    struct {
+        const size_t                    LSYSTEM_MAX_LENGTH{1000};
+        string                          axiom;
+        string                          production;
+        uint32_t                        iter_n{0};
+        shared_ptr<LSystem::D0L_System> lsys{nullptr};
+        shared_ptr<Skeleton>            skeleton{nullptr};
+    } lsystem;
+
 public:
     map<string, Shader*>                     shaders;
     map<string, GLuint>                      textures;
@@ -577,7 +598,7 @@ public:
     // map<string, shared_ptr<GeometryRenderObject>> aux;
 
     map<string, shared_ptr<LineDrawer>> lines;
-    map<string, shared_ptr<Skeleton>>   skeletons;
+    map<string, SkeletonObject>         skeletons;
 
     // shared_ptr<GeometryRenderObject> axis{nullptr};
 
@@ -587,10 +608,10 @@ public:
     vector<shared_ptr<Light>>
                lights;   // 只用于计算的光源，为了能在场景中看到光源实际位置，需要将其加入到aux中使用sphere进行渲染可视化
     PointLight light{{1.0f, 1.0f, 1.0f},
-                     {0.0f, 1.0f, 0.0f},
+                     {-2.0f, 10.0f, 3.0f},
                      1.0f};   // 用于OpenGL可视化渲染的光源
 
-    Camera camera{vec3(0.0f, 0.0f, 20.0f), vec3{0.0f, 0.0f, 0.0f}, static_cast<float>(width) / static_cast<float>(height)};
+    Camera camera{vec3(-12.0f, 30.0f, 20.0f), vec3{0.0f, 0.0f, 0.0f}, static_cast<float>(width) / static_cast<float>(height)};
     Scene() {
         if (glfwInit() == GLFW_FALSE) {
             string msg = "failed to init glfw!";
@@ -641,6 +662,8 @@ public:
 
         init_line_buffer();
 
+        init_lsystem();
+
         // init_ray_visualze(); // 创建用于可视化光线路径的线条对象
 
         // test_cubemap();
@@ -674,6 +697,21 @@ public:
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
     }
 
+    void init_lsystem() {
+        this->lsystem.axiom.resize(this->lsystem.LSYSTEM_MAX_LENGTH, 0);
+        this->lsystem.production.resize(this->lsystem.LSYSTEM_MAX_LENGTH, 0);
+        // 初始化一个示例
+
+        string production = "S(r, h) -> C(r,h) [RZ(30)RY(90)S(r, h*0.8)] "
+                            "[RZ(-30)RY(90)S(r, h*0.8)]";
+        string atom       = "S(0.03, 3)";
+        atom.copy(this->lsystem.axiom.data(), atom.length());
+        production.copy(this->lsystem.production.data(), production.length());
+
+        this->lsystem.lsys = make_shared<LSystem::D0L_System>(this->lsystem.axiom, this->lsystem.production);
+        // LSystem::D0L_System lsys("S(0.03, 3)", productions);
+    }
+
     void init_scene_obj() {
         // 光源
         shared_ptr<Geometry>             lightBall = make_shared<Sphere>(0.07f, 36, 72);
@@ -681,21 +719,20 @@ public:
             make_shared<GeometryRenderObject>("Light", lightBall);
         obj1->geometry->setColor(1.0f, 1.0f, 1.0f);
         obj1->updateVBO();
-        this->addSceneObject(obj1, true, false, false, false);
+        this->addSceneObject(obj1, this->isShowLight, false, false, false);
 
         // 坐标轴
         shared_ptr<Geometry>             axis = make_shared<CoordinateAxis>(0.1, 1.0f);
         shared_ptr<GeometryRenderObject> obj2 =
             make_shared<GeometryRenderObject>("Axis", axis);
-        this->addSceneObject(obj2, true, false, false, false);
+        this->addSceneObject(obj2, this->isShowAxis, false, false, false);
 
         // 游标
         shared_ptr<Geometry> cursor = make_shared<Sphere>(0.05, 36, 72);
         cursor->setColor(1.0f, 1.0f, 0.0f);
         shared_ptr<GeometryRenderObject> cursor_obj =
             make_shared<GeometryRenderObject>("Cursor", cursor, Transform{vec3(0.0f, 2.0f, 0.0f)});
-        cursor_obj->visible = this->isShowCursor;
-        this->addSceneObject(cursor_obj, true, false, false, false);
+        this->addSceneObject(cursor_obj, this->isShowCursor, false, false, false);
 
         // 地面
         shared_ptr<Geometry> ground = make_shared<Ground>(20.0f, 20.0f);
@@ -1270,16 +1307,62 @@ public:
                     this->test_triangle_coord();
                 ImGui::PopID();
 
-                if (ImGui::Checkbox(TEXT("线框模式"), &this->isShowWireFrame)) {
-                    // if (this->isShowWireFrame)
-                    //     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                    // else
-                    //     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-                }
+                ImGui::Checkbox(TEXT("线框模式"), &this->isShowWireFrame);
 
                 ImGui::TreePop();
             }
 
+            ImGui::End();
+
+            // 用于生成L-System的操作窗口
+            ImGui::Begin(TEXT("L-System"), NULL, ImGuiWindowFlags_AlwaysAutoResize);
+            if (ImGui::TreeNodeEx(TEXT("生成"),
+                                  ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (ImGui::InputText(TEXT("Atom"), &this->lsystem.axiom, ImGuiInputTextFlags_CallbackEdit)) {
+                }
+                if (ImGui::InputTextMultiline(TEXT("Production"), &this->lsystem.production, ImVec2(0, 0), ImGuiInputTextFlags_CallbackAlways)) {
+                    // printf("production可能被修改，现在为:\n%s\n",
+                    //        this->lsystem.production.c_str());
+                    this->lsystem.lsys = make_shared<LSystem::D0L_System>(this->lsystem.axiom, this->lsystem.production);
+                }
+
+                ImGui::Text(TEXT("iter: %u"), this->lsystem.iter_n);
+                if (ImGui::Button(TEXT("迭代"))) {
+                    string lsys_cmds = this->lsystem.lsys->next();
+                    // 更新目标骨骼系统
+                    auto skptr = this->skeletons.find("skeleton");
+                    if (skptr != this->skeletons.end()) {
+                        // 1. 从OpenGL中删除所有节点绑定的顶点数组资源
+                        SkeletonObject sk = skptr->second;
+                        printf("删除骨骼 : \"%s\"  数量 : %u\n", sk.name.c_str(), sk.num);
+                        for (uint32_t i = 0; i < sk.num; i++) {
+                            stringstream skname;
+                            skname << sk.name << "_" << i + 1;
+                            this->remove(skname.str());
+                        }
+                        // 2. 从this->skeleton中移除这个Skeleton (但由于当前引用，不会马上销毁)
+                        this->skeletons.erase(skptr);
+                    }
+
+                    auto s_input = lexy::zstring_input(lsys_cmds.c_str());
+                    auto res     = lexy::parse<GeometryGenerator::grammar::GraphicsStructure>(s_input, lexy_ext::report_error);
+                    assert(res.is_success());
+                    const GeometryGenerator::config::GraphicsStructure& gs = res.value();
+                    this->lsystem.skeleton                                 = gs.construct();
+                    // 目前固定了skeleton这个名字，只能创建一个骨架
+                    this->add("skeleton", this->lsystem.skeleton, Transform{vec3(0.5f, 0.03f, 0.5f)});
+
+                    this->lsystem.iter_n++;
+                }
+                ImGui::SameLine();
+                if (ImGui::Button(TEXT("复位"))) {
+                    // 删除目标骨骼系统
+
+                    this->lsystem.iter_n = 0;
+                }
+
+                ImGui::TreePop();
+            }
             ImGui::End();
         }
         return false;
@@ -1302,8 +1385,11 @@ public:
         io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
         io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
-        io->Fonts->AddFontFromFileTTF(
-            "C:/Windows/Fonts/simhei.ttf", 24.0f, nullptr, io->Fonts->GetGlyphRangesChineseSimplifiedCommon());
+        // io->Fonts->AddFontFromFileTTF(
+        //     "C:/Windows/Fonts/simhei.ttf", 24.0f, nullptr,
+        //     io->Fonts->GetGlyphRangesChineseSimplifiedCommon());
+        io->Fonts->AddFontFromFileTTF("C:/Windows/Fonts/simhei.ttf", 24.0f, nullptr, io->Fonts->GetGlyphRangesChineseFull());
+        io->Fonts->Build();
 
         ImGui::StyleColorsDark();
         // ImGui::StyleColorsLight();
@@ -1405,6 +1491,13 @@ public:
         updateGeometryListView();
     }
 
+    void remove(const string& name) {
+        // 移除objs中的物体，同时销毁相应的GeometryRenderObject，自动释放OpenGL缓冲区
+        auto obj_ptr = find_if(this->objs.begin(), this->objs.end(), [name](shared_ptr<GeometryRenderObject> obj) { return obj->name.compare(name) == 0; });
+        if (obj_ptr != this->objs.end()) 
+            this->objs.erase(obj_ptr);
+    }
+
     void add(const string& name, shared_ptr<Skeleton> skeleton, Transform transform) {
         // 加入骨架对象，考虑遍历Skeleton的所有节点并将其中的Geometry加入到this->objs中
         if (this->skeletons.find(name) != this->skeletons.end()) {
@@ -1416,10 +1509,11 @@ public:
         skeleton->root->setTransform(skeleton->root->getTransform() * transform);
         skeleton->update();
 
-        this->skeletons[name] = skeleton;
-        uint32_t geo_id       = 1;
+        SkeletonObject sk{name, 0, skeleton};
+
+        uint32_t geo_id = 1;
         // 遍历skeleton的所有节点并加入到this->objs中
-        skeleton->traverse([=, this, &geo_id](SkNode* node) {
+        sk.skeleton->traverse([=, this, &geo_id](SkNode* node) {
             stringstream node_geom_name;
             node_geom_name << name << "_" << geo_id;
 
@@ -1429,12 +1523,16 @@ public:
             //   // 调试，给每个节点加入一个Axis
             //   stringstream ass;
             //   ass << name << "_Axis_" << geo_id;
-            //   shared_ptr<GeometryRenderObject> robj = make_shared<GeometryRenderObject>(make_shared<CoordinateAxis>(0.067, 0.6), node->getAbsTransform());
-            //   this->addSceneObject(ass.str(), robj);
+            //   shared_ptr<GeometryRenderObject> robj =
+            //   make_shared<GeometryRenderObject>(make_shared<CoordinateAxis>(0.067,
+            //   0.6), node->getAbsTransform()); this->addSceneObject(ass.str(),
+            //   robj);
             // }
 
             geo_id++;
         });
+        sk.num                = geo_id - 1;
+        this->skeletons[name] = sk;
         updateGeometryListView();
     }
 
@@ -1813,7 +1911,7 @@ public:
     void imgui_docking_render(bool* p_open = nullptr) {
         // Variables to configure the Dockspace example.
         static bool opt_padding = false;   // Is there padding (a blank space) between
-                                          // the window edge and the Dockspace?
+                                           // the window edge and the Dockspace?
         static ImGuiDockNodeFlags dockspace_flags =
             ImGuiDockNodeFlags_None;   // Config flags for the Dockspace
         dockspace_flags |= ImGuiDockNodeFlags_PassthruCentralNode | ImGuiDockNodeFlags_AutoHideTabBar;

@@ -1,7 +1,7 @@
 #include "LSystem.h"
 
 #ifndef __WIND_D0LSYSTEM
-#define __WIND_LSYSTEM
+#define __WIND_D0LSYSTEM
 
 #define NDEBUG
 

@@ -1,22 +1,17 @@
 #pragma once
 
-#include <cstdint>
-#include <iostream>
 #include <map>
 #include <memory>
-#include <optional>
-#include <sstream>
 #include <string>
-#include <unordered_set>
 #include <vector>
 
-#include "glm/gtc/quaternion.hpp"
-#include "lexy/action/parse.hpp"
-#include "lexy/action/parse_as_tree.hpp"
-#include "lexy/callback.hpp"
-#include "lexy/dsl.hpp"
-#include "lexy/input/string_input.hpp"
-#include "lexy_ext/report_error.hpp"
+// #include "glm/gtc/quaternion.hpp"
+// #include "lexy/action/parse.hpp"
+// #include "lexy/action/parse_as_tree.hpp"
+// #include "lexy/callback.hpp"
+// #include "lexy/dsl.hpp"
+// #include "lexy/input/string_input.hpp"
+// #include "lexy_ext/report_error.hpp"
 
 #include "Geometry.hpp"
 #include "Skeleton.hpp"
@@ -107,7 +102,7 @@ struct GraphicsCallSym : public LProdCall {
     // 根据name执行对应的几何体生成操作
     // 暂时先用if else进行粗暴的实现
 
-    if (name == "Sphere") {
+    if (name == "S") {
       // 构造SkNode
       SkNode *node = new SkNode();
       node->parent = context->cur_node;
@@ -121,7 +116,7 @@ struct GraphicsCallSym : public LProdCall {
       context->cur_node->setAttitude(context->transform.getAttitude());
       // 为新节点重置上下文的transform
       context->transform = Transform();
-    } else if (name == "Cylinder") {
+    } else if (name == "C") {
       // 构造新节点
       SkNode *node = new SkNode();
       node->parent = context->cur_node;

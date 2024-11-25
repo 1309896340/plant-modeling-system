@@ -1,5 +1,6 @@
 ﻿#pragma once
 
+#include <cstdio>
 #include <deque>
 // #include <iostream>
 #include <memory>
@@ -100,6 +101,7 @@ public:
       buf.insert(buf.end(), cur->children.begin(), cur->children.end());
       delete cur;
     }
+    printf("释放骨架\n");
   }
 
   void update() {
