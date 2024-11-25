@@ -1,7 +1,7 @@
 add_rules("mode.debug","mode.release")
 set_runtimes("MD")
 add_requires("glm","glfw","glad","glm","eigen")
-add_requires("imgui",{version="v1.91.1-docking", configs={opengl3=true,glfw=true}})
+add_requires("imgui",{version="v1.91.5-docking", configs={opengl3=true,glfw=true}})
 add_requires("stb",{version="2024.06.01"})
 add_requires("vcpkg::opencascade",{alias = "opencascade"})
 set_languages("c++20")

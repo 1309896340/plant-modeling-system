@@ -5,7 +5,7 @@
 #include "GeometryGenerator.hpp"
 #include "LSystem.hpp"
 #include "lexy/input/string_input.hpp"
-#include "lexy/visualize.hpp"
+// #include "lexy/visualize.hpp"
 #include "lexy_ext/report_error.hpp"
 
 // 这里尝试将LSystem模块嵌入到当前项目中

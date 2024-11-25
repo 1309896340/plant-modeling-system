@@ -553,7 +553,7 @@ public:
 
 class Arrow : public Geometry {
 private:
-  const float body_ratio = 0.9f;
+  const float body_ratio = 0.8f;
   const float radius_ratio = 0.5f;
 
 public:

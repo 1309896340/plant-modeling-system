@@ -1143,7 +1143,7 @@ public:
 
         // imgui_docking_render();
         // ImGui::ShowExampleAppDockSpace();
-        // ImGui::ShowDemoWindow();
+        ImGui::ShowDemoWindow();
 
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu(TEXT("File"))) {
@@ -1204,7 +1204,9 @@ public:
                 if (!this->imgui.list_items.empty()) {
                     for (int i = 0; i < this->imgui.list_items.size(); i++)
                         this->imgui.list_items[i]->selected = false;
-                    this->imgui.list_items[this->imgui.selected_idx]->selected = true;
+                    this->imgui.list_items[this->imgui.selected_idx]->selected =
+                        true;
+                    // printf("选中项为 : %s\n", imgui.list_items[this->imgui.selected_idx]->name.c_str());
                 }
 
                 ImGui::EndListBox();
@@ -1269,10 +1271,10 @@ public:
                 ImGui::PopID();
 
                 if (ImGui::Checkbox(TEXT("线框模式"), &this->isShowWireFrame)) {
-                    if (this->isShowWireFrame)
-                        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-                    else
-                        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+                    // if (this->isShowWireFrame)
+                    //     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+                    // else
+                    //     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
                 }
 
                 ImGui::TreePop();
@@ -1810,7 +1812,7 @@ public:
 
     void imgui_docking_render(bool* p_open = nullptr) {
         // Variables to configure the Dockspace example.
-        static bool opt_padding = true;   // Is there padding (a blank space) between
+        static bool opt_padding = false;   // Is there padding (a blank space) between
                                           // the window edge and the Dockspace?
         static ImGuiDockNodeFlags dockspace_flags =
             ImGuiDockNodeFlags_None;   // Config flags for the Dockspace
@@ -1875,6 +1877,10 @@ public:
         glBindFramebuffer(GL_FRAMEBUFFER, this->framebuffer.fbo);
         glEnable(GL_DEPTH_TEST);
 
+        if (this->isShowWireFrame) {
+            glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        }
+
         // 更新P,V矩阵
         glBindBuffer(GL_UNIFORM_BUFFER, this->ubo);
         if (this->camera.isProjectionChanged()) {
@@ -1935,13 +1941,13 @@ public:
                 float phi   = this->camera.getPhi() / 180.0f * PI;
                 float theta = this->camera.getTheta() / 180.0f * PI;
                 vec3  from  = {
-                    2.0f * sinf(PI - theta) * cosf(PI - phi),
-                    2.0f * cosf(PI - theta),
-                    2.0f * sinf(PI - theta) * sinf(PI - phi)};
+                    1.5f * sinf(PI - theta) * cosf(PI - phi),
+                    1.5f * cosf(PI - theta),
+                    1.5f * sinf(PI - theta) * sinf(PI - phi)};
                 model             = glm::lookAt(from, vec3(0.0f, 0.0f, 0.0f), _up);
-                mat4 orth_project = glm::ortho(-2.0f, 2.0f, -2.0f, 2.0f, 0.0f, 10.0f);
+                mat4 orth_project = glm::ortho(-1.5f, 1.5f, -1.5f, 1.5f, 0.0f, 10.0f);
                 glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(orth_project));   // 使用正交投影矩阵
-                glViewport(10, this->height - 210, 200, 200);
+                glViewport(5, this->height - 210, 200, 200);
             }
 
             cur_shader->set("model", model);
@@ -1949,35 +1955,17 @@ public:
             glBindTexture(GL_TEXTURE_2D, cur_obj->texture);
             // 绘制
             glBindVertexArray(cur_obj->vao);
-            glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3,
-                           GL_UNSIGNED_INT, nullptr);
-            
+            glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3, GL_UNSIGNED_INT, nullptr);
+
             if (cur_obj->name == "Axis") {   // 恢复透视矩阵
                 glBufferSubData(
-                    GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4),
-                    glm::value_ptr(this->camera.getProject()));
+                    GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4), glm::value_ptr(this->camera.getProject()));
             }
         }
-        glViewport(0, 0, width, height);
 
-        // 2. 从有向光视角生成深度缓存
-        cur_shader = this->shaders["lightDepth"];
-        cur_shader->use();
-        cur_shader->set("projection",
-                        glm::ortho(this->depthmap.left, this->depthmap.right, this->depthmap.bottom, this->depthmap.top, this->depthmap.near, this->depthmap.far));
-        cur_shader->set("view",
-                        glm::lookAt(this->light.position, {0.0f, 0.0f, 0.0f}, _up));
-        glBindFramebuffer(GL_FRAMEBUFFER, this->depthmap.fbo);
-        glClear(GL_DEPTH_BUFFER_BIT);
-        for (auto& cur_obj : this->objs) {
-            cur_shader->set("model", cur_obj->transform.getModel());
-            glBindVertexArray(cur_obj->vao);
-            glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3, GL_UNSIGNED_INT, nullptr);
-        }
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
 #ifdef ENABLE_NORMAL_VISUALIZATION
-        // 3. 渲染法向量
+        // 2. 渲染法向量
         for (auto& [name, cur_obj] : this->objs) {
             if (cur_obj->isSelected) {
                 cur_shader = this->shaders["normal"];
@@ -1990,7 +1978,7 @@ public:
         }
 #endif
 
-        // 4. 渲染包围盒边框
+        // 3. 渲染包围盒边框
         cur_shader = this->shaders["line"];
         cur_shader->use();
         cur_shader->set("lineColor", glm::vec3(0.0f, 1.0f, 1.0f));
@@ -2012,17 +2000,20 @@ public:
             }
         }
 
-        // 5. 可视化光线追踪
+        // 4. 可视化光线追踪
         if (this->isShowRay)
             lines["Ray"]->draw(cur_shader);
 
-        // 6. 可视化三角局部坐标系
+        // 5. 可视化三角局部坐标系
         if (this->isShowCoord)
             lines["Coord"]->draw(cur_shader);
 
-        // 7. 进行最后的帧缓冲处理
+        // 6. 进行最后的帧缓冲处理
 
-        // 8. 解绑自定义帧缓冲，返回默认帧缓冲进行绘制
+        if (this->isShowWireFrame) {
+            glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        }
+        // 7. 解绑自定义帧缓冲，返回默认帧缓冲进行绘制
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glViewport(0, 0, width, height);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -2032,6 +2023,23 @@ public:
         glDisable(GL_DEPTH_TEST);
         glBindTexture(GL_TEXTURE_2D, this->framebuffer.texture);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+
+        // 8. 从有向光视角生成深度缓存
+        glBindFramebuffer(GL_FRAMEBUFFER, this->depthmap.fbo);
+        glViewport(0, 0, width, height);
+        cur_shader = this->shaders["lightDepth"];
+        cur_shader->use();
+        cur_shader->set("projection",
+                        glm::ortho(this->depthmap.left, this->depthmap.right, this->depthmap.bottom, this->depthmap.top, this->depthmap.near, this->depthmap.far));
+        cur_shader->set("view",
+                        glm::lookAt(this->light.position, {0.0f, 0.0f, 0.0f}, _up));
+        glClear(GL_DEPTH_BUFFER_BIT);
+        for (auto& cur_obj : this->objs) {
+            cur_shader->set("model", cur_obj->transform.getModel());
+            glBindVertexArray(cur_obj->vao);
+            glDrawElements(GL_TRIANGLES, cur_obj->geometry->surfaces.size() * 3, GL_UNSIGNED_INT, nullptr);
+        }
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
     void setWindowSize(float width, float height) {
         this->width  = width;

@@ -22,7 +22,7 @@ class Camera {
     vec3 toward{glm::vec3(0.0f, 0.0f, -1.0f)}; // 单位向量
     vec3 upDir{glm::vec3(0.0f, 1.0f, 0.0f)};   // 单位向量
 
-    float fov{glm::radians(35.0f)};
+    float fov{glm::radians(55.0f)};
     float near{0.1f};
     float far{200.0f};
     float aspect{1.0f};
