@@ -574,9 +574,9 @@ private:
         bool   start_record{true};
         ImVec2 mouse_pos{0, 0};
         // vector<string> items;
-        // shared_ptr<GeometryRenderObject> cur_obj{nullptr};
+        shared_ptr<GeometryRenderObject> cur{nullptr};
         // int                              highlighted_idx = 0;
-        int                                      selected_idx = 0;
+        int32_t                                  selected_idx = 0;
         vector<shared_ptr<GeometryRenderObject>> list_items;
         bool                                     changeGeometryListView{true};
         // ranges::filter_view<input_range Vw, indirect_unary_predicate<iterator_t<Vw>> Pr>
@@ -1079,7 +1079,7 @@ public:
                         bool     isHit{false};
                         vec3     hitPos{0.0f, 0.0f, 0.0f};
                         float    distance{FLT_MAX};
-                        uint32_t id{0};     // 该物体在Scene::imgui::items中的索引位置
+                        int32_t  id{0};     // 该物体在Scene::imgui::items中的索引位置
                         uint32_t type{0};   // 0为普通包围盒，1为层次包围盒
                     };
 
@@ -1087,7 +1087,7 @@ public:
                     // bool isisHit = false;
                     HitInfo_imgui target_obj;
                     for (auto& cur_obj : this->objs) {
-                        if (!cur_obj->listed)
+                        if (!cur_obj->collided)
                             continue;
 
                         HitInfo_imgui tmp_obj;
@@ -1113,30 +1113,35 @@ public:
                             }
                         }
                         if (tmp_obj.isHit &&
-                            tmp_obj.distance < target_obj.distance) {
+                            tmp_obj.distance <
+                                target_obj.distance) {   // 找到最近对象
+                            this->imgui.cur = cur_obj;
                             auto tmp_ptr =
                                 find(this->imgui.list_items.begin(),
                                      this->imgui.list_items.end(),
                                      cur_obj);
-                            if (tmp_ptr != this->imgui.list_items.end()) {
-                                tmp_obj.id =
-                                    std::distance(this->imgui.list_items.begin(),
-                                                  tmp_ptr);
-                                target_obj = tmp_obj;
-                            }
+                            if (tmp_ptr != this->imgui.list_items.end())
+                                tmp_obj.id = std::distance(this->imgui.list_items.begin(), tmp_ptr);
+                            else
+                                tmp_obj.id = -1;
+                            target_obj = tmp_obj;
                         }
                     }
                     // 找到最近碰撞目标target_obj
                     if (target_obj.isHit) {
-                        this->imgui.selected_idx = target_obj.id;
-                        if (!imgui.list_items.empty())
-                            this->camera.setAnchor(imgui.list_items[imgui.selected_idx]->box->getBoxCenter());
+                        this->imgui.selected_idx = target_obj.id;   // 可能会赋值-1
+                        if (imgui.cur != nullptr) {
+                            for (auto& obj : this->objs)   // 互斥选中
+                                obj->selected = false;
+                            imgui.cur->selected = true;
+                            this->camera.setAnchor(imgui.cur->box->getBoxCenter());
+                        }
                         switch (target_obj.type) {
                         case 1: {
                             shared_ptr<GeometryRenderObject> ptr1 = findGeometryRenderObjectByName("Cursor");
                             if (ptr1)
                                 ptr1->transform.setPosition(target_obj.hitPos);
-                            printf("选中点位置：(%.2f, %.2f, %.2f)\n", target_obj.hitPos.x, target_obj.hitPos.y, target_obj.hitPos.z);
+                            // printf("选中点位置：(%.2f, %.2f, %.2f)\n", target_obj.hitPos.x, target_obj.hitPos.y, target_obj.hitPos.z);
                             break;
                         }
                         case 0: {
@@ -1190,7 +1195,7 @@ public:
                     return true;
                 ImGui::EndMenu();
             }
-            if (ImGui::BeginMenu("Edit")) {
+            if (ImGui::BeginMenu(TEXT("Edit"))) {
 
                 ImGui::EndMenu();
             }
@@ -1241,20 +1246,17 @@ public:
                 if (!this->imgui.list_items.empty()) {
                     for (int i = 0; i < this->imgui.list_items.size(); i++)
                         this->imgui.list_items[i]->selected = false;
-                    this->imgui.list_items[this->imgui.selected_idx]->selected =
-                        true;
-                    // printf("选中项为 : %s\n", imgui.list_items[this->imgui.selected_idx]->name.c_str());
+                    assert(this->imgui.selected_idx != -1);
+                    this->imgui.cur           = this->imgui.list_items[this->imgui.selected_idx];
+                    this->imgui.cur->selected = true;
+                    printf("选中项为 : %s\n", imgui.list_items[this->imgui.selected_idx]->name.c_str());
                 }
 
                 ImGui::EndListBox();
             }
 
             // 显示参数
-            if (imgui.list_items.empty()) {
-                ImGui::TreePop();
-            }
-            else if (imgui.list_items[imgui.selected_idx] != nullptr && !imgui.list_items[imgui.selected_idx]->geometry->parameters.empty()) {
-
+            else if (!imgui.list_items.empty() && this->imgui.cur != nullptr && !this->imgui.cur->geometry->parameters.empty()) {
                 ImGui::Text(TEXT("形体参数"));
                 struct visitor {
                     string pname;
@@ -1264,8 +1266,8 @@ public:
                         , context(context) {}
                     void operator()(float& arg) {
                         if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
-                            context->imgui.list_items[context->imgui.selected_idx]->geometry->update();
-                            context->imgui.list_items[context->imgui.selected_idx]->updateVBO();
+                            context->imgui.cur->geometry->update();
+                            context->imgui.cur->updateVBO();
                             // context->compute_radiosity();
                         }
                     }
@@ -1274,8 +1276,8 @@ public:
                                              reinterpret_cast<int*>(&arg),
                                              2,
                                              50)) {
-                            context->imgui.list_items[context->imgui.selected_idx]->geometry->update();
-                            context->imgui.list_items[context->imgui.selected_idx]->updateVBO();
+                            context->imgui.cur->geometry->update();
+                            context->imgui.cur->updateVBO();
                             // context->compute_radiosity();
                         }
                     }
@@ -1283,88 +1285,84 @@ public:
                     void operator()(int& arg) {}
                     void operator()(vec3& arg) {}
                 };
-                for (auto& [name, arg_val] : imgui.list_items[imgui.selected_idx]->geometry->parameters)
+                for (auto& [name, arg_val] : imgui.cur->geometry->parameters)
                     std::visit(visitor(name, this), arg_val);
-
-                ImGui::TreePop();
             }
-
-            if (ImGui::TreeNodeEx(TEXT("调试"))) {
-                ImGui::Checkbox(TEXT("光线追踪可视化"), &this->isShowRay);
-                ImGui::SameLine();
-                ImGui::PushID(0);
-                if (ImGui::Button(TEXT("更新"))) {
-                    // thread tsk(this->compute_radiosity);
-                    this->compute_radiosity();
-                    this->printRadiosityInfo();
-                }
-                ImGui::PopID();
-
-                ImGui::Checkbox(TEXT("三角局部坐标可视化"), &this->isShowCoord);
-                ImGui::SameLine();
-                ImGui::PushID(1);
-                if (ImGui::Button(TEXT("更新")))
-                    this->test_triangle_coord();
-                ImGui::PopID();
-
-                ImGui::Checkbox(TEXT("线框模式"), &this->isShowWireFrame);
-
-                ImGui::TreePop();
-            }
-
-            ImGui::End();
-
-            // 用于生成L-System的操作窗口
-            ImGui::Begin(TEXT("L-System"), NULL, ImGuiWindowFlags_AlwaysAutoResize);
-            if (ImGui::TreeNodeEx(TEXT("生成"),
-                                  ImGuiTreeNodeFlags_DefaultOpen)) {
-                if (ImGui::InputText(TEXT("Atom"), &this->lsystem.axiom, ImGuiInputTextFlags_CallbackEdit)) {
-                }
-                if (ImGui::InputTextMultiline(TEXT("Production"), &this->lsystem.production, ImVec2(0, 0), ImGuiInputTextFlags_CallbackAlways)) {
-                    // printf("production可能被修改，现在为:\n%s\n",
-                    //        this->lsystem.production.c_str());
-                    this->lsystem.lsys = make_shared<LSystem::D0L_System>(this->lsystem.axiom, this->lsystem.production);
-                }
-
-                ImGui::Text(TEXT("iter: %u"), this->lsystem.iter_n);
-                if (ImGui::Button(TEXT("迭代"))) {
-                    string lsys_cmds = this->lsystem.lsys->next();
-                    // 更新目标骨骼系统
-                    auto skptr = this->skeletons.find("skeleton");
-                    if (skptr != this->skeletons.end()) {
-                        // 1. 从OpenGL中删除所有节点绑定的顶点数组资源
-                        SkeletonObject sk = skptr->second;
-                        printf("删除骨骼 : \"%s\"  数量 : %u\n", sk.name.c_str(), sk.num);
-                        for (uint32_t i = 0; i < sk.num; i++) {
-                            stringstream skname;
-                            skname << sk.name << "_" << i + 1;
-                            this->remove(skname.str());
-                        }
-                        // 2. 从this->skeleton中移除这个Skeleton (但由于当前引用，不会马上销毁)
-                        this->skeletons.erase(skptr);
-                    }
-
-                    auto s_input = lexy::zstring_input(lsys_cmds.c_str());
-                    auto res     = lexy::parse<GeometryGenerator::grammar::GraphicsStructure>(s_input, lexy_ext::report_error);
-                    assert(res.is_success());
-                    const GeometryGenerator::config::GraphicsStructure& gs = res.value();
-                    this->lsystem.skeleton                                 = gs.construct();
-                    // 目前固定了skeleton这个名字，只能创建一个骨架
-                    this->add("skeleton", this->lsystem.skeleton, Transform{vec3(0.5f, 0.03f, 0.5f)});
-
-                    this->lsystem.iter_n++;
-                }
-                ImGui::SameLine();
-                if (ImGui::Button(TEXT("复位"))) {
-                    // 删除目标骨骼系统
-
-                    this->lsystem.iter_n = 0;
-                }
-
-                ImGui::TreePop();
-            }
-            ImGui::End();
+            ImGui::TreePop();
         }
+        if (ImGui::TreeNodeEx(TEXT("调试"))) {
+            ImGui::Checkbox(TEXT("光线追踪可视化"), &this->isShowRay);
+            ImGui::SameLine();
+            ImGui::PushID(0);
+            if (ImGui::Button(TEXT("更新"))) {
+                // thread tsk(this->compute_radiosity);
+                this->compute_radiosity();
+                this->printRadiosityInfo();
+            }
+            ImGui::PopID();
+
+            ImGui::Checkbox(TEXT("三角局部坐标可视化"), &this->isShowCoord);
+            ImGui::SameLine();
+            ImGui::PushID(1);
+            if (ImGui::Button(TEXT("更新")))
+                this->test_triangle_coord();
+            ImGui::PopID();
+
+            ImGui::Checkbox(TEXT("线框模式"), &this->isShowWireFrame);
+
+            ImGui::TreePop();
+        }
+        ImGui::End();
+
+        // 用于生成L-System的操作窗口
+        ImGui::Begin(TEXT("L-System"), NULL, ImGuiWindowFlags_AlwaysAutoResize);
+        if (ImGui::TreeNodeEx(TEXT("生成"),
+                              ImGuiTreeNodeFlags_DefaultOpen)) {
+            if (ImGui::InputText(TEXT("Atom"), &this->lsystem.axiom, ImGuiInputTextFlags_CallbackEdit)) {
+            }
+            if (ImGui::InputTextMultiline(TEXT("Production"), &this->lsystem.production, ImVec2(0, 0), ImGuiInputTextFlags_CallbackAlways)) {
+                // printf("production可能被修改，现在为:\n%s\n",
+                //        this->lsystem.production.c_str());
+                this->lsystem.lsys = make_shared<LSystem::D0L_System>(this->lsystem.axiom, this->lsystem.production);
+            }
+
+            ImGui::Text(TEXT("iter: %u"), this->lsystem.iter_n);
+            if (ImGui::Button(TEXT("迭代"))) {
+                string lsys_cmds = this->lsystem.lsys->next();
+                // 更新目标骨骼系统
+                auto skptr = this->skeletons.find("skeleton");
+                if (skptr != this->skeletons.end()) {
+                    // 1. 从OpenGL中删除所有节点绑定的顶点数组资源
+                    SkeletonObject sk = skptr->second;
+                    printf("删除骨骼 : \"%s\"  数量 : %u\n", sk.name.c_str(), sk.num);
+                    for (uint32_t i = 0; i < sk.num; i++) {
+                        stringstream skname;
+                        skname << sk.name << "_" << i + 1;
+                        this->remove(skname.str());
+                    }
+                    // 2. 从this->skeleton中移除这个Skeleton (但由于当前引用，不会马上销毁)
+                    this->skeletons.erase(skptr);
+                }
+
+                auto s_input = lexy::zstring_input(lsys_cmds.c_str());
+                auto res     = lexy::parse<GeometryGenerator::grammar::GraphicsStructure>(s_input, lexy_ext::report_error);
+                assert(res.is_success());
+                const GeometryGenerator::config::GraphicsStructure& gs = res.value();
+                this->lsystem.skeleton                                 = gs.construct();
+                // 目前固定了skeleton这个名字，只能创建一个骨架
+                this->add("skeleton", this->lsystem.skeleton, Transform{vec3(0.5f, 0.03f, 0.5f)});
+
+                this->lsystem.iter_n++;
+            }
+            ImGui::SameLine();
+            if (ImGui::Button(TEXT("复位"))) {
+                // 删除目标骨骼系统
+
+                this->lsystem.iter_n = 0;
+            }
+            ImGui::TreePop();
+        }
+        ImGui::End();
         return false;
     }
 
@@ -1494,7 +1492,7 @@ public:
     void remove(const string& name) {
         // 移除objs中的物体，同时销毁相应的GeometryRenderObject，自动释放OpenGL缓冲区
         auto obj_ptr = find_if(this->objs.begin(), this->objs.end(), [name](shared_ptr<GeometryRenderObject> obj) { return obj->name.compare(name) == 0; });
-        if (obj_ptr != this->objs.end()) 
+        if (obj_ptr != this->objs.end())
             this->objs.erase(obj_ptr);
     }
 
@@ -1517,7 +1515,7 @@ public:
             stringstream node_geom_name;
             node_geom_name << name << "_" << geo_id;
 
-            this->add(node_geom_name.str(), node->obj, node->getAbsTransform(), true, true, true, true);
+            this->add(node_geom_name.str(), node->obj, node->getAbsTransform(), true, false, true, true);
 
             // if (!node->children.empty()) {
             //   // 调试，给每个节点加入一个Axis
@@ -1556,17 +1554,18 @@ public:
         this->objs.emplace_back(ptr);
 
         // 加入对场景元素的默认选择，总是选中最后加入的物体，并取消选择其他物体
-        for (auto& cur_obj : this->objs) {
-            if (!cur_obj->listed)
-                continue;
+        for (auto& cur_obj : this->objs)
             cur_obj->selected = false;
-        }
+        ptr->selected = true;
+
         // 初始化Scene::imgui::selected_idx
         updateGeometryListView();
         auto fptr = find_if(
             this->imgui.list_items.begin(), this->imgui.list_items.end(), [](shared_ptr<GeometryRenderObject> obj) { return obj->selected; });
         if (fptr != this->imgui.list_items.end())
             this->imgui.selected_idx = std::distance(this->imgui.list_items.begin(), fptr);
+        else
+            this->imgui.selected_idx = -1;
     }
 
     void add(const string& name, const shared_ptr<Geometry>& geometry) {
