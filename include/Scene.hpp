@@ -1,6 +1,5 @@
 ﻿#pragma once
 
-// #define NDEBUG
 #include "glm/ext/matrix_clip_space.hpp"
 #include "glm/ext/matrix_transform.hpp"
 #include <algorithm>
@@ -14,6 +13,7 @@
 #include <memory>
 #include <random>
 #include <ranges>
+#include <regex>
 #include <stdexcept>
 
 
@@ -47,6 +47,10 @@
 #include "Skeleton.hpp"
 #include "Transform.hpp"
 
+#ifndef __WIND_RANDOM_GENERATOR
+#    define __WIND_RANDOM_GENERATOR
+std::mt19937_64 rdgen;
+#endif
 
 
 #define MOUSE_VIEW_ROTATE_SENSITIVITY 0.1f
@@ -89,7 +93,6 @@ struct PngImage {
 
 struct SkeletonObject {
     string               name;
-    uint32_t             num{0};
     shared_ptr<Skeleton> skeleton{nullptr};
 };
 
@@ -503,7 +506,9 @@ public:
         }
     }
     ~GeometryRenderObject() {
+#ifndef NDEBUG
         printf("GeometryRenderObject : %s 被析构\n", this->name.c_str());
+#endif
         glDeleteBuffers(1, &this->vbo);
         glDeleteBuffers(1, &this->ebo);
         glDeleteVertexArrays(1, &this->vao);
@@ -517,7 +522,9 @@ void errorCallback(int code, const char* msg) {
 
 class Scene {
 private:
-    const float FPS_SHOW_SPAN = 1.0f;   // 大约每过1秒显示一下fps
+    const float  FPS_SHOW_SPAN = 1.0f;   // 大约每过1秒显示一下fps
+    const GLuint PVM_binding_point{0};
+    const regex  check_skeleton_node_name_pattern{"[a-zA-Z]\\w*#\\d+"};
 
     int width  = 1600;
     int height = 1200;
@@ -525,10 +532,9 @@ private:
     GLFWwindow* window{nullptr};
     ImGuiIO*    io{nullptr};
 
-    GLuint       ubo{0};
-    const GLuint PVM_binding_point = 0;
+    GLuint ubo{0};
 
-    // mt19937 random_generator;
+
 
     // 用于CPU端存储天空盒图片
     PngImage cubemaps[6];
@@ -611,7 +617,7 @@ public:
                      {-2.0f, 10.0f, 3.0f},
                      1.0f};   // 用于OpenGL可视化渲染的光源
 
-    Camera camera{vec3(-12.0f, 30.0f, 20.0f), vec3{0.0f, 0.0f, 0.0f}, static_cast<float>(width) / static_cast<float>(height)};
+    Camera camera{vec3(4.0f, 11.0f, 27.0f), vec3{15.0f, 2.0f, 0.0f}, static_cast<float>(width) / static_cast<float>(height)};
     Scene() {
         if (glfwInit() == GLFW_FALSE) {
             string msg = "failed to init glfw!";
@@ -698,15 +704,15 @@ public:
     }
 
     void init_lsystem() {
-        this->lsystem.axiom.resize(this->lsystem.LSYSTEM_MAX_LENGTH, 0);
-        this->lsystem.production.resize(this->lsystem.LSYSTEM_MAX_LENGTH, 0);
+      // this->lsystem.axiom.resize(this->lsystem.LSYSTEM_MAX_LENGTH, 0);
+      // this->lsystem.production.resize(this->lsystem.LSYSTEM_MAX_LENGTH, 0);
+      // 
         // 初始化一个示例
-
         string production = "S(r, h) -> C(r,h) [RZ(30)RY(90)S(r, h*0.8)] "
                             "[RZ(-30)RY(90)S(r, h*0.8)]";
-        string atom       = "S(0.03, 3)";
-        atom.copy(this->lsystem.axiom.data(), atom.length());
-        production.copy(this->lsystem.production.data(), production.length());
+        string axiom       = "S(0.03, 3)";
+        this->lsystem.axiom += axiom;
+        this->lsystem.production += production;
 
         this->lsystem.lsys = make_shared<LSystem::D0L_System>(this->lsystem.axiom, this->lsystem.production);
         // LSystem::D0L_System lsys("S(0.03, 3)", productions);
@@ -1141,12 +1147,17 @@ public:
                             shared_ptr<GeometryRenderObject> ptr1 = findGeometryRenderObjectByName("Cursor");
                             if (ptr1)
                                 ptr1->transform.setPosition(target_obj.hitPos);
-                            // printf("选中点位置：(%.2f, %.2f, %.2f)\n", target_obj.hitPos.x, target_obj.hitPos.y, target_obj.hitPos.z);
+                            // printf("选中点位置：(%.2f, %.2f, %.2f)\n",
+                            // target_obj.hitPos.x, target_obj.hitPos.y,
+                            // target_obj.hitPos.z);
+                            this->showCursor();
                             break;
                         }
                         case 0: {
-
+                            this->hideCursor();
                             break;
+                        default:
+                            this->hideCursor();
                         }
                         }
                     }
@@ -1330,34 +1341,25 @@ public:
             if (ImGui::Button(TEXT("迭代"))) {
                 string lsys_cmds = this->lsystem.lsys->next();
                 // 更新目标骨骼系统
-                auto skptr = this->skeletons.find("skeleton");
-                if (skptr != this->skeletons.end()) {
-                    // 1. 从OpenGL中删除所有节点绑定的顶点数组资源
-                    SkeletonObject sk = skptr->second;
-                    printf("删除骨骼 : \"%s\"  数量 : %u\n", sk.name.c_str(), sk.num);
-                    for (uint32_t i = 0; i < sk.num; i++) {
-                        stringstream skname;
-                        skname << sk.name << "_" << i + 1;
-                        this->remove(skname.str());
-                    }
-                    // 2. 从this->skeleton中移除这个Skeleton (但由于当前引用，不会马上销毁)
-                    this->skeletons.erase(skptr);
-                }
+                if(this->skeletons.find("skeleton")!=this->skeletons.end())
+                    this->removeSkeleton("skeleton");
 
                 auto s_input = lexy::zstring_input(lsys_cmds.c_str());
                 auto res     = lexy::parse<GeometryGenerator::grammar::GraphicsStructure>(s_input, lexy_ext::report_error);
-                assert(res.is_success());
-                const GeometryGenerator::config::GraphicsStructure& gs = res.value();
-                this->lsystem.skeleton                                 = gs.construct();
-                // 目前固定了skeleton这个名字，只能创建一个骨架
-                this->add("skeleton", this->lsystem.skeleton, Transform{vec3(0.5f, 0.03f, 0.5f)});
-
-                this->lsystem.iter_n++;
+                if (res.is_success()) {
+                    const GeometryGenerator::config::GraphicsStructure& gs = res.value();
+                    this->lsystem.skeleton                                 = gs.construct();
+                    // 目前固定了skeleton这个名字，只能创建一个骨架
+                    this->add("skeleton", this->lsystem.skeleton, Transform{vec3(0.5f, 0.03f, 0.5f)});
+                    this->lsystem.iter_n++;
+                }
             }
             ImGui::SameLine();
             if (ImGui::Button(TEXT("复位"))) {
                 // 删除目标骨骼系统
-
+                if(this->skeletons.find("skeleton")!=this->skeletons.end())
+                    this->removeSkeleton("skeleton");
+                this->lsystem.lsys->reset();
                 this->lsystem.iter_n = 0;
             }
             ImGui::TreePop();
@@ -1496,10 +1498,22 @@ public:
             this->objs.erase(obj_ptr);
     }
 
+    void removeSkeleton(const string& name) {
+        auto skptr = this->skeletons.find(name);
+        if (skptr == this->skeletons.end()) {
+            cout << format("warnning: skeleton \"{}\" not found in removeSkeleton()", name) << endl;
+            return;
+        }
+        erase_if(this->objs, [&](shared_ptr<GeometryRenderObject> obj) {
+            return regex_match(obj->name, this->check_skeleton_node_name_pattern);
+        });
+        this->skeletons.erase(skptr);
+    }
+
     void add(const string& name, shared_ptr<Skeleton> skeleton, Transform transform) {
         // 加入骨架对象，考虑遍历Skeleton的所有节点并将其中的Geometry加入到this->objs中
         if (this->skeletons.find(name) != this->skeletons.end()) {
-            cout << "scene cannot add \"Skeleton\" with an existed name \"" << name << "\"" << endl;
+            cout << "warnning: scene cannot add \"Skeleton\" with an existed name \"" << name << "\"" << endl;
             return;
         }
         // 将transform的影响加入到skeleton->root节点的transform中，然后更新整个skeleton
@@ -1507,13 +1521,13 @@ public:
         skeleton->root->setTransform(skeleton->root->getTransform() * transform);
         skeleton->update();
 
-        SkeletonObject sk{name, 0, skeleton};
+        SkeletonObject sk{name, skeleton};
 
         uint32_t geo_id = 1;
         // 遍历skeleton的所有节点并加入到this->objs中
         sk.skeleton->traverse([=, this, &geo_id](SkNode* node) {
             stringstream node_geom_name;
-            node_geom_name << name << "_" << geo_id;
+            node_geom_name << name << "#" << geo_id;
 
             this->add(node_geom_name.str(), node->obj, node->getAbsTransform(), true, false, true, true);
 
@@ -1529,7 +1543,6 @@ public:
 
             geo_id++;
         });
-        sk.num                = geo_id - 1;
         this->skeletons[name] = sk;
         updateGeometryListView();
     }
