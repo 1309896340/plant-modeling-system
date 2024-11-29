@@ -19,12 +19,6 @@ int main(int argc, char** argv) {
     scene.camera.lookAt({0.0f, 4.0f, 0.0f});
     scene.light.color = {0.6f, 0.6f, 0.6f};
 
-
-    // 调试
-    LSystem::D0L_System lsys("F(2)", "F(x) -> F(x*0.5) C(x+1) F(2*x)");
-    string a = lsys.next();
-    cout << a << endl;
-
-    // scene.mainloop();
+    scene.mainloop();
     return 0;
 }

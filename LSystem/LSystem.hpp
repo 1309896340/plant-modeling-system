@@ -1,4 +1,5 @@
 #include "LSystem.h"
+#include <cstdint>
 
 #ifndef __WIND_D0LSYSTEM
 #    define __WIND_D0LSYSTEM
@@ -14,11 +15,13 @@ class D0L_System {
     LSysParser::config::LSystem lsystem;
     string                      axiom;
     string                      current_state;   // 迭代的当前状态
+    uint32_t                    iter_n;
 
 public:
     D0L_System(const string& axiom, const string& productions)
         : axiom(axiom)
         , current_state(axiom)
+        , iter_n(0)
         , lsystem() {
         printf("input production: %s\n", productions.c_str());
         auto lsys_prods_string = lexy::string_input(productions);
@@ -30,7 +33,21 @@ public:
     D0L_System(const string& axiom, const vector<string>& productions)
         : axiom(axiom)
         , current_state(axiom)
+        , iter_n(0)
         , lsystem() {
+
+        this->updateProduction(productions);
+    }
+
+    uint32_t get_iter_n() const { return this->iter_n; }
+
+    bool updateAxiom(const string& axiom) {
+        this->axiom = axiom;
+        this->reset();
+        return true;
+    }
+
+    bool updateProduction(const vector<string>& productions) {
         vector<LSysParser::config::LProduction> prods;
         bool                                    is_success = true;
         for (const string& production : productions) {
@@ -44,11 +61,13 @@ public:
         }
         if (is_success)
             this->lsystem = LSysParser::config::LSystem(prods);
+        return true;
     }
 
     string next(uint32_t n = 1) {
         for (uint32_t i = 0; i < n; i++)
             this->current_state = this->iterate(this->current_state);
+        this->iter_n += n;
         return this->current_state;
     }
 

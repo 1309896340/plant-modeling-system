@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include <filesystem>
+#include <format>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -591,7 +592,7 @@ private:
     struct {
         const size_t                    LSYSTEM_MAX_LENGTH{1000};
         string                          axiom;
-        string                          production;
+        vector<string>                  productions;
         uint32_t                        iter_n{0};
         shared_ptr<LSystem::D0L_System> lsys{nullptr};
         shared_ptr<Skeleton>            skeleton{nullptr};
@@ -704,17 +705,17 @@ public:
     }
 
     void init_lsystem() {
-      // this->lsystem.axiom.resize(this->lsystem.LSYSTEM_MAX_LENGTH, 0);
-      // this->lsystem.production.resize(this->lsystem.LSYSTEM_MAX_LENGTH, 0);
-      // 
+        // this->lsystem.axiom.resize(this->lsystem.LSYSTEM_MAX_LENGTH, 0);
+        // this->lsystem.production.resize(this->lsystem.LSYSTEM_MAX_LENGTH, 0);
+        //
         // 初始化一个示例
         string production = "S(r, h) -> C(r,h) [RZ(30)RY(90)S(r, h*0.8)] "
                             "[RZ(-30)RY(90)S(r, h*0.8)]";
-        string axiom       = "S(0.03, 3)";
+        string axiom      = "S(0.03, 3)";
         this->lsystem.axiom += axiom;
-        this->lsystem.production += production;
+        this->lsystem.productions.push_back(production);
 
-        this->lsystem.lsys = make_shared<LSystem::D0L_System>(this->lsystem.axiom, this->lsystem.production);
+        this->lsystem.lsys = make_shared<LSystem::D0L_System>(this->lsystem.axiom, this->lsystem.productions);
         // LSystem::D0L_System lsys("S(0.03, 3)", productions);
     }
 
@@ -1191,6 +1192,70 @@ public:
                                               });
         this->imgui.list_items = vector<shared_ptr<GeometryRenderObject>>(tmp_item_view.begin(), tmp_item_view.end());
     }
+    void addSoftReturnsToText(std::string& str, float multilineWidth) {
+
+        float       textSize = 0;
+        std::string tmpStr   = "";
+        std::string finalStr = "";
+        int         curChr   = 0;
+        while (curChr < str.size()) {
+
+            if (str[curChr] == '\n') {
+                finalStr += tmpStr + "\n";
+                tmpStr = "";
+            }
+
+            tmpStr += str[curChr];
+            textSize = ImGui::CalcTextSize(tmpStr.c_str()).x;
+
+            if (textSize > multilineWidth) {
+                int lastSpace = tmpStr.size() - 1;
+                while (tmpStr[lastSpace] != ' ' and lastSpace > 0)
+                    lastSpace--;
+                if (lastSpace == 0)
+                    lastSpace = tmpStr.size() - 2;
+                finalStr += tmpStr.substr(0, lastSpace + 1) + "\r\n";
+                if (lastSpace + 1 > tmpStr.size())
+                    tmpStr = "";
+                else
+                    tmpStr = tmpStr.substr(lastSpace + 1);
+            }
+            curChr++;
+        }
+        if (tmpStr.size() > 0)
+            finalStr += tmpStr;
+
+        str = finalStr;
+    };
+
+    bool imgui_autosizingMultilineInput(const char* label, std::string* str, const ImVec2& sizeMin, const ImVec2& sizeMax, ImGuiInputTextFlags flags = ImGuiInputTextFlags_None) {
+
+        // calculate the maximum y/height
+        ImGui::PushTextWrapPos(sizeMax.x);
+        auto textSize = ImGui::CalcTextSize(str->c_str());
+        if (textSize.x > sizeMax.x) {
+            float ratio = textSize.x / sizeMax.x;
+            textSize.x  = sizeMax.x;
+            textSize.y *= ratio;
+            textSize.y += 20;   // add space for an extra line
+        }
+
+        textSize.y += 8;   // to compensate for inputbox margins
+
+        if (textSize.x < sizeMin.x)
+            textSize.x = sizeMin.x;
+        if (textSize.y < sizeMin.y)
+            textSize.y = sizeMin.y;
+        if (textSize.x > sizeMax.x)
+            textSize.x = sizeMax.x;
+        if (textSize.y > sizeMax.y)
+            textSize.y = sizeMax.y;
+
+        bool value_changed = ImGui::InputTextMultiline(label, str, textSize, flags);
+        ImGui::PopTextWrapPos();
+
+        return value_changed;
+    }
 
     bool imgui_menu() {
 
@@ -1327,21 +1392,44 @@ public:
 
         // 用于生成L-System的操作窗口
         ImGui::Begin(TEXT("L-System"), NULL, ImGuiWindowFlags_AlwaysAutoResize);
-        if (ImGui::TreeNodeEx(TEXT("生成"),
-                              ImGuiTreeNodeFlags_DefaultOpen)) {
-            if (ImGui::InputText(TEXT("Atom"), &this->lsystem.axiom, ImGuiInputTextFlags_CallbackEdit)) {
+        if (ImGui::TreeNodeEx(TEXT("生成"), ImGuiTreeNodeFlags_DefaultOpen)) {
+            ImGui::PushItemWidth(300.0f);
+            if (ImGui::InputText(TEXT("Axiom"), &this->lsystem.axiom, ImGuiInputTextFlags_CallbackEdit)) {
+                this->lsystem.lsys->updateAxiom(this->lsystem.axiom);
             }
-            if (ImGui::InputTextMultiline(TEXT("Production"), &this->lsystem.production, ImVec2(0, 0), ImGuiInputTextFlags_CallbackAlways)) {
-                // printf("production可能被修改，现在为:\n%s\n",
-                //        this->lsystem.production.c_str());
-                this->lsystem.lsys = make_shared<LSystem::D0L_System>(this->lsystem.axiom, this->lsystem.production);
+            ImGui::PopItemWidth();
+
+            for (uint32_t i = 0; i < this->lsystem.productions.size(); i++) {
+                ImGui::PushItemWidth(900.0f);
+                if (ImGui::InputText(format("production {}", i + 1).c_str(),
+                                     &this->lsystem.productions[i])) {
+                    // 需要更新lsystem
+                    if (!this->lsystem.lsys->updateProduction(
+                            this->lsystem.productions)) {
+                        cout << "产生式规则含可能含有未知错误" << endl;
+                    }
+                }
+                ImGui::PopItemWidth();
+                ImGui::SameLine();
+                ImGui::PushID(i);
+                if (ImGui::Button(TEXT("移除"))) {
+                    this->lsystem.productions.erase(this->lsystem.productions.begin() + i);
+                    // 需要更新lsystem
+                    this->lsystem.lsys->updateProduction(this->lsystem.productions);
+                }
+                ImGui::PopID();
             }
+            if (ImGui::Button(TEXT("增加")))
+                this->lsystem.productions.push_back("");
+
 
             ImGui::Text(TEXT("iter: %u"), this->lsystem.iter_n);
             if (ImGui::Button(TEXT("迭代"))) {
                 string lsys_cmds = this->lsystem.lsys->next();
+                cout << "调试迭代字符串：" << endl;
+                cout << lsys_cmds << endl;
                 // 更新目标骨骼系统
-                if(this->skeletons.find("skeleton")!=this->skeletons.end())
+                if (this->skeletons.find("skeleton") != this->skeletons.end())
                     this->removeSkeleton("skeleton");
 
                 auto s_input = lexy::zstring_input(lsys_cmds.c_str());
@@ -1357,7 +1445,7 @@ public:
             ImGui::SameLine();
             if (ImGui::Button(TEXT("复位"))) {
                 // 删除目标骨骼系统
-                if(this->skeletons.find("skeleton")!=this->skeletons.end())
+                if (this->skeletons.find("skeleton") != this->skeletons.end())
                     this->removeSkeleton("skeleton");
                 this->lsystem.lsys->reset();
                 this->lsystem.iter_n = 0;
