@@ -2,14 +2,13 @@
 // #define ENBALE_POLYGON_VISUALIZATION
 #include "Scene.hpp"
 
-// #include "GeometryGenerator.hpp"
-// #include "LSystem.hpp"
-
-// #include "lexy/input/string_input.hpp"
-// #include "lexy/visualize.hpp"
-// #include "lexy_ext/report_error.hpp"
-
 // 这里尝试将LSystem模块嵌入到当前项目中
+
+
+// 此处演示的示例为
+// string production = "S(r, h) -> C(r,h) [RZ(30)RY(90)S(r, h*0.8)] "
+// "[RZ(-30)RY(90)S(r, h*0.8)]";
+// string axiom      = "S(0.03, 3)";
 
 using namespace std;
 int main(int argc, char** argv) {

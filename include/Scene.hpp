@@ -1,11 +1,11 @@
 ﻿#pragma once
 
-#include "glm/ext/matrix_clip_space.hpp"
-#include "glm/ext/matrix_transform.hpp"
+#include "LSysConfig.h"
 #include <algorithm>
 #include <cassert>
 #include <chrono>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <format>
@@ -43,6 +43,7 @@
 #include "Geometry.hpp"
 // #include "GeometryGenerator.hpp"
 // #include "LSystem.hpp"
+#include "LSystem.h"
 #include "Light.hpp"
 #include "Shader.hpp"
 #include "Skeleton.hpp"
@@ -595,6 +596,7 @@ class Scene {
     vector<string> productions;
     uint32_t       iter_n{0};
     // shared_ptr<LSystem::D0L_System> lsys{nullptr};
+    shared_ptr<LSystem::LSystem> config{nullptr};
     shared_ptr<Skeleton> skeleton{nullptr};
   } lsystem;
 
@@ -716,7 +718,8 @@ class Scene {
     this->lsystem.productions.push_back(production);
 
     // this->lsystem.lsys = make_shared<LSystem::D0L_System>(this->lsystem.axiom, this->lsystem.productions);
-    throw runtime_error("Scene::init_lsystem()中初始化this->lsys成员！");
+    this->lsystem.config = make_shared<LSystem::LSystem>(this->lsystem.axiom, this->lsystem.productions);
+    // throw runtime_error("Scene::init_lsystem()中初始化this->lsys成员！");
   }
 
   void init_scene_obj() {
@@ -1401,6 +1404,7 @@ class Scene {
       if (ImGui::InputText(TEXT("Axiom"), &this->lsystem.axiom, ImGuiInputTextFlags_CallbackEdit)) {
         throw runtime_error("Scene::imgui_menu()中，更新this->lsystem的axiom！");
         // this->lsystem.lsys->updateAxiom(this->lsystem.axiom);
+        this->lsystem.config->updateAxiom(this->lsystem.axiom);
       }
       ImGui::PopItemWidth();
 
@@ -1410,11 +1414,11 @@ class Scene {
                              &this->lsystem.productions[i])) {
           // 需要更新lsystem
 
-          throw runtime_error("Scene::imgui_menu()中，更新this->lsystem的production！");
-          // if (!this->lsystem.lsys->updateProduction(
-          //         this->lsystem.productions)) {
-          //     cout << "产生式规则含可能含有未知错误" << endl;
-          // }
+          // throw runtime_error("Scene::imgui_menu()中，更新this->lsystem的production！");
+          if (!this->lsystem.config->updateProduction(
+                  this->lsystem.productions)) {
+              cout << "产生式规则含可能含有未知错误" << endl;
+          }
         }
         ImGui::PopItemWidth();
         ImGui::SameLine();
@@ -1422,8 +1426,8 @@ class Scene {
         if (ImGui::Button(TEXT("移除"))) {
           this->lsystem.productions.erase(this->lsystem.productions.begin() + i);
           // 需要更新lsystem
-          throw runtime_error("Scene::imgui_menu()中，更新this->lsystem的production！");
-          // this->lsystem.lsys->updateProduction(this->lsystem.productions);
+          // throw runtime_error("Scene::imgui_menu()中，更新this->lsystem的production！");
+          this->lsystem.config->updateProduction(this->lsystem.productions);
         }
         ImGui::PopID();
       }
@@ -1433,16 +1437,19 @@ class Scene {
 
       ImGui::Text(TEXT("iter: %u"), this->lsystem.iter_n);
       if (ImGui::Button(TEXT("迭代"))) {
-        throw runtime_error("Scene::imgui_menu()中，更新迭代符号串！");
-        // string lsys_cmds = this->lsystem.lsys->next();
-        // cout << "调试迭代字符串：" << endl;
-        // cout << lsys_cmds << endl;
-        //
+        // throw runtime_error("Scene::imgui_menu()中，更新迭代符号串！");
+        string lsys_cmds = this->lsystem.config->iterate();
+        cout << "调试迭代字符串：" << endl;
+        cout << lsys_cmds << endl;
+
         // 更新目标骨骼系统
         if (this->skeletons.find("skeleton") != this->skeletons.end())
           this->removeSkeleton("skeleton");
 
+        
         throw runtime_error("Scene::imgui_menu()中，解析新字符串，更新骨架！");
+        shared_ptr<LSysConfig::SymSeq> symSeq = this->lsystem.config->parseInput(lsys_cmds);
+
         // auto s_input = lexy::zstring_input(lsys_cmds.c_str());
         // auto res     = lexy::parse<GeometryGenerator::grammar::GraphicsStructure>(s_input, lexy_ext::report_error);
         // if (res.is_success()) {
