@@ -43,7 +43,7 @@ namespace LSysConfig {
 		std::string name;
 		std::vector<float> args;
 		// 第2种情况，是一个punct符号
-		std::string punct;
+		char punct;
 	};
 	struct SymSeq {
 		std::vector<std::shared_ptr<Sym>> syms;

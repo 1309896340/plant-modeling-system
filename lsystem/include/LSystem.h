@@ -16,7 +16,7 @@ namespace LSystem {
 		LSystem(const std::string& axiom, std::shared_ptr<LSysConfig::LSystem> lsystem) : axiom(axiom), current(axiom), lsystem(lsystem){}
 		LSystem(const std::string& axiom, const std::string& productions);
 		LSystem(const std::string& axiom, const std::vector<std::string>& productions);
-		std::shared_ptr<LSysConfig::SymSeq> LSystem::LSystem::parseInput(const std::string &input);
+		std::shared_ptr<LSysConfig::SymSeq> parseInput(const std::string &sinput);
 		std::string getCurrent()const;
 		bool updateAxiom(const std::string &new_axiom);
 		bool updateProduction(const std::vector<std::string> &new_productions);

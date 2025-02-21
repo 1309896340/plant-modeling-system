@@ -41,6 +41,7 @@
 #include "Bounding.hpp"
 #include "Camera.hpp"
 #include "Geometry.hpp"
+#include "GeometryInterpreter.hpp"
 // #include "GeometryGenerator.hpp"
 // #include "LSystem.hpp"
 #include "LSystem.h"
@@ -597,7 +598,7 @@ class Scene {
     uint32_t       iter_n{0};
     // shared_ptr<LSystem::D0L_System> lsys{nullptr};
     shared_ptr<LSystem::LSystem> config{nullptr};
-    shared_ptr<Skeleton> skeleton{nullptr};
+    shared_ptr<Skeleton>         skeleton{nullptr};
   } lsystem;
 
   public:
@@ -1416,8 +1417,8 @@ class Scene {
 
           // throw runtime_error("Scene::imgui_menu()中，更新this->lsystem的production！");
           if (!this->lsystem.config->updateProduction(
-                  this->lsystem.productions)) {
-              cout << "产生式规则含可能含有未知错误" << endl;
+                this->lsystem.productions)) {
+            cout << "产生式规则含可能含有未知错误" << endl;
           }
         }
         ImGui::PopItemWidth();
@@ -1446,9 +1447,16 @@ class Scene {
         if (this->skeletons.find("skeleton") != this->skeletons.end())
           this->removeSkeleton("skeleton");
 
-        
-        throw runtime_error("Scene::imgui_menu()中，解析新字符串，更新骨架！");
-        shared_ptr<LSysConfig::SymSeq> symSeq = this->lsystem.config->parseInput(lsys_cmds);
+
+        // throw runtime_error("Scene::imgui_menu()中，解析新字符串，更新骨架！");
+        shared_ptr<LSysConfig::SymSeq> symSeq =
+          this->lsystem.config->parseInput(lsys_cmds);
+        assert(symSeq && "praseInput() return nullptr!");
+
+        const GeometryInterpreter::GraphicsStructure gs(symSeq);
+        this->lsystem.skeleton = gs.construct();
+        this->add("skeleton", this->lsystem.skeleton, Transform{vec3(0.5f, 0.03f, 0.5f)});
+        this->lsystem.iter_n++;
 
         // auto s_input = lexy::zstring_input(lsys_cmds.c_str());
         // auto res     = lexy::parse<GeometryGenerator::grammar::GraphicsStructure>(s_input, lexy_ext::report_error);
@@ -1465,8 +1473,8 @@ class Scene {
         // 删除目标骨骼系统
         if (this->skeletons.find("skeleton") != this->skeletons.end())
           this->removeSkeleton("skeleton");
-        throw runtime_error("Scene::imgui_menu()中删除骨骼系统时，重置this->lsystem.lsys");
-        // this->lsystem.lsys->reset();
+        // throw runtime_error("Scene::imgui_menu()中删除骨骼系统时，重置this->lsystem.lsys");
+        this->lsystem.config->reset();
         this->lsystem.iter_n = 0;
       }
       ImGui::TreePop();

@@ -35,7 +35,7 @@ any LSystemInputVisitorImpl::visitSym(LSystemInputParser::SymContext* ctx) {
 	}
 	else if (ctx->Punct()) {
 		sym->type = LSysConfig::Sym::PUNCT;
-		sym->punct = ctx->Punct()->getText();
+		sym->punct = ctx->Punct()->getText()[0];
 	}
 	else {
 		cerr << "LSystemInputVisitorImpl.cpp    visitSym()    error!";
