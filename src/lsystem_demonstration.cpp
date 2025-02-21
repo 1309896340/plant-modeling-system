@@ -2,17 +2,18 @@
 // #define ENBALE_POLYGON_VISUALIZATION
 #include "Scene.hpp"
 
-#include "GeometryGenerator.hpp"
-#include "LSystem.hpp"
-#include "lexy/input/string_input.hpp"
+// #include "GeometryGenerator.hpp"
+// #include "LSystem.hpp"
+
+// #include "lexy/input/string_input.hpp"
 // #include "lexy/visualize.hpp"
-#include "lexy_ext/report_error.hpp"
+// #include "lexy_ext/report_error.hpp"
 
 // 这里尝试将LSystem模块嵌入到当前项目中
 
 using namespace std;
 int main(int argc, char** argv) {
-
+  try {
     Scene scene;
 
     //   scene.showAxis();
@@ -20,5 +21,10 @@ int main(int argc, char** argv) {
     scene.light.color = {0.6f, 0.6f, 0.6f};
 
     scene.mainloop();
-    return 0;
+  }
+  catch (const exception& e) {
+    cout << e.what() << endl;
+  }
+
+  return 0;
 }
