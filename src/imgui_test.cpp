@@ -2,8 +2,6 @@
 
 using namespace std;
 
-std::mt19937_64 rdgen;
-
 int main(void) {
     Scene scene;
     scene.showAxis();

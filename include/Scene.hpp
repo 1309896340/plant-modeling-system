@@ -712,9 +712,9 @@ class Scene {
     // this->lsystem.production.resize(this->lsystem.LSYSTEM_MAX_LENGTH, 0);
     //
     // 初始化一个示例
-    string production = "S(r, h) -> C(r,h) [RZ(30)RY(90)S(r, h*0.8)] "
-                        "[RZ(-30)RY(90)S(r, h*0.8)]";
-    string axiom      = "S(0.03, 3)";
+    string production = "S(r,h)->C(r,h)[RZ(30)RY(90)S(r,h*0.8)]"
+                        "[RZ(-30)RY(90)S(r,h*0.8)]";
+    string axiom      = "S(0.03,3)";
     this->lsystem.axiom += axiom;
     this->lsystem.productions.push_back(production);
 

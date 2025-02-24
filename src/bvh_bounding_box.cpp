@@ -4,8 +4,6 @@
 #include <memory>
 #include "Scene.hpp"
 
-std::mt19937_64 rdgen(42);
-
 using namespace std;
 int main(int argc, char **argv) {
 
@@ -30,7 +28,7 @@ int main(int argc, char **argv) {
 
   // 创建Sphere对象的层次包围盒
   for (auto &obj : scene.objs)
-    obj.second->constructBvhTree();
+    obj->constructBvhTree();
 
   // scene.compute_radiosity();
   // scene.printRadiosityInfo();

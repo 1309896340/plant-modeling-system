@@ -8,7 +8,6 @@
 
 #include "Scene.hpp"
 
-std::mt19937_64 rdgen(42);
 
 vec3 screen2world(vec2 pos, Scene &scene) {
     pos = - pos;
@@ -75,7 +74,7 @@ int main(int argc, char **argv) {
 
   // 创建Sphere对象的层次包围盒
   for (auto &obj : scene.objs)
-    obj.second->constructBvhTree();
+    obj->constructBvhTree();
 
   RayCastFrame frame = screen_ray_cast_init(scene, 1600, 1200);
   for (int k = 0; k < 30; k++) {

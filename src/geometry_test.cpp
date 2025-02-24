@@ -4,8 +4,6 @@
 #include <memory>
 
 
-std::mt19937_64 rdgen;
-
 uint32_t count = 0;
 
 using namespace std;

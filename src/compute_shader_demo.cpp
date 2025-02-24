@@ -1,6 +1,4 @@
-﻿#include <iostream>
-
-// 计算着色器初步使用
+﻿// 计算着色器初步使用
 
 #include "Scene.hpp"
 #include "Shader.hpp"
