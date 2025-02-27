@@ -116,7 +116,7 @@ struct GraphicsCallSym : public LProdCall {
       context->cur_node->addChild(node);
       context->cur_node = node;
       // 创建几何体
-      shared_ptr<Cylinder> geometry = make_shared<Cylinder>(args[0], args[1]);
+      auto geometry = CompositeMesh::Cylinder(args[0], args[1],36,10,20);
       context->cur_node->obj = static_pointer_cast<Geometry>(geometry);
       // 更新偏移量
       context->cur_node->setAttitude(context->transform.getAttitude());
@@ -124,7 +124,7 @@ struct GraphicsCallSym : public LProdCall {
       // 为新节点重置上下文的transform
       context->transform = Transform();
       // 当前几何体的位置偏移将更新到下一个节点中
-      vec3 offset = std::get<float>(geometry->parameters["height"]) * _up;
+      vec3 offset = std::get<float>(geometry->parameters["height"]->getProp()) * _up;
       context->transform.translate(offset);
     } else if (name == "F") { // 不构造几何体，也不生成节点
       vec3 offset = _up;
