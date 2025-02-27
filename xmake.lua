@@ -85,7 +85,7 @@ target("geometry_test")
             os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
-    set_enabled(false)
+    set_enabled(true)
 
 -- 测试骨架
 target("skeleton_test")
@@ -115,7 +115,7 @@ target("compute_shader_demo")
             os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
-    set_enabled(true)
+    set_enabled(false)
 
 -- 测试光线追踪渲染
 target("raytracing_image")

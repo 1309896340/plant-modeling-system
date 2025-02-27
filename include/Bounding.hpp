@@ -244,14 +244,14 @@ public:
 
   void loadGeometry(const shared_ptr<Geometry> &geometry, Transform transform) {
     // 深拷贝一份geometry并对其顶点应用transform的变换
-    this->vertices.resize(geometry->vertices.size());
+    this->vertices.resize(geometry->getVertices().size());
     mat4 model = transform.getModel();
-    for (int i = 0; i < geometry->vertices.size(); i++) {
+    for (int i = 0; i < geometry->getVertices().size(); i++) {
       vec3 pt = vec3(
-          model * vec4(glm::make_vec3(geometry->vertices[i].position), 1.0f));
+          model * vec4(glm::make_vec3(geometry->getVertices()[i].position), 1.0f));
       memcpy(&vertices[i], glm::value_ptr(pt), 3 * sizeof(float));
     }
-    this->surfaces = geometry->surfaces; // 拷贝构造
+    this->surfaces = geometry->getSurfaces(); // 拷贝构造
   }
 
   void construct() {
