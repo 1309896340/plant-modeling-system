@@ -109,7 +109,7 @@ class GeometryGenerater : public GeometryCmd {
       context->cur_node->addChild(node);
       context->cur_node = node;
       // 创建几何体
-      auto geometry = CompositeMesh::Cylinder(args[0], args[1], 36, 36, 20);
+      auto geometry = Composition::Cylinder(args[0], args[1], 36, 36, 20);
       // shared_ptr<Cylinder> geometry = make_shared<Cylinder>(args[0], args[1]);
       context->cur_node->obj = static_pointer_cast<Geometry>(geometry);
       // 更新偏移量

@@ -258,18 +258,18 @@ class TriangleSampler {
   }
 
   float calcArea() const {
-    return glm::length(glm::cross(pt[1] - pt[0], pt[2] - pt[0]));
+    return glm::length(glm::cross(pt[2] - pt[0], pt[1] - pt[0]));
   }
 
   glm::vec3 calcNorm() const {
-    return glm::normalize(glm::cross(pt[1] - pt[0], pt[2] - pt[0]));
+    return glm::normalize(glm::cross(pt[2] - pt[0], pt[1] - pt[0]));
   }
 
   glm::vec3 calcCenter() const {
     return (pt[0] + pt[1] + pt[2]) / 3.0f;
   }
 
-  // 以法向量为上方向基准，结合pt[1]-pt[0]、pt[2]-pt[1]所成平面构建局部坐标系
+  // 以法向量为上方向基准，结合pt[2]-pt[1]、pt[1]-pt[0]所成平面构建局部坐标系
   tuple<glm::vec3, glm::vec3, glm::vec3> calcLocalCoord() const {
     glm::vec3 up    = this->calcNorm();
     glm::vec3 right = glm::normalize(glm::cross(pt[1] - pt[0], up));
@@ -644,8 +644,8 @@ class Scene {
     }
     glEnable(GL_MULTISAMPLE);   // 开启MSAA抗锯齿
     glEnable(GL_DEPTH_TEST);    // 开启深度测试
-    // glEnable(GL_CULL_FACE);   // 开启面剔除
-    glFrontFace(GL_CCW);   // 逆时针索引顺序为正面
+    glEnable(GL_CULL_FACE);     // 开启面剔除
+    glFrontFace(GL_CW);         // 顺时针索引顺序为正面
     glLineWidth(1.5f);
     // #ifdef ENBALE_POLYGON_VISUALIZATION
     //     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
@@ -734,13 +734,11 @@ class Scene {
     this->addSceneObject(obj1, this->isShowLight, false, false, false);
 
     // 坐标轴
-    // shared_ptr<Geometry>             axis = make_shared<CoordinateAxis>(0.1, 1.0f);
-
-    
+    shared_ptr<Geometry> axis = make_shared<CoordinateAxis>(0.1, 1.0f);
     // shared_ptr<Geometry>             axis = nullptr;  // todo 暂时先留空
-    // shared_ptr<GeometryRenderObject> obj2 =
-    //   make_shared<GeometryRenderObject>("Axis", axis);
-    // this->addSceneObject(obj2, this->isShowAxis, false, false, false);
+    shared_ptr<GeometryRenderObject> obj2 =
+      make_shared<GeometryRenderObject>("Axis", axis);
+    this->addSceneObject(obj2, this->isShowAxis, false, false, false);
 
     // 游标
     // shared_ptr<Geometry> cursor = make_shared<Sphere>(0.05, 36, 72);
@@ -752,7 +750,7 @@ class Scene {
 
     // 地面
     // shared_ptr<Geometry> ground = make_shared<Ground>(20.0f, 20.0f);
-    shared_ptr<Geometry> ground = Mesh::Plane(20.0f, 20.0f,10,10);
+    shared_ptr<Geometry> ground = Mesh::Plane(20.0f, 20.0f, 10, 10);
     // 为了让光线不在两个重叠面上抖动进而穿透，将Ground下移一个微小距离
     shared_ptr<GeometryRenderObject> obj3 = make_shared<GeometryRenderObject>("Ground", ground, Transform({0.0f, -0.1f, 0.0f}));
     obj3->texture                         = this->textures["fabric"];
@@ -760,21 +758,21 @@ class Scene {
 
     // 左侧面
     // shared_ptr<Geometry> side_left = make_shared<Plane>(20.0f, 20.0f);
-    shared_ptr<Geometry> side_left = Mesh::Plane(20.0f, 20.0f,10,10);
+    shared_ptr<Geometry> side_left = Mesh::Plane(20.0f, 20.0f, 10, 10);
     side_left->setColor(0.0f, 0.0f, 1.0f);
     shared_ptr<GeometryRenderObject> side_left_obj = make_shared<GeometryRenderObject>("Side_left", side_left, Transform({-10.0f, 9.9f, 0.0f}, _front, glm::radians(90.0f)));
     this->addSceneObject(side_left_obj, true, false, true, true);
 
     // 后侧面
     // shared_ptr<Geometry> side_back = make_shared<Plane>(20.0f, 20.0f);
-    shared_ptr<Geometry> side_back = Mesh::Plane(20.0f, 20.0f,10,10);
+    shared_ptr<Geometry> side_back = Mesh::Plane(20.0f, 20.0f, 10, 10);
     side_back->setColor(0.0f, 1.0f, 0.0f);
     shared_ptr<GeometryRenderObject> side_back_obj = make_shared<GeometryRenderObject>("Side_back", side_back, Transform({0.0f, 9.9f, -10.0f}, _right, glm::radians(90.0f)));
     this->addSceneObject(side_back_obj, true, false, true, true);
 
     // 上侧面
     // shared_ptr<Geometry> side_top = make_shared<Plane>(20.0f, 20.0f);
-    shared_ptr<Geometry> side_top = Mesh::Plane(20.0f, 20.0f,10,10);
+    shared_ptr<Geometry> side_top = Mesh::Plane(20.0f, 20.0f, 10, 10);
     side_top->setColor(1.0f, 0.0f, 0.0f);
     shared_ptr<GeometryRenderObject> side_top_obj = make_shared<GeometryRenderObject>("Side_top", side_top, Transform({0.0f, 19.9f, 0.0f}, _right, glm::radians(180.0f)));
     this->addSceneObject(side_top_obj, true, false, true, true);
@@ -794,7 +792,8 @@ class Scene {
       {1.0, 1.0, -1.0},
       {1.0, 1.0, 1.0},
     };
-    vector<uint32_t> surfaces = {1, 7, 5, 1, 3, 7, 0, 6, 2, 0, 4, 6, 5, 6, 4, 5, 7, 6, 0, 3, 1, 0, 2, 3, 4, 1, 5, 4, 0, 1, 3, 6, 7, 3, 2, 6};
+    vector<uint32_t> surfaces = {1, 5, 7, 1, 7, 3, 0, 2, 6, 0, 6, 4, 5, 4, 6, 5, 6, 7, 0, 1, 3, 0, 3, 2, 4, 5, 1, 4, 1, 0, 3, 7, 6, 3, 6, 2};
+
     glGenVertexArrays(1, &this->skybox_obj.vao);
     glBindVertexArray(this->skybox_obj.vao);
 
@@ -1296,7 +1295,7 @@ class Scene {
       if (ImGui::SliderFloat(TEXT("天顶角"), &this->camera.getTheta(), 0.0f, 180.0f, "%.1f"))
         this->camera.updateAttitudeFromShadow();
       if (ImGui::SliderFloat(
-            TEXT("方向角"),
+            TEXT("方位角"),
             &this->camera.getPhi(),
             -180.0f,
             180.0f,
@@ -1339,10 +1338,13 @@ class Scene {
         if (!this->imgui.list_items.empty()) {
           for (int i = 0; i < this->imgui.list_items.size(); i++)
             this->imgui.list_items[i]->selected = false;
-          assert(this->imgui.selected_idx != -1);
-          this->imgui.cur           = this->imgui.list_items[this->imgui.selected_idx];
-          this->imgui.cur->selected = true;
-          printf("选中项为 : %s\n", imgui.list_items[this->imgui.selected_idx]->name.c_str());
+          // assert(this->imgui.selected_idx != -1);
+          if (this->imgui.selected_idx != -1) {
+
+            this->imgui.cur           = this->imgui.list_items[this->imgui.selected_idx];
+            this->imgui.cur->selected = true;
+            // printf("选中项为 : %s\n", imgui.list_items[this->imgui.selected_idx]->name.c_str());
+          }
         }
 
         ImGui::EndListBox();
@@ -1361,7 +1363,7 @@ class Scene {
           void operator()(float& arg) {
             if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
               // context->imgui.cur->geometry->update();
-              printf("pname: %s\n", pname.c_str());
+              // printf("pname: %s\n", pname.c_str());
               context->imgui.cur->geometry->parameters[pname]->notifyAll();
               context->imgui.cur->updateVBO();
               // context->compute_radiosity();
@@ -1372,7 +1374,8 @@ class Scene {
                                  reinterpret_cast<int*>(&arg),
                                  2,
                                  50)) {
-              context->imgui.cur->geometry->update();
+              // context->imgui.cur->geometry->update();
+              context->imgui.cur->geometry->parameters[pname]->notifyAll();
               context->imgui.cur->updateVBO();
               // context->compute_radiosity();
             }

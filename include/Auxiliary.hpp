@@ -13,33 +13,43 @@ using glm::mat3;
 using glm::mat4;
 using glm::vec3;
 
-class CoordinateAxis : public FixedGeometry {
+class CoordinateAxis : public Geometry {
+  shared_ptr<Geometry> axis_x{nullptr};
+  shared_ptr<Geometry> axis_y{nullptr};
+  shared_ptr<Geometry> axis_z{nullptr};
 public:
   CoordinateAxis(float radius, float length){
     // Arrow a_x(radius, length);
     // Arrow a_y(radius, length);
     // Arrow a_z(radius, length);
-    auto a_x = CompositeMesh::Arrow(radius,length);
-    auto a_y = CompositeMesh::Arrow(radius,length);
-    auto a_z = CompositeMesh::Arrow(radius,length);
+    axis_x = Composition::Arrow(radius,length);
+    axis_y = Composition::Arrow(radius,length);
+    axis_z = Composition::Arrow(radius,length);
     
     // 由于使用了响应式变量，Geometry本身的这些变换操作可能失效
-    a_x->rotate(glm::radians(90.0f), _front);
-    a_z->rotate(glm::radians(90.0f), _right);
+    axis_x->rotate(glm::radians(90.0f), _front);
+    axis_z->rotate(glm::radians(90.0f), _right);
 
-    a_x->setColor(1.0f, 0.0f, 0.0f);
-    a_y->setColor(0.0f, 1.0f, 0.0f);
-    a_z->setColor(0.0f, 0.0f, 1.0f);
+    axis_x->setColor(1.0f, 0.0f, 0.0f);
+    axis_y->setColor(0.0f, 1.0f, 0.0f);
+    axis_z->setColor(0.0f, 0.0f, 1.0f);
 
-    FixedGeometry &&res = (*a_x) + (*a_y) + (*a_z);
+    FixedGeometry &&res = (*axis_x) + (*axis_y) + (*axis_z);
     this->vertices = res.vertices;
     this->surfaces = res.surfaces;
   }
   CoordinateAxis():CoordinateAxis(0.06f,1.0f){}
 
+  virtual void update() {
+    // // 不会改变，无需更新
+    // FixedGeometry &&res = (*axis_x) + (*axis_y) + (*axis_z);
+    // this->vertices = res.vertices;
+    // this->surfaces = res.surfaces;
+  }
+  virtual void notify(const string& name, const prop& parameter){}
 };
 
-class Ground : public FixedGeometry {
+class Ground : public Geometry {
 public:
   Ground(float width, float height) {
     // Plane ground(width, height);
@@ -50,6 +60,8 @@ public:
     this->surfaces = ground->getSurfaces();
   }
   Ground() : Ground(20.0f, 20.0f) {}
+  virtual void update() {}
+  virtual void notify(const string& name, const prop& parameter){}
 };
 
 // class Beam : public FixedGeometry{
