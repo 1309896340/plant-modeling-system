@@ -60,81 +60,82 @@ struct Vertex {
 // };
 
 struct Surface {
-  uint32_t tidx[3];   // 3个Vertex构成
+  uint32_t tidx[3]; // 3个Vertex构成
 };
 
 class Observer : public enable_shared_from_this<Observer> {
-  public:
-  virtual void notify(const string& name, const prop& parameter) = 0;
+public:
+  virtual void notify(const string &name, const prop &parameter) = 0;
 };
 
 // class Geometry;
 class ReflectValue : public Observer {
-  private:
-  string                     name;
-  prop                       value;
+private:
+  string name;
+  prop value;
   vector<weak_ptr<Observer>> observers;
 
-  public:
-  ReflectValue(const string& name, prop init_value)
-    : name(name)
-    , value(init_value) {}
-  ReflectValue(const string& name, prop init_value, weak_ptr<Observer> observer)
-    : name(name)
-    , value(init_value) {
+public:
+  ReflectValue(const string &name, prop init_value)
+      : name(name), value(init_value) {}
+  ReflectValue(const string &name, prop init_value, weak_ptr<Observer> observer)
+      : name(name), value(init_value) {
     this->observers.emplace_back(observer);
   }
-  // ReflectValue(const string& name, prop init_value, shared_ptr<Observer> observer)
+  // ReflectValue(const string& name, prop init_value, shared_ptr<Observer>
+  // observer)
   //   : name(name)
   //   , value(init_value) {
   //   this->observers.emplace_back(observer);
   // }
-  prop& getProp() { return this->value; }
+  prop &getProp() { return this->value; }
 
-  virtual void notify(const string& name, const prop& param) {
+  virtual void notify(const string &name, const prop &param) {
     // 实现ReflectValue之间的单向绑定
     this->value = param;
   }
 
-  void notifyAll() {   // 外部有修改时调用
+  void notifyAll() { // 外部有修改时调用
     // 移除this->observers中已经失效的元素
-    erase_if(this->observers, [](weak_ptr<Observer> obs) {
-      return obs.expired();
-    });
-    for (auto& obs : this->observers) {
-      assert(!obs.expired() && "ReflectValue::notifyAll(): observer pointer is expired!");
-      obs.lock()->notify(this->name, this->value);   // Geometry需要定义notify(string, prop)接口
+    erase_if(this->observers,
+             [](weak_ptr<Observer> obs) { return obs.expired(); });
+    for (auto &obs : this->observers) {
+      assert(!obs.expired() &&
+             "ReflectValue::notifyAll(): observer pointer is expired!");
+      obs.lock()->notify(
+          this->name, this->value); // Geometry需要定义notify(string, prop)接口
     }
   }
   string getName() const { return this->name; }
-  void   addObserver(weak_ptr<Observer> observer) {
-    assert(!observer.expired() && "ReflectVal::addObserver(): observer is expired!");
+  void addObserver(weak_ptr<Observer> observer) {
+    assert(!observer.expired() &&
+           "ReflectVal::addObserver(): observer is expired!");
     this->observers.emplace_back(observer);
   }
 };
 
 class Geometry : public Observer {
-  protected:
-  vector<Vertex>  vertices;
+protected:
+  vector<Vertex> vertices;
   vector<Surface> surfaces;
 
-  public:
+public:
   // map<string, shared_ptr<ReflectValue>> parameters;
   map<string, shared_ptr<ReflectValue>> parameters;
   // map<string, param_variant> parameters;
   // prop parameters;
 
-  Geometry()                = default;
-  Geometry(const Geometry&) = default;
-  ~Geometry()               = default;
+  Geometry() = default;
+  Geometry(const Geometry &) = default;
+  ~Geometry() = default;
 
-  vector<Vertex>&        getVertices() { return this->vertices; }
-  vector<Surface>&       getSurfaces() { return this->surfaces; }
-  const vector<Vertex>&  getVertices() const { return this->vertices; }
-  const vector<Surface>& getSurfaces() const { return this->surfaces; }
+  vector<Vertex> &getVertices() { return this->vertices; }
+  vector<Surface> &getSurfaces() { return this->surfaces; }
+  const vector<Vertex> &getVertices() const { return this->vertices; }
+  const vector<Surface> &getSurfaces() const { return this->surfaces; }
 
   void translate(float x_offset, float y_offset, float z_offset) {
-    for (auto& vertex : this->vertices) {
+    for (auto &vertex : this->vertices) {
       vertex.x += x_offset;
       vertex.y += y_offset;
       vertex.z += z_offset;
@@ -143,21 +144,21 @@ class Geometry : public Observer {
 
   void rotate(float angle, glm::vec3 axis) {
     glm::mat3 rot_mat = glm::mat3(glm::rotate(glm::mat4(1.0f), angle, axis));
-    for (auto& vertex : this->vertices) {
-      glm::vec3 new_pos    = rot_mat * glm::make_vec3(vertex.position);
+    for (auto &vertex : this->vertices) {
+      glm::vec3 new_pos = rot_mat * glm::make_vec3(vertex.position);
       glm::vec3 new_normal = rot_mat * glm::make_vec3(vertex.normal);
-      vertex.x             = new_pos.x;
-      vertex.y             = new_pos.y;
-      vertex.z             = new_pos.z;
-      vertex.nx            = new_normal.x;
-      vertex.ny            = new_normal.y;
-      vertex.nz            = new_normal.z;
+      vertex.x = new_pos.x;
+      vertex.y = new_pos.y;
+      vertex.z = new_pos.z;
+      vertex.nx = new_normal.x;
+      vertex.ny = new_normal.y;
+      vertex.nz = new_normal.z;
     }
   }
 
   void setColor(float r, float g, float b) {
     // 设置纯色
-    for (auto& vertex : this->vertices) {
+    for (auto &vertex : this->vertices) {
       vertex.r = r;
       vertex.g = g;
       vertex.b = b;
@@ -176,7 +177,8 @@ class Geometry : public Observer {
 //   FixedGeometry() { this->parameters.clear(); }
 
 //   FixedGeometry(const Geometry &geometry) {
-//     // 可以从Geometry构造（这是个有点奇怪的操作，引入了从父类到子类的隐式转换）
+//     //
+//     可以从Geometry构造（这是个有点奇怪的操作，引入了从父类到子类的隐式转换）
 //     this->vertices = geometry.vertices;
 //     this->surfaces = geometry.surfaces;
 //     this->parameters.clear();
@@ -227,23 +229,23 @@ class Geometry : public Observer {
 // };
 
 struct FixedGeometry {
-  vector<Vertex>  vertices;
+  vector<Vertex> vertices;
   vector<Surface> surfaces;
   FixedGeometry() = default;
-  FixedGeometry(const vector<Vertex>& vertices,const vector<Surface>& surfaces):vertices(vertices),surfaces(surfaces){}
-  FixedGeometry(const Geometry& geo)
-    : vertices(geo.getVertices())
-    , surfaces(geo.getSurfaces()) {}
+  FixedGeometry(const vector<Vertex> &vertices, const vector<Surface> &surfaces)
+      : vertices(vertices), surfaces(surfaces) {}
+  FixedGeometry(const Geometry &geo)
+      : vertices(geo.getVertices()), surfaces(geo.getSurfaces()) {}
 };
 
-FixedGeometry operator+(const FixedGeometry& a, const FixedGeometry& b) {
+FixedGeometry operator+(const FixedGeometry &a, const FixedGeometry &b) {
   FixedGeometry res = a;
   // 1. 将两组vertices进行简单拼接
   res.vertices.insert(res.vertices.end(), b.vertices.begin(), b.vertices.end());
   // 2. 将b的surfaces的索引偏移this->vertices.size()，然后拼接
-  const uint32_t  offset = a.vertices.size();
-  vector<Surface> sfs    = b.surfaces;
-  for (auto& surf_ids : sfs) {
+  const uint32_t offset = a.vertices.size();
+  vector<Surface> sfs = b.surfaces;
+  for (auto &surf_ids : sfs) {
     surf_ids.tidx[0] += offset;
     surf_ids.tidx[1] += offset;
     surf_ids.tidx[2] += offset;
@@ -252,27 +254,26 @@ FixedGeometry operator+(const FixedGeometry& a, const FixedGeometry& b) {
   return res;
 }
 
-
 class Mesh : public Geometry {
   using MeshUpdater = function<Vertex(float, float)>;
 
-  private:
+private:
   MeshUpdater updater;
-  bool        topo_flag{true};
+  bool topo_flag{true};
 
-  public:
-  Mesh(uint32_t uNum, uint32_t vNum)
-    : topo_flag(true) {
+public:
+  Mesh(uint32_t uNum, uint32_t vNum) : topo_flag(true) {
     // 不能在构造函数中shared_from_this()
-    // this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum, shared_from_this());
-    // this->parameters["vNum"] = make_shared<ReflectValue>("vNum", vNum, shared_from_this());
+    // this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum,
+    // shared_from_this()); this->parameters["vNum"] =
+    // make_shared<ReflectValue>("vNum", vNum, shared_from_this());
     this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum);
     this->parameters["vNum"] = make_shared<ReflectValue>("vNum", vNum);
 
     // 默认updater生成一个平面
     MeshUpdater updater = [](float u, float v) {
       // 默认尺寸
-      float width  = 5;
+      float width = 5;
       float height = 5;
 
       Vertex vt;
@@ -295,14 +296,14 @@ class Mesh : public Geometry {
       return vt;
     };
   }
-  Mesh(uint32_t uNum, uint32_t vNum, MeshUpdater updater)
-    : topo_flag(true) {
+  Mesh(uint32_t uNum, uint32_t vNum, MeshUpdater updater) : topo_flag(true) {
     // 不能在构造函数中shared_from_this()
-    // this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum, shared_from_this());
-    // this->parameters["vNum"] = make_shared<ReflectValue>("vNum", vNum, shared_from_this());
+    // this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum,
+    // shared_from_this()); this->parameters["vNum"] =
+    // make_shared<ReflectValue>("vNum", vNum, shared_from_this());
     this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum);
     this->parameters["vNum"] = make_shared<ReflectValue>("vNum", vNum);
-    this->updater            = updater;
+    this->updater = updater;
   }
 
   // FixedGeometry operator+(const Mesh &other) const {
@@ -317,8 +318,9 @@ class Mesh : public Geometry {
       this->resize();
       for (int i = 0; i < uNum; i++) {
         for (int j = 0; j < vNum; j++) {
-          uint32_t ptr            = (j + i * vNum) * 2;
-          this->surfaces[ptr + 0] = {j + i * (vNum + 1), 1 + j + i * (vNum + 1), 1 + j + (i + 1) * (vNum + 1)};
+          uint32_t ptr = (j + i * vNum) * 2;
+          this->surfaces[ptr + 0] = {j + i * (vNum + 1), 1 + j + i * (vNum + 1),
+                                     1 + j + (i + 1) * (vNum + 1)};
           this->surfaces[ptr + 1] = {j + i * (vNum + 1),
                                      1 + j + (i + 1) * (vNum + 1),
                                      j + (i + 1) * (vNum + 1)};
@@ -329,14 +331,15 @@ class Mesh : public Geometry {
     if (this->updater) {
       for (int i = 0; i <= uNum; i++) {
         for (int j = 0; j <= vNum; j++) {
-          float u                            = static_cast<float>(i) / uNum;
-          float v                            = static_cast<float>(j) / vNum;
+          float u = static_cast<float>(i) / uNum;
+          float v = static_cast<float>(j) / vNum;
           this->vertices[j + i * (vNum + 1)] = this->updater(u, v);
           // 待优化，不必每次更新顶点都要重置网格
           // if (i != uNum && j != vNum) {
           //   uint32_t ptr            = (j + i * vNum) * 2;
-          //   this->surfaces[ptr + 0] = {j + i * (vNum + 1), 1 + j + i * (vNum + 1), 1 + j + (i + 1) * (vNum + 1)};
-          //   this->surfaces[ptr + 1] = {j + i * (vNum + 1),
+          //   this->surfaces[ptr + 0] = {j + i * (vNum + 1), 1 + j + i * (vNum
+          //   + 1), 1 + j + (i + 1) * (vNum + 1)}; this->surfaces[ptr + 1] = {j
+          //   + i * (vNum + 1),
           //                             1 + j + (i + 1) * (vNum + 1),
           //                             j + (i + 1) * (vNum + 1)};
           // }
@@ -345,9 +348,7 @@ class Mesh : public Geometry {
     }
   }
 
-  void changeUpdater(MeshUpdater updater) {
-    this->updater = updater;
-  }
+  void changeUpdater(MeshUpdater updater) { this->updater = updater; }
 
   void resize() {
     uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]->getProp());
@@ -357,7 +358,7 @@ class Mesh : public Geometry {
     this->surfaces.resize(uNum * vNum * 2);
   }
 
-  virtual void notify(const string& name, const prop& param) {
+  virtual void notify(const string &name, const prop &param) {
     // todo
     // 需要根据name进行判断
     // 如果name=="uNum"或name=="vNum"，则要先调用rebuildTopo()
@@ -393,8 +394,9 @@ class Mesh : public Geometry {
   //     // 待优化，不必每次更新顶点都要重置网格
   //     if (i != uNum && j != vNum) {
   //       uint32_t ptr            = (j + i * vNum) * 2;
-  //       this->surfaces[ptr + 0] = {j + i * (vNum + 1), 1 + j + i * (vNum + 1), 1 + j + (i + 1) * (vNum + 1)};
-  //       this->surfaces[ptr + 1] = {j + i * (vNum + 1),
+  //       this->surfaces[ptr + 0] = {j + i * (vNum + 1), 1 + j + i * (vNum +
+  //       1), 1 + j + (i + 1) * (vNum + 1)}; this->surfaces[ptr + 1] = {j + i *
+  //       (vNum + 1),
   //                                  1 + j + (i + 1) * (vNum + 1),
   //                                  j + (i + 1) * (vNum + 1)};
   //     }
@@ -402,29 +404,28 @@ class Mesh : public Geometry {
   // }
   // }
 
-  void transformVertex(function<Vertex(const Vertex&, float, float)> func) {
+  void transformVertex(function<Vertex(const Vertex &, float, float)> func) {
     uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]->getProp());
     uint32_t vNum = std::get<uint32_t>(this->parameters["vNum"]->getProp());
     for (int i = 0; i <= uNum; i++) {
       for (int j = 0; j <= vNum; j++) {
-        float   u  = static_cast<float>(i) / uNum;
-        float   v  = static_cast<float>(j) / vNum;
-        Vertex& vt = this->vertices[j + i * (vNum + 1)];
-        vt         = func(vt, u, v);
+        float u = static_cast<float>(i) / uNum;
+        float v = static_cast<float>(j) / vNum;
+        Vertex &vt = this->vertices[j + i * (vNum + 1)];
+        vt = func(vt, u, v);
       }
     }
   }
 
-
   static shared_ptr<Mesh> Sphere(float radius, uint32_t PNum, uint32_t VNum) {
     auto radius_val = make_shared<ReflectValue>("radius", radius);
-    auto mesh       = make_shared<Mesh>(PNum, VNum, [radius_val](float u, float v) {
-      float  radius = std::get<float>(radius_val->getProp());
+    auto mesh = make_shared<Mesh>(PNum, VNum, [radius_val](float u, float v) {
+      float radius = std::get<float>(radius_val->getProp());
       Vertex vt;
 
       vt.nx = sin(PI * v) * cos(-2 * PI * u);
-      vt.ny = sin(PI * v) * sin(-2 * PI * u);
-      vt.nz = cos(PI * v);
+      vt.ny = cos(PI * v);
+      vt.nz = sin(PI * v) * sin(-2 * PI * u);
 
       vt.x = radius * vt.normal[0];
       vt.y = radius * vt.normal[1];
@@ -449,18 +450,18 @@ class Mesh : public Geometry {
 
   static shared_ptr<Mesh> Disk(float radius, uint32_t PNum, uint32_t RNum) {
     auto radius_val = make_shared<ReflectValue>("radius", radius);
-    auto mesh       = make_shared<Mesh>(PNum, RNum, [radius_val](float u, float v) {
+    auto mesh = make_shared<Mesh>(PNum, RNum, [radius_val](float u, float v) {
       float radius = std::get<float>(radius_val->getProp());
 
       Vertex vt;
 
-      vt.nx = sin(PI * v) * cos(-2 * PI * u);
-      vt.ny = sin(PI * v) * sin(-2 * PI * u);
-      vt.nz = cos(PI * v);
+      vt.x = radius * v * cos(-2 * PI * u);
+      vt.y = 0.0f;
+      vt.z = radius * v * sin(-2 * PI * u);
 
-      vt.x = radius * vt.normal[0];
-      vt.y = radius * vt.normal[1];
-      vt.z = radius * vt.normal[2];
+      vt.nx = 0.0f;
+      vt.ny = 1.0f;
+      vt.nz = 0.0f;
 
       vt.r = vt.x;
       vt.g = vt.y;
@@ -479,32 +480,34 @@ class Mesh : public Geometry {
     return mesh;
   }
 
-  static shared_ptr<Mesh> ConeSide(float radius, float height, uint32_t PNum, uint32_t HNum) {
+  static shared_ptr<Mesh> ConeSide(float radius, float height, uint32_t PNum,
+                                   uint32_t HNum) {
     auto radius_val = make_shared<ReflectValue>("radius", radius);
     auto height_val = make_shared<ReflectValue>("height", height);
-    auto mesh       = make_shared<Mesh>(PNum, HNum, [radius_val, height_val](float u, float v) {
-      float  radius = std::get<float>(radius_val->getProp());
-      float  height = std::get<float>(height_val->getProp());
-      Vertex vt;
+    auto mesh = make_shared<Mesh>(
+        PNum, HNum, [radius_val, height_val](float u, float v) {
+          float radius = std::get<float>(radius_val->getProp());
+          float height = std::get<float>(height_val->getProp());
+          Vertex vt;
 
-      vt.x = radius * (1 - v) * cos(2 * PI * u);
-      vt.y = radius * (1 - v) * sin(2 * PI * u);
-      vt.z = height * v;
+          vt.x = radius * (1 - v) * cos(2 * PI * u);
+          vt.y = height * v;
+          vt.z = radius * (1 - v) * sin(2 * PI * u);
 
-      float tmp = sqrt(radius * radius + height * height);
-      vt.nx     = height / tmp * cos(2 * PI * u);
-      vt.ny     = height / tmp * sin(2 * PI * u);
-      vt.nz     = radius / tmp;
+          float tmp = sqrt(radius * radius + height * height);
+          vt.nx = height / tmp * cos(2 * PI * u);
+          vt.ny = radius / tmp;
+          vt.nz = height / tmp * sin(2 * PI * u);
 
-      vt.r = 1.0f;
-      vt.g = 0.0f;
-      vt.b = 0.0f;
+          vt.r = 1.0f;
+          vt.g = 0.0f;
+          vt.b = 0.0f;
 
-      vt.u = u;
-      vt.v = v;
+          vt.u = u;
+          vt.v = v;
 
-      return vt;
-    });
+          return vt;
+        });
     radius_val->addObserver(mesh);
     height_val->addObserver(mesh);
     mesh->parameters["radius"] = radius_val;
@@ -516,33 +519,32 @@ class Mesh : public Geometry {
     return mesh;
   }
 
-  static shared_ptr<Mesh> CylinderSide(float radius, float height, uint32_t PNum, uint32_t HNum) {
+  static shared_ptr<Mesh> CylinderSide(float radius, float height,
+                                       uint32_t PNum, uint32_t HNum) {
     auto radius_val = make_shared<ReflectValue>("radius", radius);
     auto height_val = make_shared<ReflectValue>("height", height);
-    auto mesh       = make_shared<Mesh>(
-      PNum,
-      HNum,
-      [radius_val, height_val](float u, float v) -> Vertex {
-        float  radius = std::get<float>(radius_val->getProp());
-        float  height = std::get<float>(height_val->getProp());
-        Vertex vt;
-        vt.x = radius * cos(2 * PI * u);
-        vt.y = radius * sin(2 * PI * u);
-        vt.z = height * v;
+    auto mesh = make_shared<Mesh>(
+        PNum, HNum, [radius_val, height_val](float u, float v) -> Vertex {
+          float radius = std::get<float>(radius_val->getProp());
+          float height = std::get<float>(height_val->getProp());
+          Vertex vt;
+          vt.x = radius * cos(2 * PI * u);
+          vt.y = height * v;
+          vt.z = radius * sin(2 * PI * u);
 
-        vt.nx = cos(2 * PI * u);
-        vt.ny = sin(2 * PI * u);
-        vt.nz = 0.0f;
+          vt.nx = cos(2 * PI * u);
+          vt.ny = 0.0f;
+          vt.nz = sin(2 * PI * u);
 
-        vt.r = 1.0f;
-        vt.g = 0.0f;
-        vt.b = 1.0f;
+          vt.r = 1.0f;
+          vt.g = 0.0f;
+          vt.b = 1.0f;
 
-        vt.u = u;
-        vt.v = v;
+          vt.u = u;
+          vt.v = v;
 
-        return vt;
-      });
+          return vt;
+        });
     radius_val->addObserver(mesh);
     height_val->addObserver(mesh);
     mesh->parameters["radius"] = radius_val;
@@ -554,33 +556,35 @@ class Mesh : public Geometry {
     return mesh;
   }
 
-  static shared_ptr<Mesh> Plane(float width, float height, uint32_t VNum, uint32_t HNum) {
-    auto width_val  = make_shared<ReflectValue>("width", width);
+  static shared_ptr<Mesh> Plane(float width, float height, uint32_t VNum,
+                                uint32_t HNum) {
+    auto width_val = make_shared<ReflectValue>("width", width);
     auto height_val = make_shared<ReflectValue>("height", height);
-    auto mesh       = make_shared<Mesh>(VNum, HNum, [width_val, height_val](float u, float v) {
-      float width  = std::get<float>(width_val->getProp());
-      float height = std::get<float>(height_val->getProp());
+    auto mesh = make_shared<Mesh>(
+        VNum, HNum, [width_val, height_val](float u, float v) {
+          float width = std::get<float>(width_val->getProp());
+          float height = std::get<float>(height_val->getProp());
 
-      Vertex vt;
-      vt.x = (0.5f - u) * width;
-      vt.y = (v - 0.5f) * height;
-      vt.z = 0.0f;
+          Vertex vt;
+          vt.x = (0.5f - u) * width;
+          vt.y = 0.0f;
+          vt.z = (v - 0.5f) * height;
 
-      vt.nx = 0.0f;
-      vt.ny = 0.0f;
-      vt.nz = 1.0f;
+          vt.nx = 0.0f;
+          vt.ny = 1.0f;
+          vt.nz = 0.0f;
 
-      vt.r = 1.0f;
-      vt.g = 1.0f;
-      vt.b = 0.0f;
+          vt.r = 1.0f;
+          vt.g = 1.0f;
+          vt.b = 0.0f;
 
-      vt.u = u;
-      vt.v = v;
-      return vt;
-    });
+          vt.u = u;
+          vt.v = v;
+          return vt;
+        });
     width_val->addObserver(mesh);
     height_val->addObserver(mesh);
-    mesh->parameters["width"]  = width_val;
+    mesh->parameters["width"] = width_val;
     mesh->parameters["height"] = height_val;
     mesh->parameters["uNum"]->addObserver(mesh);
     mesh->parameters["vNum"]->addObserver(mesh);
@@ -593,23 +597,22 @@ class Mesh : public Geometry {
 using TransformUpdater = function<glm::mat4()>;
 
 class CompositeMesh : public Geometry {
-  private:
+private:
   vector<shared_ptr<Mesh>> meshes;
   vector<TransformUpdater> transforms;
 
-  public:
+public:
   CompositeMesh() = default;
 
-  void pushMesh(shared_ptr<Mesh> mesh, const TransformUpdater& transform) {
+  void pushMesh(shared_ptr<Mesh> mesh, const TransformUpdater &transform) {
     if (this->meshes.empty()) {
       this->parameters = mesh->parameters;
-      for (auto& param_pair : mesh->parameters) {
+      for (auto &param_pair : mesh->parameters) {
         param_pair.second->addObserver(shared_from_this());
         // 似乎无法将this转换为weak_ptr，因此只能将Observer继承enable_shared_from_this
       }
-    }
-    else {
-      for (auto& param_pair : mesh->parameters) {
+    } else {
+      for (auto &param_pair : mesh->parameters) {
         // 如果this->parameters中已经存在同名变量，则以this->parameters中的为准
         if (!this->parameters.contains(param_pair.first)) {
           this->parameters[param_pair.first] = param_pair.second;
@@ -628,12 +631,11 @@ class CompositeMesh : public Geometry {
     this->transforms.pop_back();
   }
 
-  virtual void notify(const string& name, const prop& param) {
-    this->update();
-  }
+  virtual void notify(const string &name, const prop &param) { this->update(); }
 
   virtual void update() {
-    assert(this->meshes.size() == this->transforms.size() && "CompositeMesh meshes.size() != transforms.size()!");
+    assert(this->meshes.size() == this->transforms.size() &&
+           "CompositeMesh meshes.size() != transforms.size()!");
     uint32_t num = this->meshes.size();
     vector<shared_ptr<FixedGeometry>> meshes;
     for (uint32_t i = 0; i < num; i++) {
@@ -642,32 +644,40 @@ class CompositeMesh : public Geometry {
       // 此处要进行矩阵乘法效率可能比较低(后续再考虑是否需要优化)
       glm::mat4 trans = this->transforms[i]();
       for (uint32_t j = 0; j < mesh_vertices.size(); j++) {
-        glm::vec4 pt(mesh_vertices[j].x, mesh_vertices[j].y, mesh_vertices[j].z, 1);
-        // 这里可能存在乘法顺序的错误，需要检查验证。glm应该是行变换乘法，也就是矩阵左乘列向量
-        glm::vec4 res      = trans * pt;
-        mesh_vertices[j].x = res.x;
-        mesh_vertices[j].y = res.y;
-        mesh_vertices[j].z = res.z;
+        glm::vec4 pt(mesh_vertices[j].x, mesh_vertices[j].y, mesh_vertices[j].z,
+                     1);
+        glm::vec4 pt_norm(mesh_vertices[j].nx, mesh_vertices[j].ny,
+                          mesh_vertices[j].nz, 0);
+        glm::vec4 new_pt = trans * pt;
+        glm::vec4 new_pt_norm = trans * pt_norm;
+        mesh_vertices[j].x = new_pt.x;
+        mesh_vertices[j].y = new_pt.y;
+        mesh_vertices[j].z = new_pt.z;
+        mesh_vertices[j].nx = new_pt_norm.x;
+        mesh_vertices[j].ny = new_pt_norm.y;
+        mesh_vertices[j].nz = new_pt_norm.z;
       }
-      meshes.emplace_back(make_shared<FixedGeometry>(mesh_vertices, this->meshes[i]->getSurfaces()));
+      meshes.emplace_back(make_shared<FixedGeometry>(
+          mesh_vertices, this->meshes[i]->getSurfaces()));
     }
     // todo 需要将所有变换后的vertices及其对应surfaces拼接到一起
     assert(!meshes.empty() && "CompositeMesh::update() meshes.size()==0!");
     shared_ptr<FixedGeometry> fgeo = meshes[0];
-    for (uint32_t i = 1; i < meshes.size() - 1; i++) 
+    for (uint32_t i = 1; i < meshes.size(); i++)
       (*fgeo) = (*fgeo) + (*meshes[i]);
     this->vertices = fgeo->vertices;
     this->surfaces = fgeo->surfaces;
-    // todo 检查
   }
 
-  static shared_ptr<CompositeMesh> Cube(float xWidth, float yWidth, float zWidth, uint32_t xNum, uint32_t yNum, uint32_t zNum) {
+  static shared_ptr<CompositeMesh> Cube(float xWidth, float yWidth,
+                                        float zWidth, uint32_t xNum,
+                                        uint32_t yNum, uint32_t zNum) {
     auto xwidth_val = make_shared<ReflectValue>("xWidth", xWidth);
     auto ywidth_val = make_shared<ReflectValue>("yWidth", yWidth);
     auto zwidth_val = make_shared<ReflectValue>("zWidth", zWidth);
-    auto xnum_val   = make_shared<ReflectValue>("xNum", xNum);
-    auto ynum_val   = make_shared<ReflectValue>("yNum", yNum);
-    auto znum_val   = make_shared<ReflectValue>("zNum", zNum);
+    auto xnum_val = make_shared<ReflectValue>("xNum", xNum);
+    auto ynum_val = make_shared<ReflectValue>("yNum", yNum);
+    auto znum_val = make_shared<ReflectValue>("zNum", zNum);
 
     auto xy1 = Mesh::Plane(xWidth, yWidth, xNum, yNum);
     auto xy2 = Mesh::Plane(xWidth, yWidth, xNum, yNum);
@@ -684,56 +694,66 @@ class CompositeMesh : public Geometry {
     cmesh->meshes.emplace_back(yz1);
     cmesh->meshes.emplace_back(yz2);
     // 构建坐标变换
-    cmesh->transforms.emplace_back([xwidth_val, ywidth_val, zwidth_val]() {   // xy1  前
-      float     xwidth = std::get<float>(xwidth_val->getProp());
-      float     ywidth = std::get<float>(ywidth_val->getProp());
-      float     zwidth = std::get<float>(zwidth_val->getProp());
+    cmesh->transforms.emplace_back([xwidth_val, ywidth_val,
+                                    zwidth_val]() { // xy1  前
+      float xwidth = std::get<float>(xwidth_val->getProp());
+      float ywidth = std::get<float>(ywidth_val->getProp());
+      float zwidth = std::get<float>(zwidth_val->getProp());
       glm::mat4 trans(1.0f);
+      trans =
+          glm::translate(trans, glm::vec3(0.0f, ywidth / 2.0f, zwidth / 2.0f));
       trans = glm::rotate(trans, glm::radians(90.0f), _right);
-      trans = glm::translate(trans, glm::vec3(0.0f, ywidth / 2.0f, zwidth / 2.0f));
       return trans;
     });
-    cmesh->transforms.emplace_back([xwidth_val, ywidth_val, zwidth_val]() {   // xy2  后
-      float     xwidth = std::get<float>(xwidth_val->getProp());
-      float     ywidth = std::get<float>(ywidth_val->getProp());
-      float     zwidth = std::get<float>(zwidth_val->getProp());
+    cmesh->transforms.emplace_back([xwidth_val, ywidth_val,
+                                    zwidth_val]() { // xy2  后
+      float xwidth = std::get<float>(xwidth_val->getProp());
+      float ywidth = std::get<float>(ywidth_val->getProp());
+      float zwidth = std::get<float>(zwidth_val->getProp());
       glm::mat4 trans(1.0f);
+      trans =
+          glm::translate(trans, glm::vec3(0.0f, ywidth / 2.0f, -zwidth / 2.0f));
       trans = glm::rotate(trans, glm::radians(90.0f), -_right);
-      trans = glm::translate(trans, glm::vec3(0.0f, ywidth / 2.0f, -zwidth / 2.0f));
       return trans;
     });
-    cmesh->transforms.emplace_back([xwidth_val, ywidth_val, zwidth_val]() {   // xz1 下
-      float     xwidth = std::get<float>(xwidth_val->getProp());
-      float     ywidth = std::get<float>(ywidth_val->getProp());
-      float     zwidth = std::get<float>(zwidth_val->getProp());
+    cmesh->transforms.emplace_back(
+        [xwidth_val, ywidth_val, zwidth_val]() { // xz1 下
+          float xwidth = std::get<float>(xwidth_val->getProp());
+          float ywidth = std::get<float>(ywidth_val->getProp());
+          float zwidth = std::get<float>(zwidth_val->getProp());
+          glm::mat4 trans(1.0f);
+          trans = glm::rotate(trans, glm::radians(180.0f), _right);
+          return trans;
+        });
+    cmesh->transforms.emplace_back(
+        [xwidth_val, ywidth_val, zwidth_val]() { // xz2 上
+          float xwidth = std::get<float>(xwidth_val->getProp());
+          float ywidth = std::get<float>(ywidth_val->getProp());
+          float zwidth = std::get<float>(zwidth_val->getProp());
+          glm::mat4 trans(1.0f);
+          trans = glm::translate(trans, glm::vec3(0.0f, ywidth, 0.0f));
+          return trans;
+        });
+    cmesh->transforms.emplace_back([xwidth_val, ywidth_val,
+                                    zwidth_val]() { // yz1 左
+      float xwidth = std::get<float>(xwidth_val->getProp());
+      float ywidth = std::get<float>(ywidth_val->getProp());
+      float zwidth = std::get<float>(zwidth_val->getProp());
       glm::mat4 trans(1.0f);
-      trans = glm::rotate(trans, glm::radians(180.0f), _right);
-      return trans;
-    });
-    cmesh->transforms.emplace_back([xwidth_val, ywidth_val, zwidth_val]() {   // xz2 上
-      float     xwidth = std::get<float>(xwidth_val->getProp());
-      float     ywidth = std::get<float>(ywidth_val->getProp());
-      float     zwidth = std::get<float>(zwidth_val->getProp());
-      glm::mat4 trans(1.0f);
-      trans = glm::translate(trans, glm::vec3(0.0f, ywidth, 0.0f));
-      return trans;
-    });
-    cmesh->transforms.emplace_back([xwidth_val, ywidth_val, zwidth_val]() {   // yz1 左
-      float     xwidth = std::get<float>(xwidth_val->getProp());
-      float     ywidth = std::get<float>(ywidth_val->getProp());
-      float     zwidth = std::get<float>(zwidth_val->getProp());
-      glm::mat4 trans(1.0f);
+      trans =
+          glm::translate(trans, glm::vec3(-xwidth / 2.0f, ywidth / 2.0f, 0.0f));
       trans = glm::rotate(trans, glm::radians(90.0f), -_front);
-      trans = glm::translate(trans, glm::vec3(0.0f, ywidth / 2.0f, 0.0f));
       return trans;
     });
-    cmesh->transforms.emplace_back([xwidth_val, ywidth_val, zwidth_val]() {   // yz2 右
-      float     xwidth = std::get<float>(xwidth_val->getProp());
-      float     ywidth = std::get<float>(ywidth_val->getProp());
-      float     zwidth = std::get<float>(zwidth_val->getProp());
+    cmesh->transforms.emplace_back([xwidth_val, ywidth_val,
+                                    zwidth_val]() { // yz2 右
+      float xwidth = std::get<float>(xwidth_val->getProp());
+      float ywidth = std::get<float>(ywidth_val->getProp());
+      float zwidth = std::get<float>(zwidth_val->getProp());
       glm::mat4 trans(1.0f);
+      trans =
+          glm::translate(trans, glm::vec3(xwidth / 2.0f, ywidth / 2.0f, 0.0f));
       trans = glm::rotate(trans, glm::radians(90.0f), _front);
-      trans = glm::translate(trans, glm::vec3(0.0f, ywidth / 2.0f, 0.0f));
       return trans;
     });
 
@@ -767,7 +787,6 @@ class CompositeMesh : public Geometry {
     yz2->parameters["uNum"]->addObserver(ynum_val);
     yz2->parameters["vNum"]->addObserver(znum_val);
 
-
     xwidth_val->addObserver(cmesh);
     ywidth_val->addObserver(cmesh);
     zwidth_val->addObserver(cmesh);
@@ -777,16 +796,18 @@ class CompositeMesh : public Geometry {
     cmesh->parameters["xWidth"] = xwidth_val;
     cmesh->parameters["yWidth"] = ywidth_val;
     cmesh->parameters["zWidth"] = zwidth_val;
-    cmesh->parameters["xNum"]   = xnum_val;
-    cmesh->parameters["yNum"]   = ynum_val;
-    cmesh->parameters["zNum"]   = znum_val;
+    cmesh->parameters["xNum"] = xnum_val;
+    cmesh->parameters["yNum"] = ynum_val;
+    cmesh->parameters["zNum"] = znum_val;
 
     // 初始化更新
     cmesh->update();
     return cmesh;
   }
 
-  static shared_ptr<CompositeMesh> Cylinder(float radius, float height, uint32_t PNum, uint32_t RNum, uint32_t HNum) {
+  static shared_ptr<CompositeMesh> Cylinder(float radius, float height,
+                                            uint32_t PNum, uint32_t RNum,
+                                            uint32_t HNum) {
     auto radius_val = make_shared<ReflectValue>("radius", radius);
     auto height_val = make_shared<ReflectValue>("height", height);
 
@@ -795,35 +816,35 @@ class CompositeMesh : public Geometry {
     auto hnum_val = make_shared<ReflectValue>("HNum", HNum);
 
     auto bottom = Mesh::Disk(radius, PNum, RNum);
-    auto top    = Mesh::Disk(radius, PNum, RNum);
-    auto side   = Mesh::CylinderSide(radius, height, PNum, HNum);
+    auto top = Mesh::Disk(radius, PNum, RNum);
+    auto side = Mesh::CylinderSide(radius, height, PNum, HNum);
     // 组装cmesh
     auto cmesh = make_shared<CompositeMesh>();
     cmesh->meshes.emplace_back(bottom);
     cmesh->meshes.emplace_back(top);
     cmesh->meshes.emplace_back(side);
     // 构建坐标变换
-    cmesh->transforms.emplace_back([radius_val, height_val]() {   // bottom
-      float     radius = std::get<float>(radius_val->getProp());
-      float     height = std::get<float>(height_val->getProp());
+    cmesh->transforms.emplace_back([radius_val, height_val]() { // bottom
+      float radius = std::get<float>(radius_val->getProp());
+      float height = std::get<float>(height_val->getProp());
       glm::mat4 trans(1.0f);
-      trans = glm::rotate(trans, glm::radians(-90.0f), _right);
+      // trans = glm::rotate(trans, glm::radians(-90.0f), _right);
       trans = glm::rotate(trans, glm::radians(180.0f), _right);
       return trans;
     });
-    cmesh->transforms.emplace_back([radius_val, height_val]() {   // top
-      float     radius = std::get<float>(radius_val->getProp());
-      float     height = std::get<float>(height_val->getProp());
+    cmesh->transforms.emplace_back([radius_val, height_val]() { // top
+      float radius = std::get<float>(radius_val->getProp());
+      float height = std::get<float>(height_val->getProp());
       glm::mat4 trans(1.0f);
-      trans = glm::rotate(trans, glm::radians(-90.0f), _right);
+      // trans = glm::rotate(trans, glm::radians(-90.0f), _right);
       trans = glm::translate(trans, glm::vec3(0.0f, height, 0.0f));
       return trans;
     });
-    cmesh->transforms.emplace_back([radius_val, height_val]() {   // side
-      float     radius = std::get<float>(radius_val->getProp());
-      float     height = std::get<float>(height_val->getProp());
+    cmesh->transforms.emplace_back([radius_val, height_val]() { // side
+      float radius = std::get<float>(radius_val->getProp());
+      float height = std::get<float>(height_val->getProp());
       glm::mat4 trans(1.0f);
-      trans = glm::rotate(trans, glm::radians(-90.0f), _right);
+      // trans = glm::rotate(trans, glm::radians(-90.0f), _right);
       return trans;
     });
 
@@ -850,39 +871,87 @@ class CompositeMesh : public Geometry {
 
     cmesh->parameters["radius"] = radius_val;
     cmesh->parameters["height"] = height_val;
-    cmesh->parameters["PNum"]   = pnum_val;
-    cmesh->parameters["RNum"]   = rnum_val;
-    cmesh->parameters["HNum"]   = hnum_val;
+    cmesh->parameters["PNum"] = pnum_val;
+    cmesh->parameters["RNum"] = rnum_val;
+    cmesh->parameters["HNum"] = hnum_val;
 
+    cmesh->update();
     return cmesh;
   }
 
-  static shared_ptr<CompositeMesh> Cone(float radius, float height, uint32_t PNum, uint32_t RNum, uint32_t HNum) {
+  static shared_ptr<CompositeMesh> Cone(float radius, float height,
+                                        uint32_t PNum, uint32_t RNum,
+                                        uint32_t HNum) {
+    auto radius_val = make_shared<ReflectValue>("radius", radius);
+    auto height_val = make_shared<ReflectValue>("height", height);
 
-    return nullptr;
+    auto pnum_val = make_shared<ReflectValue>("PNum", PNum);
+    auto rnum_val = make_shared<ReflectValue>("RNum", RNum);
+    auto hnum_val = make_shared<ReflectValue>("HNum", HNum);
+
+    auto bottom = Mesh::Disk(radius, PNum, RNum);
+    // auto top    = Mesh::Disk(radius, PNum, RNum);
+    auto side = Mesh::ConeSide(radius, height, PNum, HNum);
+    // 组装cmesh
+    auto cmesh = make_shared<CompositeMesh>();
+    cmesh->meshes.emplace_back(bottom);
+    cmesh->meshes.emplace_back(side);
+    // 构建坐标变换
+    cmesh->transforms.emplace_back([radius_val, height_val]() { // bottom
+      float radius = std::get<float>(radius_val->getProp());
+      float height = std::get<float>(height_val->getProp());
+      glm::mat4 trans(1.0f);
+      trans = glm::rotate(trans, glm::radians(180.0f), _right);
+      return trans;
+    });
+    cmesh->transforms.emplace_back([radius_val, height_val]() { // side
+      float radius = std::get<float>(radius_val->getProp());
+      float height = std::get<float>(height_val->getProp());
+      glm::mat4 trans(1.0f);
+      // trans = glm::rotate(trans, glm::radians(-90.0f), _right);
+      return trans;
+    });
+
+    bottom->parameters["radius"]->addObserver(radius_val);
+    bottom->parameters["uNum"]->addObserver(pnum_val);
+    bottom->parameters["vNum"]->addObserver(rnum_val);
+
+    side->parameters["radius"]->addObserver(radius_val);
+    side->parameters["height"]->addObserver(height_val);
+    side->parameters["uNum"]->addObserver(pnum_val);
+    side->parameters["vNum"]->addObserver(hnum_val);
+
+    radius_val->addObserver(cmesh);
+    height_val->addObserver(cmesh);
+    pnum_val->addObserver(cmesh);
+    rnum_val->addObserver(cmesh);
+    hnum_val->addObserver(cmesh);
+
+    cmesh->parameters["radius"] = radius_val;
+    cmesh->parameters["height"] = height_val;
+    cmesh->parameters["PNum"] = pnum_val;
+    cmesh->parameters["RNum"] = rnum_val;
+    cmesh->parameters["HNum"] = hnum_val;
+
+    cmesh->update();
+    return cmesh;
   }
 
   static shared_ptr<CompositeMesh> Arrow(float radius, float length) {
 
     // 定义lambda变量
 
-
     // 定义构成的曲面
-
 
     // 组装曲面
 
-
     // 构建坐标变换
-
 
     // 参数映射方案
 
     // 配置观察者
 
-
     // cmesh添加parameters
-
 
     return nullptr;
   }
@@ -996,7 +1065,8 @@ class CompositeMesh : public Geometry {
 
 // class Cone : public Geometry {
 //   public:
-//   Cone(float radius, float height, uint32_t RNum = 8, uint32_t HNum = 10, uint32_t PNum = 18) {
+//   Cone(float radius, float height, uint32_t RNum = 8, uint32_t HNum = 10,
+//   uint32_t PNum = 18) {
 
 //     this->parameters["radius"] = radius;
 //     this->parameters["height"] = height;
@@ -1067,7 +1137,8 @@ class CompositeMesh : public Geometry {
 // class TruncatedConeSide : public Mesh {
 //   private:
 //   public:
-//   TruncatedConeSide(float r1, float r2, float h, uint32_t RNum = 8, uint32_t HNum = 10, uint32_t PNum = 18)
+//   TruncatedConeSide(float r1, float r2, float h, uint32_t RNum = 8, uint32_t
+//   HNum = 10, uint32_t PNum = 18)
 //     : Mesh(HNum, PNum) {
 //     this->parameters["r1"] = r1;
 //     this->parameters["r2"] = r2;
@@ -1108,7 +1179,8 @@ class CompositeMesh : public Geometry {
 // class Cylinder : public Geometry {
 //   // todo 改为惰性构造
 //   public:
-//   Cylinder(float radius, float height, uint32_t RNum = 8, uint32_t HNum = 10, uint32_t PNum = 18) {
+//   Cylinder(float radius, float height, uint32_t RNum = 8, uint32_t HNum = 10,
+//   uint32_t PNum = 18) {
 //     this->parameters["radius"] = radius;
 //     this->parameters["height"] = height;
 //     this->parameters["RNum"]   = RNum;
@@ -1145,7 +1217,8 @@ class CompositeMesh : public Geometry {
 //   public:
 //   TruncatedConeEx()
 //     : TruncatedConeEx(1.0f, 1.0f, 3.0f, 0.0f, 0.0f) {}
-//   TruncatedConeEx(float r1, float r2, float h, float phi, float rho, uint32_t RNum = 8, uint32_t HNum = 10, uint32_t PNum = 18) {
+//   TruncatedConeEx(float r1, float r2, float h, float phi, float rho, uint32_t
+//   RNum = 8, uint32_t HNum = 10, uint32_t PNum = 18) {
 //     this->parameters["r1"]   = r1;
 //     this->parameters["r2"]   = r2;
 //     this->parameters["h"]    = h;
@@ -1224,7 +1297,8 @@ class CompositeMesh : public Geometry {
 //   const float radius_ratio = 0.5f;
 
 //   public:
-//   Arrow(float radius, float length, glm::vec3 arrow_color, glm::vec3 body_color) {
+//   Arrow(float radius, float length, glm::vec3 arrow_color, glm::vec3
+//   body_color) {
 //     this->parameters["radius"]      = radius;
 //     this->parameters["length"]      = length;
 //     this->parameters["arrow_color"] = arrow_color;
@@ -1239,7 +1313,8 @@ class CompositeMesh : public Geometry {
 //     float     length = std::get<float>(this->parameters["length"]);
 //     glm::vec3 arrow_color =
 //       std::get<glm::vec3>(this->parameters["arrow_color"]);
-//     glm::vec3 body_color = std::get<glm::vec3>(this->parameters["body_color"]);
+//     glm::vec3 body_color =
+//     std::get<glm::vec3>(this->parameters["body_color"]);
 
 //     Cone     arrow(radius, 1 - body_ratio);
 //     Cylinder body(radius_ratio * radius, body_ratio * length);
@@ -1294,7 +1369,8 @@ class CompositeMesh : public Geometry {
 
 // class Cube : public Geometry {
 //   public:
-//   Cube(float xWidth, float yWidth, float zWidth, uint32_t xNum = 10, uint32_t yNum = 10, uint32_t zNum = 10) {
+//   Cube(float xWidth, float yWidth, float zWidth, uint32_t xNum = 10, uint32_t
+//   yNum = 10, uint32_t zNum = 10) {
 //     this->parameters["xWidth"] = xWidth;
 //     this->parameters["yWidth"] = yWidth;
 //     this->parameters["zWidth"] = zWidth;
@@ -1313,9 +1389,10 @@ class CompositeMesh : public Geometry {
 //     uint32_t yNum = std::get<uint32_t>(this->parameters["yNum"]);
 //     uint32_t zNum = std::get<uint32_t>(this->parameters["zNum"]);
 
-//     Plane back(xWidth, yWidth, xNum, yNum), front(xWidth, yWidth, xNum, yNum);
-//     Plane left(yWidth, zWidth, yNum, zNum), right(yWidth, zWidth, yNum, zNum);
-//     Plane bottom(xWidth, zWidth, xNum, zNum), top(xWidth, zWidth, xNum, zNum);
+//     Plane back(xWidth, yWidth, xNum, yNum), front(xWidth, yWidth, xNum,
+//     yNum); Plane left(yWidth, zWidth, yNum, zNum), right(yWidth, zWidth,
+//     yNum, zNum); Plane bottom(xWidth, zWidth, xNum, zNum), top(xWidth,
+//     zWidth, xNum, zNum);
 
 //     bottom.rotate(glm::radians(180.0f), _right);
 
@@ -1341,4 +1418,4 @@ class CompositeMesh : public Geometry {
 //   }
 // };
 
-}   // namespace
+} // namespace

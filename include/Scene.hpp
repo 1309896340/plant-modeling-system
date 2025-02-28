@@ -1349,7 +1349,7 @@ class Scene {
       }
 
       // 显示参数
-      else if (!imgui.list_items.empty() && this->imgui.cur != nullptr && !this->imgui.cur->geometry->parameters.empty()) {
+      if (!imgui.list_items.empty() && this->imgui.cur != nullptr && !this->imgui.cur->geometry->parameters.empty()) {
         ImGui::Text(TEXT("形体参数"));
         struct visitor {
           // uint32_t, int32_t, float, double, bool, char, glm::vec3
@@ -1360,7 +1360,8 @@ class Scene {
             , context(context) {}
           void operator()(float& arg) {
             if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
-              context->imgui.cur->geometry->update();
+              // context->imgui.cur->geometry->update();
+              context->imgui.cur->geometry->parameters[pname]->notifyAll();
               context->imgui.cur->updateVBO();
               // context->compute_radiosity();
             }

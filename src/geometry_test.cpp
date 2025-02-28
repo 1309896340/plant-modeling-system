@@ -30,8 +30,8 @@ int main(int argc, char** argv) {
 
     scene.add("Sphere", Mesh::Sphere(2.0f, 72, 36), {-4.0f, 2.0f, 6.0f});
     scene.add("Cube", CompositeMesh::Cube(10.0f, 7.0f, 4.0f, 10, 7, 4), {4.0f, 2.0f, -6.0f});
-    // scene.add("Cone", CompositeMesh::Cone(2.0f, 3.0f, 72, 10, 20), {0.0f, 0.0f, 6.0f});
-    // scene.add("Cylinder", CompositeMesh::Cylinder(2.5f, 5.0f, 72, 10, 20), {5.0f, 0.0f, 0.0f});
+    scene.add("Cylinder", CompositeMesh::Cylinder(2.5f, 5.0f, 72, 10, 20), {5.0f, 0.0f, 0.0f});
+    scene.add("Cone", CompositeMesh::Cone(2.0f, 3.0f, 72, 10, 20), {0.0f, 0.0f, 6.0f});
 
     // for(auto &[name, obj]: scene.objs){
     //   obj->constructBvhTree();
