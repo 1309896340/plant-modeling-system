@@ -1361,6 +1361,7 @@ class Scene {
           void operator()(float& arg) {
             if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
               // context->imgui.cur->geometry->update();
+              printf("pname: %s\n", pname.c_str());
               context->imgui.cur->geometry->parameters[pname]->notifyAll();
               context->imgui.cur->updateVBO();
               // context->compute_radiosity();

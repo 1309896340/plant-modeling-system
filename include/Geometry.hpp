@@ -348,7 +348,9 @@ public:
     }
   }
 
-  void changeUpdater(MeshUpdater updater) { this->updater = updater; }
+  // 由于updater的参数构建比较复杂，且比较抽象，以下的简单赋值并不足以正确完成updater的替换
+  // 下面这种做法是存在问题的，先移除
+  // void changeUpdater(MeshUpdater updater) { this->updater = updater; }
 
   void resize() {
     uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]->getProp());
@@ -404,18 +406,18 @@ public:
   // }
   // }
 
-  void transformVertex(function<Vertex(const Vertex &, float, float)> func) {
-    uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]->getProp());
-    uint32_t vNum = std::get<uint32_t>(this->parameters["vNum"]->getProp());
-    for (int i = 0; i <= uNum; i++) {
-      for (int j = 0; j <= vNum; j++) {
-        float u = static_cast<float>(i) / uNum;
-        float v = static_cast<float>(j) / vNum;
-        Vertex &vt = this->vertices[j + i * (vNum + 1)];
-        vt = func(vt, u, v);
-      }
-    }
-  }
+  // void transformVertex(function<Vertex(const Vertex &, float, float)> func) {
+  //   uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]->getProp());
+  //   uint32_t vNum = std::get<uint32_t>(this->parameters["vNum"]->getProp());
+  //   for (int i = 0; i <= uNum; i++) {
+  //     for (int j = 0; j <= vNum; j++) {
+  //       float u = static_cast<float>(i) / uNum;
+  //       float v = static_cast<float>(j) / vNum;
+  //       Vertex &vt = this->vertices[j + i * (vNum + 1)];
+  //       vt = func(vt, u, v);
+  //     }
+  //   }
+  // }
 
   static shared_ptr<Mesh> Sphere(float radius, uint32_t PNum, uint32_t VNum) {
     auto radius_val = make_shared<ReflectValue>("radius", radius);

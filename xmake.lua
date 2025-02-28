@@ -5,6 +5,9 @@ add_requires("imgui",{version="v1.91.5-docking", configs={opengl3=true,glfw=true
 add_requires("stb",{version="2024.06.01"})
 set_languages("c++20")
 
+add_rules("plugin.vsxmake.autoupdate")
+add_rules("plugin.compile_commands.autoupdate",{outputdir=".vscode"})
+
 on_load(
   function (target)
       local antlr4 = os.getenv("ANTLR4")
