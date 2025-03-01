@@ -86,12 +86,6 @@ class ReflectValue : public Observer {
     , value(init_value) {
     this->observers.emplace_back(observer);
   }
-  // ReflectValue(const string& name, prop init_value, shared_ptr<Observer>
-  // observer)
-  //   : name(name)
-  //   , value(init_value) {
-  //   this->observers.emplace_back(observer);
-  // }
   prop& getProp() { return this->value; }
 
   virtual void notify(const string& name, const prop& param) {
@@ -111,15 +105,6 @@ class ReflectValue : public Observer {
     for (auto& obs : this->observers) {
       assert(!obs.expired() &&
              "ReflectValue::notifyAll(): observer pointer is expired!");
-      // std::visit([this](auto&& arg) {
-      //   using T = std::decay_t<decltype(arg)>;
-      //   if constexpr (std::is_same_v<T, float>) {
-      //     printf("name: %s value: %f\n", this->name.c_str(), arg);
-      //   }
-      //   else if constexpr (std::is_same_v<T, uint32_t>) {
-      //     printf("name: %s value: %u\n", this->name.c_str(), arg);
-      //   }
-      // }, this->value);
       obs.lock()->notify(
         this->name,
         this->value);   // Geometry需要定义notify(string, prop)接口
@@ -139,11 +124,6 @@ class Geometry : public Observer {
   vector<Surface> surfaces;
 
   public:
-    // map<string, shared_ptr<ReflectValue>> parameters;
-    // map<string, shared_ptr<ReflectValue>> parameters;
-    // map<string, param_variant> parameters;
-    // prop parameters;
-    
     map<string, shared_ptr<ReflectValue>> topo_parameters;
     map<string, shared_ptr<ReflectValue>> geom_parameters;
 
@@ -291,15 +271,6 @@ class Mesh : public Geometry {
           float u                            = static_cast<float>(i) / uNum;
           float v                            = static_cast<float>(j) / vNum;
           this->vertices[j + i * (vNum + 1)] = this->updater(u, v);
-          // 待优化，不必每次更新顶点都要重置网格
-          // if (i != uNum && j != vNum) {
-          //   uint32_t ptr            = (j + i * vNum) * 2;
-          //   this->surfaces[ptr + 0] = {j + i * (vNum + 1), 1 + j + i * (vNum
-          //   + 1), 1 + j + (i + 1) * (vNum + 1)}; this->surfaces[ptr + 1] = {j
-          //   + i * (vNum + 1),
-          //                             1 + j + (i + 1) * (vNum + 1),
-          //                             j + (i + 1) * (vNum + 1)};
-          // }
         }
       }
     }
@@ -320,7 +291,7 @@ class Mesh : public Geometry {
   virtual void notify(const string& name, const prop& param) {
     // todo
     // 需要根据name进行判断
-    // 如果name=="uNum"或name=="vNum"，则要先调用rebuildTopo()
+    // 如果name=="uNum"或name=="vNum"，则要标记更新网格拓扑
     // 之后统一调用一次this->update更新参数曲面的顶点数据
     // 注意：暂时无法确定Observer处定义的这个接口是否被正确重写
 
@@ -337,57 +308,9 @@ class Mesh : public Geometry {
     //            param);
     
     if (name == "uNum" || name == "vNum")
-      this->rebuildTopo();
+      this->topo_flag = true;
     this->update();
   }
-
-  void rebuildTopo() {
-    // 外部修改了uNum和vNum，下一次update()调用将重新生成拓扑
-    uint32_t uNum = std::get<uint32_t>(this->topo_parameters["uNum"]->getProp());
-    uint32_t vNum = std::get<uint32_t>(this->topo_parameters["vNum"]->getProp());
-
-    this->vertices.resize((uNum + 1) * (vNum + 1));
-    this->surfaces.resize(uNum * vNum * 2);
-
-    this->topo_flag = true;
-  }
-
-  // void updateVertex(MeshUpdater func) {
-  // resize();
-  // uint32_t uNum     = std::get<uint32_t>(this->parameters["uNum"]);
-  // uint32_t vNum     = std::get<uint32_t>(this->parameters["vNum"]);
-  // this->updater = func;   // 缓存更新函数用于resize中保留uv更新顶点属性
-  // for (int i = 0; i <= uNum; i++) {
-  //   for (int j = 0; j <= vNum; j++) {
-  //     float   u  = static_cast<float>(i) / uNum;
-  //     float   v  = static_cast<float>(j) / vNum;
-  //     Vertex& vt = this->vertices[j + i * (vNum + 1)];
-  //     vt         = func(u, v);
-  //     // 待优化，不必每次更新顶点都要重置网格
-  //     if (i != uNum && j != vNum) {
-  //       uint32_t ptr            = (j + i * vNum) * 2;
-  //       this->surfaces[ptr + 0] = {j + i * (vNum + 1), 1 + j + i * (vNum +
-  //       1), 1 + j + (i + 1) * (vNum + 1)}; this->surfaces[ptr + 1] = {j + i *
-  //       (vNum + 1),
-  //                                  1 + j + (i + 1) * (vNum + 1),
-  //                                  j + (i + 1) * (vNum + 1)};
-  //     }
-  //   }
-  // }
-  // }
-
-  // void transformVertex(function<Vertex(const Vertex &, float, float)> func) {
-  //   uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]->getProp());
-  //   uint32_t vNum = std::get<uint32_t>(this->parameters["vNum"]->getProp());
-  //   for (int i = 0; i <= uNum; i++) {
-  //     for (int j = 0; j <= vNum; j++) {
-  //       float u = static_cast<float>(i) / uNum;
-  //       float v = static_cast<float>(j) / vNum;
-  //       Vertex &vt = this->vertices[j + i * (vNum + 1)];
-  //       vt = func(vt, u, v);
-  //     }
-  //   }
-  // }
 
   static shared_ptr<Mesh> Sphere(float radius, uint32_t PNum, uint32_t VNum) {
     auto mesh = make_shared<Mesh>(PNum, VNum);
@@ -582,23 +505,6 @@ class Composition : public Geometry {
   Composition() = default;
 
   void pushGeometry(shared_ptr<Geometry> mesh, const TransformUpdater& transform) {
-    // if (this->goemetries.empty()) {
-    //   this->parameters = mesh->parameters;
-    //   for (auto& param_pair : mesh->parameters) {
-    //     param_pair.second->addObserver(shared_from_this());
-    //     // 似乎无法将this转换为weak_ptr，因此只能将Observer继承enable_shared_from_this
-    //   }
-    // }
-    // else {
-    //   for (auto& param_pair : mesh->parameters) {
-    //     // 如果this->parameters中已经存在同名变量，则以this->parameters中的为准
-    //     if (!this->parameters.contains(param_pair.first)) {
-    //       this->parameters[param_pair.first] = param_pair.second;
-    //       param_pair.second->addObserver(shared_from_this());
-    //     }
-    //     // todo，此处需要仔细考虑当Composition::parameters的元素发生改变时，如何驱动Mesh::parameters动作的问题
-    //   }
-    // }
 
     this->goemetries.emplace_back(mesh);
     this->transforms.emplace_back(transform);
@@ -611,16 +517,17 @@ class Composition : public Geometry {
 
   virtual void notify(const string& name, const prop& param) {
     // 调整this->meshes和this->transforms中受影响的Mesh实例
-    std::visit([name](auto&& arg) {
-      using T = std::decay_t<decltype(arg)>;
-      if constexpr (std::is_same_v<T, float>) {
-        printf("Composition更新变量\"%s\" 新值：%f\n", name.c_str(), arg);
-      }
-      else if constexpr (std::is_same_v<T, uint32_t>) {
-        printf("Composition更新变量\"%s\" 新值：%u\n", name.c_str(), arg);
-      }
-    },
-               param);
+
+    // std::visit([name](auto&& arg) {
+    //   using T = std::decay_t<decltype(arg)>;
+    //   if constexpr (std::is_same_v<T, float>) {
+    //     printf("Composition更新变量\"%s\" 新值：%f\n", name.c_str(), arg);
+    //   }
+    //   else if constexpr (std::is_same_v<T, uint32_t>) {
+    //     printf("Composition更新变量\"%s\" 新值：%u\n", name.c_str(), arg);
+    //   }
+    // },
+    //            param);
 
     this->update();
   }
