@@ -388,6 +388,19 @@ class Mesh : public Geometry {
     // 如果name=="uNum"或name=="vNum"，则要先调用rebuildTopo()
     // 之后统一调用一次this->update更新参数曲面的顶点数据
     // 注意：暂时无法确定Observer处定义的这个接口是否被正确重写
+
+
+    std::visit([name](auto&& arg) {
+      using T = std::decay_t<decltype(arg)>;
+      if constexpr (std::is_same_v<T, float>) {
+        printf("Mesh更新变量\"%s\" 新值：%f\n", name.c_str(), arg);
+      }
+      else if constexpr (std::is_same_v<T, uint32_t>) {
+        printf("Composition更新变量\"%s\" 新值：%u\n", name.c_str(), arg);
+      }
+    },
+               param);
+    
     if (name == "uNum" || name == "vNum")
       this->rebuildTopo();
     this->update();
@@ -632,23 +645,23 @@ class Composition : public Geometry {
   Composition() = default;
 
   void pushGeometry(shared_ptr<Geometry> mesh, const TransformUpdater& transform) {
-    if (this->goemetries.empty()) {
-      this->parameters = mesh->parameters;
-      for (auto& param_pair : mesh->parameters) {
-        param_pair.second->addObserver(shared_from_this());
-        // 似乎无法将this转换为weak_ptr，因此只能将Observer继承enable_shared_from_this
-      }
-    }
-    else {
-      for (auto& param_pair : mesh->parameters) {
-        // 如果this->parameters中已经存在同名变量，则以this->parameters中的为准
-        if (!this->parameters.contains(param_pair.first)) {
-          this->parameters[param_pair.first] = param_pair.second;
-          param_pair.second->addObserver(shared_from_this());
-        }
-        // todo，此处需要仔细考虑当Composition::parameters的元素发生改变时，如何驱动Mesh::parameters动作的问题
-      }
-    }
+    // if (this->goemetries.empty()) {
+    //   this->parameters = mesh->parameters;
+    //   for (auto& param_pair : mesh->parameters) {
+    //     param_pair.second->addObserver(shared_from_this());
+    //     // 似乎无法将this转换为weak_ptr，因此只能将Observer继承enable_shared_from_this
+    //   }
+    // }
+    // else {
+    //   for (auto& param_pair : mesh->parameters) {
+    //     // 如果this->parameters中已经存在同名变量，则以this->parameters中的为准
+    //     if (!this->parameters.contains(param_pair.first)) {
+    //       this->parameters[param_pair.first] = param_pair.second;
+    //       param_pair.second->addObserver(shared_from_this());
+    //     }
+    //     // todo，此处需要仔细考虑当Composition::parameters的元素发生改变时，如何驱动Mesh::parameters动作的问题
+    //   }
+    // }
 
     this->goemetries.emplace_back(mesh);
     this->transforms.emplace_back(transform);
@@ -661,7 +674,16 @@ class Composition : public Geometry {
 
   virtual void notify(const string& name, const prop& param) {
     // 调整this->meshes和this->transforms中受影响的Mesh实例
-
+    std::visit([name](auto&& arg) {
+      using T = std::decay_t<decltype(arg)>;
+      if constexpr (std::is_same_v<T, float>) {
+        printf("Composition更新变量\"%s\" 新值：%f\n", name.c_str(), arg);
+      }
+      else if constexpr (std::is_same_v<T, uint32_t>) {
+        printf("Composition更新变量\"%s\" 新值：%u\n", name.c_str(), arg);
+      }
+    },
+               param);
 
     this->update();
   }
@@ -954,7 +976,7 @@ class Composition : public Geometry {
     return comp;
   }
 
-  static shared_ptr<Composition> Arrow(float radius, float length/*, glm::vec3 bodyColor, glm::vec3 arrowColor*/) {
+  static shared_ptr<Composition> Arrow(float radius, float length /*, glm::vec3 bodyColor, glm::vec3 arrowColor*/) {
     // todo 后续考虑实现参数之间存在计算关系的响应式
     float bodyRatio   = 0.8f;
     float radiusRatio = 0.5f;
