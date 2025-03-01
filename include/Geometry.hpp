@@ -194,61 +194,6 @@ class Geometry : public Observer {
   }
 };
 
-// class FixedGeometry : public Geometry {
-// public:
-//   FixedGeometry() { this->parameters.clear(); }
-
-//   FixedGeometry(const Geometry &geometry) {
-//     //
-//     可以从Geometry构造（这是个有点奇怪的操作，引入了从父类到子类的隐式转换）
-//     this->vertices = geometry.vertices;
-//     this->surfaces = geometry.surfaces;
-//     this->parameters.clear();
-//   }
-
-//   FixedGeometry(Geometry &&geometry) noexcept {
-//     this->vertices = geometry.vertices;
-//     this->surfaces = geometry.surfaces;
-//     geometry.vertices.clear();
-//     geometry.surfaces.clear();
-//     this->parameters.clear();
-//   }
-
-//   FixedGeometry(const vector<Vertex> &vertices,
-//                 const vector<Surface> &surfaces) {
-//     this->vertices = vertices;
-//     this->surfaces = surfaces;
-//     // 没有任何可修改属性
-//     this->parameters.clear();
-//   }
-
-//   // 默认正常拷贝 vertices 和 surfaces
-//   FixedGeometry(const FixedGeometry &) = default;
-
-//   virtual void update() {
-//     // 空实现，不会修改网格及其顶点的任何属性
-//   }
-//   virtual void reset() {
-//     // 空实现，直到对象自动销毁前，不会有人为的清空操作
-//   }
-
-//   FixedGeometry operator+(const Geometry &b) const {
-//     FixedGeometry c(*this);
-//     // 1. 将两组vertices进行简单拼接
-//     c.vertices.insert(c.vertices.end(), b.vertices.begin(),
-//     b.vertices.end());
-//     // 2. 将b的surfaces的索引偏移this->vertices.size()，然后拼接
-//     const uint32_t offset = this->vertices.size();
-//     vector<Surface> sfs = b.surfaces;
-//     for (auto &surf_ids : sfs) {
-//       surf_ids.tidx[0] += offset;
-//       surf_ids.tidx[1] += offset;
-//       surf_ids.tidx[2] += offset;
-//     }
-//     c.surfaces.insert(c.surfaces.end(), sfs.begin(), sfs.end());
-//     return c;
-//   }
-// };
 
 struct FixedGeometry {
   vector<Vertex>  vertices;
@@ -288,10 +233,6 @@ class Mesh : public Geometry {
   public:
   Mesh(uint32_t uNum, uint32_t vNum)
     : topo_flag(true) {
-    // 不能在构造函数中shared_from_this()
-    // this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum,
-    // shared_from_this()); this->parameters["vNum"] =
-    // make_shared<ReflectValue>("vNum", vNum, shared_from_this());
     this->topo_parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum);
     this->topo_parameters["vNum"] = make_shared<ReflectValue>("vNum", vNum);
 
@@ -323,19 +264,10 @@ class Mesh : public Geometry {
   }
   Mesh(uint32_t uNum, uint32_t vNum, MeshUpdater updater)
     : topo_flag(true) {
-    // 不能在构造函数中shared_from_this()
-    // this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum,
-    // shared_from_this()); this->parameters["vNum"] =
-    // make_shared<ReflectValue>("vNum", vNum, shared_from_this());
     this->topo_parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum);
     this->topo_parameters["vNum"] = make_shared<ReflectValue>("vNum", vNum);
     this->updater            = updater;
   }
-
-  // FixedGeometry operator+(const Mesh &other) const {
-  //   FixedGeometry b(other);
-  //   return FixedGeometry(*this) + b;
-  // }
 
   virtual void update() {
     uint32_t uNum = std::get<uint32_t>(this->topo_parameters["uNum"]->getProp());
@@ -375,7 +307,7 @@ class Mesh : public Geometry {
 
   // 由于updater的参数构建比较复杂，且比较抽象，以下的简单赋值并不足以正确完成updater的替换
   // 下面这种做法是存在问题的，先移除
-  // void changeUpdater(MeshUpdater updater) { this->updater = updater; }
+  void setUpdater(MeshUpdater updater) { this->updater = updater; }
 
   void resize() {
     uint32_t uNum = std::get<uint32_t>(this->topo_parameters["uNum"]->getProp());
@@ -393,16 +325,16 @@ class Mesh : public Geometry {
     // 注意：暂时无法确定Observer处定义的这个接口是否被正确重写
 
 
-    std::visit([name](auto&& arg) {
-      using T = std::decay_t<decltype(arg)>;
-      if constexpr (std::is_same_v<T, float>) {
-        printf("Mesh更新变量\"%s\" 新值：%f\n", name.c_str(), arg);
-      }
-      else if constexpr (std::is_same_v<T, uint32_t>) {
-        printf("Composition更新变量\"%s\" 新值：%u\n", name.c_str(), arg);
-      }
-    },
-               param);
+    // std::visit([name](auto&& arg) {
+    //   using T = std::decay_t<decltype(arg)>;
+    //   if constexpr (std::is_same_v<T, float>) {
+    //     printf("Mesh更新变量\"%s\" 新值：%f\n", name.c_str(), arg);
+    //   }
+    //   else if constexpr (std::is_same_v<T, uint32_t>) {
+    //     printf("Composition更新变量\"%s\" 新值：%u\n", name.c_str(), arg);
+    //   }
+    // },
+    //            param);
     
     if (name == "uNum" || name == "vNum")
       this->rebuildTopo();
@@ -458,9 +390,9 @@ class Mesh : public Geometry {
   // }
 
   static shared_ptr<Mesh> Sphere(float radius, uint32_t PNum, uint32_t VNum) {
-    auto radius_val = make_shared<ReflectValue>("radius", radius);
-    auto mesh       = make_shared<Mesh>(PNum, VNum, [radius_val](float u, float v) {
-      float  radius = std::get<float>(radius_val->getProp());
+    auto mesh = make_shared<Mesh>(PNum, VNum);
+    auto updater = [mesh](float u, float v) {
+      float radius = std::get<float>(mesh->geom_parameters["radius"]->getProp());
       Vertex vt;
 
       vt.nx = sin(PI * v) * cos(2 * PI * u);
@@ -478,7 +410,9 @@ class Mesh : public Geometry {
       vt.u = u;
       vt.v = v;
       return vt;
-    });
+    };
+    mesh->setUpdater(updater);
+    auto radius_val = make_shared<ReflectValue>("radius", radius);
     radius_val->addObserver(mesh);
     mesh->geom_parameters["radius"] = radius_val;
     mesh->topo_parameters["uNum"]->addObserver(mesh);
@@ -489,9 +423,9 @@ class Mesh : public Geometry {
   }
 
   static shared_ptr<Mesh> Disk(float radius, uint32_t PNum, uint32_t RNum) {
-    auto radius_val = make_shared<ReflectValue>("radius", radius);
-    auto mesh       = make_shared<Mesh>(PNum, RNum, [radius_val](float u, float v) {
-      float radius = std::get<float>(radius_val->getProp());
+    auto mesh = make_shared<Mesh>(PNum, RNum);
+    auto updater = [mesh](float u, float v) {
+      float radius = std::get<float>(mesh->geom_parameters["radius"]->getProp());
 
       Vertex vt;
 
@@ -510,7 +444,9 @@ class Mesh : public Geometry {
       vt.u = u;
       vt.v = v;
       return vt;
-    });
+    };
+    mesh->setUpdater(updater);
+    auto radius_val = make_shared<ReflectValue>("radius", radius);
     radius_val->addObserver(mesh);
     mesh->geom_parameters["radius"] = radius_val;
     mesh->topo_parameters["uNum"]->addObserver(mesh);
@@ -521,34 +457,33 @@ class Mesh : public Geometry {
   }
 
   static shared_ptr<Mesh> ConeSide(float radius, float height, uint32_t PNum, uint32_t HNum) {
+    auto mesh = make_shared<Mesh>(PNum, HNum);
+    auto updater = [mesh](float u, float v) {
+      float radius = std::get<float>(mesh->geom_parameters["radius"]->getProp());
+      float height = std::get<float>(mesh->geom_parameters["height"]->getProp());
+      Vertex vt;
+
+      vt.x = radius * (1 - v) * cos(-2 * PI * u);
+      vt.y = height * v;
+      vt.z = radius * (1 - v) * sin(-2 * PI * u);
+
+      float tmp = sqrt(radius * radius + height * height);
+      vt.nx = height / tmp * cos(-2 * PI * u);
+      vt.ny = radius / tmp;
+      vt.nz = height / tmp * sin(-2 * PI * u);
+
+      vt.r = 1.0f;
+      vt.g = 0.0f;
+      vt.b = 0.0f;
+
+      vt.u = u;
+      vt.v = v;
+
+      return vt;
+    };
+    mesh->setUpdater(updater);
     auto radius_val = make_shared<ReflectValue>("radius", radius);
     auto height_val = make_shared<ReflectValue>("height", height);
-    auto mesh       = make_shared<Mesh>(
-      PNum,
-      HNum,
-      [radius_val, height_val](float u, float v) {
-        float  radius = std::get<float>(radius_val->getProp());
-        float  height = std::get<float>(height_val->getProp());
-        Vertex vt;
-
-        vt.x = radius * (1 - v) * cos(-2 * PI * u);
-        vt.y = height * v;
-        vt.z = radius * (1 - v) * sin(-2 * PI * u);
-
-        float tmp = sqrt(radius * radius + height * height);
-        vt.nx     = height / tmp * cos(-2 * PI * u);
-        vt.ny     = radius / tmp;
-        vt.nz     = height / tmp * sin(-2 * PI * u);
-
-        vt.r = 1.0f;
-        vt.g = 0.0f;
-        vt.b = 0.0f;
-
-        vt.u = u;
-        vt.v = v;
-
-        return vt;
-      });
     radius_val->addObserver(mesh);
     height_val->addObserver(mesh);
     mesh->geom_parameters["radius"] = radius_val;
@@ -561,32 +496,31 @@ class Mesh : public Geometry {
   }
 
   static shared_ptr<Mesh> CylinderSide(float radius, float height, uint32_t PNum, uint32_t HNum) {
+    auto mesh = make_shared<Mesh>(PNum, HNum);
+    auto updater = [mesh](float u, float v) -> Vertex {
+      float radius = std::get<float>(mesh->geom_parameters["radius"]->getProp());
+      float height = std::get<float>(mesh->geom_parameters["height"]->getProp());
+      Vertex vt;
+      vt.x = radius * cos(-2 * PI * u);
+      vt.y = height * v;
+      vt.z = radius * sin(-2 * PI * u);
+
+      vt.nx = cos(-2 * PI * u);
+      vt.ny = 0.0f;
+      vt.nz = sin(-2 * PI * u);
+
+      vt.r = 1.0f;
+      vt.g = 0.0f;
+      vt.b = 1.0f;
+
+      vt.u = u;
+      vt.v = v;
+
+      return vt;
+    };
+    mesh->setUpdater(updater);
     auto radius_val = make_shared<ReflectValue>("radius", radius);
     auto height_val = make_shared<ReflectValue>("height", height);
-    auto mesh       = make_shared<Mesh>(
-      PNum,
-      HNum,
-      [radius_val, height_val](float u, float v) -> Vertex {
-        float  radius = std::get<float>(radius_val->getProp());
-        float  height = std::get<float>(height_val->getProp());
-        Vertex vt;
-        vt.x = radius * cos(-2 * PI * u);
-        vt.y = height * v;
-        vt.z = radius * sin(-2 * PI * u);
-
-        vt.nx = cos(-2 * PI * u);
-        vt.ny = 0.0f;
-        vt.nz = sin(-2 * PI * u);
-
-        vt.r = 1.0f;
-        vt.g = 0.0f;
-        vt.b = 1.0f;
-
-        vt.u = u;
-        vt.v = v;
-
-        return vt;
-      });
     radius_val->addObserver(mesh);
     height_val->addObserver(mesh);
     mesh->geom_parameters["radius"] = radius_val;
@@ -599,32 +533,32 @@ class Mesh : public Geometry {
   }
 
   static shared_ptr<Mesh> Plane(float width, float height, uint32_t VNum, uint32_t HNum) {
+    auto mesh = make_shared<Mesh>(VNum, HNum);
+    auto updater = [mesh](float u, float v) {
+      float width = std::get<float>(mesh->geom_parameters["width"]->getProp());
+      float height =
+          std::get<float>(mesh->geom_parameters["height"]->getProp());
+
+      Vertex vt;
+      vt.x = (0.5f - u) * width;
+      vt.y = 0.0f;
+      vt.z = (v - 0.5f) * height;
+
+      vt.nx = 0.0f;
+      vt.ny = 1.0f;
+      vt.nz = 0.0f;
+
+      vt.r = 1.0f;
+      vt.g = 1.0f;
+      vt.b = 0.0f;
+
+      vt.u = u;
+      vt.v = v;
+      return vt;
+    };
+    mesh->setUpdater(updater);
     auto width_val  = make_shared<ReflectValue>("width", width);
     auto height_val = make_shared<ReflectValue>("height", height);
-    auto mesh       = make_shared<Mesh>(
-      VNum,
-      HNum,
-      [width_val, height_val](float u, float v) {
-        float width  = std::get<float>(width_val->getProp());
-        float height = std::get<float>(height_val->getProp());
-
-        Vertex vt;
-        vt.x = (0.5f - u) * width;
-        vt.y = 0.0f;
-        vt.z = (v - 0.5f) * height;
-
-        vt.nx = 0.0f;
-        vt.ny = 1.0f;
-        vt.nz = 0.0f;
-
-        vt.r = 1.0f;
-        vt.g = 1.0f;
-        vt.b = 0.0f;
-
-        vt.u = u;
-        vt.v = v;
-        return vt;
-      });
     width_val->addObserver(mesh);
     height_val->addObserver(mesh);
     mesh->geom_parameters["width"]  = width_val;
@@ -979,7 +913,7 @@ class Composition : public Geometry {
     return comp;
   }
 
-  static shared_ptr<Composition> Arrow(float radius, float length /*, glm::vec3 bodyColor, glm::vec3 arrowColor*/) {
+  static shared_ptr<Composition> Arrow(float radius, float length ) {
     // todo 后续考虑实现参数之间存在计算关系的响应式
     float bodyRatio   = 0.8f;
     float radiusRatio = 0.5f;
@@ -992,7 +926,6 @@ class Composition : public Geometry {
     auto comp = make_shared<Composition>();
     comp->pushGeometry(arrow, [=]() {
       glm::mat4 trans(1.0f);
-      // trans = glm::rotate(trans, glm::radians(-90.0f), _right);
       trans = glm::translate(trans, glm::vec3(0.0f, length * bodyRatio, 0.0f));
       return trans;
     });
