@@ -1351,7 +1351,7 @@ class Scene {
       }
 
       // 显示参数
-      if (!imgui.list_items.empty() && this->imgui.cur != nullptr && !this->imgui.cur->geometry->parameters.empty()) {
+      if (!imgui.list_items.empty() && this->imgui.cur != nullptr && (!this->imgui.cur->geometry->geom_parameters.empty() || !this->imgui.cur->geometry->topo_parameters.empty())) {
         ImGui::Text(TEXT("形体参数"));
         struct visitor {
           // uint32_t, int32_t, float, double, bool, char, glm::vec3
@@ -1364,7 +1364,7 @@ class Scene {
             if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
               // context->imgui.cur->geometry->update();
               // printf("pname: %s\n", pname.c_str());
-              context->imgui.cur->geometry->parameters[pname]->notifyAll();
+              context->imgui.cur->geometry->geom_parameters[pname]->notifyAll();
               context->imgui.cur->updateVBO();
               // context->compute_radiosity();
             }
@@ -1375,7 +1375,7 @@ class Scene {
                                  2,
                                  50)) {
               // context->imgui.cur->geometry->update();
-              context->imgui.cur->geometry->parameters[pname]->notifyAll();
+              context->imgui.cur->geometry->topo_parameters[pname]->notifyAll();
               context->imgui.cur->updateVBO();
               // context->compute_radiosity();
             }
@@ -1386,7 +1386,9 @@ class Scene {
           void operator()(char& arg) {}
           void operator()(glm::vec3& arg) {}
         };
-        for (auto& [name, arg_val] : imgui.cur->geometry->parameters)
+        for (auto& [name, arg_val] : imgui.cur->geometry->geom_parameters)
+          std::visit(visitor(name, this), arg_val->getProp());
+        for (auto& [name, arg_val] : imgui.cur->geometry->topo_parameters)
           std::visit(visitor(name, this), arg_val->getProp());
       }
       ImGui::TreePop();

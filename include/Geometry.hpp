@@ -139,10 +139,13 @@ class Geometry : public Observer {
   vector<Surface> surfaces;
 
   public:
-  // map<string, shared_ptr<ReflectValue>> parameters;
-  map<string, shared_ptr<ReflectValue>> parameters;
-  // map<string, param_variant> parameters;
-  // prop parameters;
+    // map<string, shared_ptr<ReflectValue>> parameters;
+    // map<string, shared_ptr<ReflectValue>> parameters;
+    // map<string, param_variant> parameters;
+    // prop parameters;
+    
+    map<string, shared_ptr<ReflectValue>> topo_parameters;
+    map<string, shared_ptr<ReflectValue>> geom_parameters;
 
   Geometry()                = default;
   Geometry(const Geometry&) = default;
@@ -289,8 +292,8 @@ class Mesh : public Geometry {
     // this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum,
     // shared_from_this()); this->parameters["vNum"] =
     // make_shared<ReflectValue>("vNum", vNum, shared_from_this());
-    this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum);
-    this->parameters["vNum"] = make_shared<ReflectValue>("vNum", vNum);
+    this->topo_parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum);
+    this->topo_parameters["vNum"] = make_shared<ReflectValue>("vNum", vNum);
 
     // 默认updater生成一个平面
     MeshUpdater updater = [](float u, float v) {
@@ -324,8 +327,8 @@ class Mesh : public Geometry {
     // this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum,
     // shared_from_this()); this->parameters["vNum"] =
     // make_shared<ReflectValue>("vNum", vNum, shared_from_this());
-    this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum);
-    this->parameters["vNum"] = make_shared<ReflectValue>("vNum", vNum);
+    this->topo_parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum);
+    this->topo_parameters["vNum"] = make_shared<ReflectValue>("vNum", vNum);
     this->updater            = updater;
   }
 
@@ -335,8 +338,8 @@ class Mesh : public Geometry {
   // }
 
   virtual void update() {
-    uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]->getProp());
-    uint32_t vNum = std::get<uint32_t>(this->parameters["vNum"]->getProp());
+    uint32_t uNum = std::get<uint32_t>(this->topo_parameters["uNum"]->getProp());
+    uint32_t vNum = std::get<uint32_t>(this->topo_parameters["vNum"]->getProp());
     if (this->topo_flag) {
       this->resize();
       for (int i = 0; i < uNum; i++) {
@@ -375,8 +378,8 @@ class Mesh : public Geometry {
   // void changeUpdater(MeshUpdater updater) { this->updater = updater; }
 
   void resize() {
-    uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]->getProp());
-    uint32_t vNum = std::get<uint32_t>(this->parameters["vNum"]->getProp());
+    uint32_t uNum = std::get<uint32_t>(this->topo_parameters["uNum"]->getProp());
+    uint32_t vNum = std::get<uint32_t>(this->topo_parameters["vNum"]->getProp());
 
     this->vertices.resize((uNum + 1) * (vNum + 1));
     this->surfaces.resize(uNum * vNum * 2);
@@ -408,8 +411,8 @@ class Mesh : public Geometry {
 
   void rebuildTopo() {
     // 外部修改了uNum和vNum，下一次update()调用将重新生成拓扑
-    uint32_t uNum = std::get<uint32_t>(this->parameters["uNum"]->getProp());
-    uint32_t vNum = std::get<uint32_t>(this->parameters["vNum"]->getProp());
+    uint32_t uNum = std::get<uint32_t>(this->topo_parameters["uNum"]->getProp());
+    uint32_t vNum = std::get<uint32_t>(this->topo_parameters["vNum"]->getProp());
 
     this->vertices.resize((uNum + 1) * (vNum + 1));
     this->surfaces.resize(uNum * vNum * 2);
@@ -477,9 +480,9 @@ class Mesh : public Geometry {
       return vt;
     });
     radius_val->addObserver(mesh);
-    mesh->parameters["radius"] = radius_val;
-    mesh->parameters["uNum"]->addObserver(mesh);
-    mesh->parameters["vNum"]->addObserver(mesh);
+    mesh->geom_parameters["radius"] = radius_val;
+    mesh->topo_parameters["uNum"]->addObserver(mesh);
+    mesh->topo_parameters["vNum"]->addObserver(mesh);
     // 进行一次初始的更新
     mesh->update();
     return mesh;
@@ -509,9 +512,9 @@ class Mesh : public Geometry {
       return vt;
     });
     radius_val->addObserver(mesh);
-    mesh->parameters["radius"] = radius_val;
-    mesh->parameters["uNum"]->addObserver(mesh);
-    mesh->parameters["vNum"]->addObserver(mesh);
+    mesh->geom_parameters["radius"] = radius_val;
+    mesh->topo_parameters["uNum"]->addObserver(mesh);
+    mesh->topo_parameters["vNum"]->addObserver(mesh);
     // 进行一次初始的更新
     mesh->update();
     return mesh;
@@ -548,10 +551,10 @@ class Mesh : public Geometry {
       });
     radius_val->addObserver(mesh);
     height_val->addObserver(mesh);
-    mesh->parameters["radius"] = radius_val;
-    mesh->parameters["height"] = height_val;
-    mesh->parameters["uNum"]->addObserver(mesh);
-    mesh->parameters["vNum"]->addObserver(mesh);
+    mesh->geom_parameters["radius"] = radius_val;
+    mesh->geom_parameters["height"] = height_val;
+    mesh->topo_parameters["uNum"]->addObserver(mesh);
+    mesh->topo_parameters["vNum"]->addObserver(mesh);
     // 进行一次初始的更新
     mesh->update();
     return mesh;
@@ -586,10 +589,10 @@ class Mesh : public Geometry {
       });
     radius_val->addObserver(mesh);
     height_val->addObserver(mesh);
-    mesh->parameters["radius"] = radius_val;
-    mesh->parameters["height"] = height_val;
-    mesh->parameters["uNum"]->addObserver(mesh);
-    mesh->parameters["vNum"]->addObserver(mesh);
+    mesh->geom_parameters["radius"] = radius_val;
+    mesh->geom_parameters["height"] = height_val;
+    mesh->topo_parameters["uNum"]->addObserver(mesh);
+    mesh->topo_parameters["vNum"]->addObserver(mesh);
     // 进行一次初始的更新
     mesh->update();
     return mesh;
@@ -624,10 +627,10 @@ class Mesh : public Geometry {
       });
     width_val->addObserver(mesh);
     height_val->addObserver(mesh);
-    mesh->parameters["width"]  = width_val;
-    mesh->parameters["height"] = height_val;
-    mesh->parameters["uNum"]->addObserver(mesh);
-    mesh->parameters["vNum"]->addObserver(mesh);
+    mesh->geom_parameters["width"]  = width_val;
+    mesh->geom_parameters["height"] = height_val;
+    mesh->topo_parameters["uNum"]->addObserver(mesh);
+    mesh->topo_parameters["vNum"]->addObserver(mesh);
     // 进行一次初始的更新
     mesh->update();
     return mesh;
@@ -803,33 +806,33 @@ class Composition : public Geometry {
     });
 
     // 反向绑定
-    xnum_val->addObserver(xy1->parameters["uNum"]);
-    xnum_val->addObserver(xy2->parameters["uNum"]);
-    xnum_val->addObserver(xz1->parameters["uNum"]);
-    xnum_val->addObserver(xz2->parameters["uNum"]);
-    ynum_val->addObserver(yz1->parameters["uNum"]);
-    ynum_val->addObserver(yz2->parameters["uNum"]);
+    xnum_val->addObserver(xy1->topo_parameters["uNum"]);
+    xnum_val->addObserver(xy2->topo_parameters["uNum"]);
+    xnum_val->addObserver(xz1->topo_parameters["uNum"]);
+    xnum_val->addObserver(xz2->topo_parameters["uNum"]);
+    ynum_val->addObserver(yz1->topo_parameters["uNum"]);
+    ynum_val->addObserver(yz2->topo_parameters["uNum"]);
 
-    ynum_val->addObserver(xy1->parameters["vNum"]);
-    ynum_val->addObserver(xy2->parameters["vNum"]);
-    znum_val->addObserver(xz1->parameters["vNum"]);
-    znum_val->addObserver(xz2->parameters["vNum"]);
-    znum_val->addObserver(yz1->parameters["vNum"]);
-    znum_val->addObserver(yz2->parameters["vNum"]);
+    ynum_val->addObserver(xy1->topo_parameters["vNum"]);
+    ynum_val->addObserver(xy2->topo_parameters["vNum"]);
+    znum_val->addObserver(xz1->topo_parameters["vNum"]);
+    znum_val->addObserver(xz2->topo_parameters["vNum"]);
+    znum_val->addObserver(yz1->topo_parameters["vNum"]);
+    znum_val->addObserver(yz2->topo_parameters["vNum"]);
 
-    xwidth_val->addObserver(xy1->parameters["width"]);
-    xwidth_val->addObserver(xy2->parameters["width"]);
-    xwidth_val->addObserver(xz1->parameters["width"]);
-    xwidth_val->addObserver(xz2->parameters["width"]);
-    ywidth_val->addObserver(yz1->parameters["width"]);
-    ywidth_val->addObserver(yz2->parameters["width"]);
+    xwidth_val->addObserver(xy1->geom_parameters["width"]);
+    xwidth_val->addObserver(xy2->geom_parameters["width"]);
+    xwidth_val->addObserver(xz1->geom_parameters["width"]);
+    xwidth_val->addObserver(xz2->geom_parameters["width"]);
+    ywidth_val->addObserver(yz1->geom_parameters["width"]);
+    ywidth_val->addObserver(yz2->geom_parameters["width"]);
 
-    ywidth_val->addObserver(xy1->parameters["height"]);
-    ywidth_val->addObserver(xy2->parameters["height"]);
-    zwidth_val->addObserver(xz1->parameters["height"]);
-    zwidth_val->addObserver(xz2->parameters["height"]);
-    zwidth_val->addObserver(yz1->parameters["height"]);
-    zwidth_val->addObserver(yz2->parameters["height"]);
+    ywidth_val->addObserver(xy1->geom_parameters["height"]);
+    ywidth_val->addObserver(xy2->geom_parameters["height"]);
+    zwidth_val->addObserver(xz1->geom_parameters["height"]);
+    zwidth_val->addObserver(xz2->geom_parameters["height"]);
+    zwidth_val->addObserver(yz1->geom_parameters["height"]);
+    zwidth_val->addObserver(yz2->geom_parameters["height"]);
 
     // 添加观察者
     xwidth_val->addObserver(comp);
@@ -838,12 +841,12 @@ class Composition : public Geometry {
     xnum_val->addObserver(comp);
     ynum_val->addObserver(comp);
     znum_val->addObserver(comp);
-    comp->parameters["xWidth"] = xwidth_val;
-    comp->parameters["yWidth"] = ywidth_val;
-    comp->parameters["zWidth"] = zwidth_val;
-    comp->parameters["XNum"]   = xnum_val;
-    comp->parameters["YNum"]   = ynum_val;
-    comp->parameters["ZNum"]   = znum_val;
+    comp->geom_parameters["xWidth"] = xwidth_val;
+    comp->geom_parameters["yWidth"] = ywidth_val;
+    comp->geom_parameters["zWidth"] = zwidth_val;
+    comp->topo_parameters["XNum"]   = xnum_val;
+    comp->topo_parameters["YNum"]   = ynum_val;
+    comp->topo_parameters["ZNum"]   = znum_val;
 
     // 初始化更新
     comp->update();
@@ -889,20 +892,20 @@ class Composition : public Geometry {
     });
 
     // 参数绑定
-    radius_val->addObserver(bottom->parameters["radius"]);
-    radius_val->addObserver(top->parameters["radius"]);
-    radius_val->addObserver(side->parameters["radius"]);
+    radius_val->addObserver(bottom->geom_parameters["radius"]);
+    radius_val->addObserver(top->geom_parameters["radius"]);
+    radius_val->addObserver(side->geom_parameters["radius"]);
 
-    height_val->addObserver(side->parameters["height"]);
+    height_val->addObserver(side->geom_parameters["height"]);
 
-    pnum_val->addObserver(bottom->parameters["uNum"]);
-    pnum_val->addObserver(top->parameters["uNum"]);
-    pnum_val->addObserver(side->parameters["uNum"]);
+    pnum_val->addObserver(bottom->topo_parameters["uNum"]);
+    pnum_val->addObserver(top->topo_parameters["uNum"]);
+    pnum_val->addObserver(side->topo_parameters["uNum"]);
 
-    rnum_val->addObserver(bottom->parameters["vNum"]);
-    rnum_val->addObserver(top->parameters["vNum"]);
+    rnum_val->addObserver(bottom->topo_parameters["vNum"]);
+    rnum_val->addObserver(top->topo_parameters["vNum"]);
 
-    hnum_val->addObserver(side->parameters["vNum"]);
+    hnum_val->addObserver(side->topo_parameters["vNum"]);
 
     // 注册观察者
     radius_val->addObserver(comp);
@@ -912,11 +915,11 @@ class Composition : public Geometry {
     hnum_val->addObserver(comp);
 
     // 注册目标变量
-    comp->parameters["radius"] = radius_val;
-    comp->parameters["height"] = height_val;
-    comp->parameters["PNum"]   = pnum_val;
-    comp->parameters["RNum"]   = rnum_val;
-    comp->parameters["HNum"]   = hnum_val;
+    comp->geom_parameters["radius"] = radius_val;
+    comp->geom_parameters["height"] = height_val;
+    comp->topo_parameters["PNum"]   = pnum_val;
+    comp->topo_parameters["RNum"]   = rnum_val;
+    comp->topo_parameters["HNum"]   = hnum_val;
 
     comp->update();
     return comp;
@@ -951,14 +954,14 @@ class Composition : public Geometry {
     });
 
     // 反向映射
-    pnum_val->addObserver(bottom->parameters["uNum"]);
-    pnum_val->addObserver(side->parameters["uNum"]);
-    rnum_val->addObserver(bottom->parameters["vNum"]);
-    hnum_val->addObserver(side->parameters["vNum"]);
+    pnum_val->addObserver(bottom->topo_parameters["uNum"]);
+    pnum_val->addObserver(side->topo_parameters["uNum"]);
+    rnum_val->addObserver(bottom->topo_parameters["vNum"]);
+    hnum_val->addObserver(side->topo_parameters["vNum"]);
 
-    radius_val->addObserver(bottom->parameters["radius"]);
-    radius_val->addObserver(side->parameters["radius"]);
-    height_val->addObserver(side->parameters["height"]);
+    radius_val->addObserver(bottom->geom_parameters["radius"]);
+    radius_val->addObserver(side->geom_parameters["radius"]);
+    height_val->addObserver(side->geom_parameters["height"]);
 
     radius_val->addObserver(comp);
     height_val->addObserver(comp);
@@ -966,11 +969,11 @@ class Composition : public Geometry {
     rnum_val->addObserver(comp);
     hnum_val->addObserver(comp);
 
-    comp->parameters["radius"] = radius_val;
-    comp->parameters["height"] = height_val;
-    comp->parameters["PNum"]   = pnum_val;
-    comp->parameters["RNum"]   = rnum_val;
-    comp->parameters["HNum"]   = hnum_val;
+    comp->geom_parameters["radius"] = radius_val;
+    comp->geom_parameters["height"] = height_val;
+    comp->topo_parameters["PNum"]   = pnum_val;
+    comp->topo_parameters["RNum"]   = rnum_val;
+    comp->topo_parameters["HNum"]   = hnum_val;
 
     comp->update();
     return comp;
