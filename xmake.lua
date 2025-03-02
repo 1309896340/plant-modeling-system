@@ -56,7 +56,7 @@ target("lsystem_demonstration")
             os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
-    set_enabled(false)
+    set_enabled(true)
 
 
 

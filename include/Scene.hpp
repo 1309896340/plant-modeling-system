@@ -436,7 +436,7 @@ class GeometryRenderObject {
     : GeometryRenderObject(name, geometry, Transform()) {}
 
   void constructBvhTree() {
-    // 基于当前bvh树下所有节点的box状态，更新
+    // 构建bvh树，如果this->bvhtree不为空，则强制清空重建
     
     if (this->bvhtree != nullptr) {
       // 销毁当前的tree，完全重构
