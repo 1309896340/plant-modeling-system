@@ -382,10 +382,8 @@ class GeometryRenderObject {
         model *
         vec4(glm::make_vec3(this->geometry->getVertices()[i].position), 1.0f));
     }
-    this->box = make_unique<BoundingBox>(vertices);
-    vector<vec3>     box_vertices;
-    vector<uint32_t> box_indices;
-    this->box->genOpenGLRenderInfo(box_vertices, box_indices);
+    this->box                        = make_unique<BoundingBox>(vertices);
+    auto [box_vertices, box_indices] = this->box->genOpenGLRenderInfo();
     this->box_obj =
       make_unique<BoundingBoxRenderObject>(box_vertices, box_indices);
   }
@@ -438,6 +436,8 @@ class GeometryRenderObject {
     : GeometryRenderObject(name, geometry, Transform()) {}
 
   void constructBvhTree() {
+    // 基于当前bvh树下所有节点的box状态，更新
+    
     if (this->bvhtree != nullptr) {
       // 销毁当前的tree，完全重构
       this->bvhtree.reset();
@@ -447,9 +447,7 @@ class GeometryRenderObject {
     // 生成顶点缓冲
     this->bvhbox_objs.clear();   // 释放所有旧的顶点缓冲（智能指针自动析构）
     this->bvhtree->traverse([this](BvhNode* node) {
-      vector<vec3>     vertices;
-      vector<uint32_t> indices;
-      node->box->genOpenGLRenderInfo(vertices, indices);
+      auto [vertices, indices] = node->box->genOpenGLRenderInfo();
       this->bvhbox_objs.emplace_back(
         make_shared<BoundingBoxRenderObject>(vertices, indices));
     });
@@ -487,25 +485,23 @@ class GeometryRenderObject {
     // 计算包围盒的6个边界值
     this->box->update(vertices);
     // 更新到OpenGL的顶点缓冲区
-    vector<vec3>     bound_vertices;
-    vector<uint32_t> bound_indices;
-    this->box->genOpenGLRenderInfo(bound_vertices, bound_indices);
+    auto [bound_vertices, bound_indices] = this->box->genOpenGLRenderInfo();
     this->box_obj->update(bound_vertices, bound_indices);
 
     // 若启用了层次包围盒，则一同更新
     if (this->bvhtree != nullptr) {
-      // 更新所有节点的包围盒
-      this->bvhtree->loadGeometry(this->geometry, this->transform);
-      this->bvhtree->construct();
-      // 更新所有包围盒的顶点缓冲
-      this->bvhbox_objs.clear();   // 释放所有旧的顶点缓冲（智能指针自动析构）
-      this->bvhtree->traverse([this](BvhNode* node) {
-        vector<vec3>     vertices;
-        vector<uint32_t> indices;
-        node->box->genOpenGLRenderInfo(vertices, indices);
-        this->bvhbox_objs.emplace_back(
-          make_shared<BoundingBoxRenderObject>(vertices, indices));
-      });
+      // // 更新所有节点的包围盒
+      // this->bvhtree->loadGeometry(this->geometry, this->transform);
+      // this->bvhtree->construct();
+      // // 更新所有包围盒的顶点缓冲
+      // this->bvhbox_objs.clear();   //
+      // 释放所有旧的顶点缓冲（智能指针自动析构）
+      // this->bvhtree->traverse([this](BvhNode* node) {
+      //   auto [vertices, indices] = node->box->genOpenGLRenderInfo();
+      //   this->bvhbox_objs.emplace_back(
+      //     make_shared<BoundingBoxRenderObject>(vertices, indices));
+      // });
+      this->constructBvhTree();
     }
   }
   ~GeometryRenderObject() {
@@ -577,6 +573,7 @@ class Scene {
   bool isShowCoord{false};
   bool isShowWireFrame{false};
   bool isShowCursor{false};
+  bool isShowBvhFrame{false};
 
   // imgui的状态变量
   struct ImguiInfo {
@@ -1412,6 +1409,7 @@ class Scene {
       ImGui::PopID();
 
       ImGui::Checkbox(TEXT("线框模式"), &this->isShowWireFrame);
+      ImGui::Checkbox(TEXT("显示BVH线框"), &this->isShowBvhFrame);
 
       ImGui::TreePop();
     }
@@ -2234,7 +2232,7 @@ class Scene {
     cur_shader->set("lineColor", glm::vec3(0.0f, 1.0f, 1.0f));
     for (auto& cur_obj : this->objs) {
       if (cur_obj->selected) {
-        if (cur_obj->bvhtree != nullptr) {
+        if (cur_obj->bvhtree != nullptr && this->isShowBvhFrame) {
           // 渲染层次包围盒
           for (const shared_ptr<BoundingBoxRenderObject>& bb_obj :
                cur_obj->bvhbox_objs) {

@@ -177,12 +177,12 @@ public:
   float getYWidth() const { return max_bound.y - min_bound.y; }
   float getZWidth() const { return max_bound.z - min_bound.z; }
 
-  void genOpenGLRenderInfo(vector<vec3> &vertices,
-                           vector<uint32_t> &indices) const {
+  tuple<vector<vec3>, vector<uint32_t>>
+  genOpenGLRenderInfo() const {
     // 用于将包围盒的min_bound,max_bound生成可用GL_LINES绘制的顶点和索引数据
     vec3 max_xyz = this->max_bound;
     vec3 min_xyz = this->min_bound;
-    vertices = {min_xyz,
+    vector<vec3> vertices = {min_xyz,
                 {min_xyz.x, min_xyz.y, max_xyz.z},
                 {min_xyz.x, max_xyz.y, min_xyz.z},
                 {min_xyz.x, max_xyz.y, max_xyz.z},
@@ -190,8 +190,9 @@ public:
                 {max_xyz.x, min_xyz.y, max_xyz.z},
                 {max_xyz.x, max_xyz.y, min_xyz.z},
                 max_xyz};
-    indices = {0, 1, 0, 2, 0, 4, 1, 3, 1, 5, 2, 3,
-               2, 6, 4, 6, 4, 5, 3, 7, 5, 7, 6, 7};
+    vector<uint32_t> indices = {0, 1, 0, 2, 0, 4, 1, 3, 1, 5, 2, 3,
+                                2, 6, 4, 6, 4, 5, 3, 7, 5, 7, 6, 7};
+    return make_tuple(vertices, indices);
   }
 
   bool hit(Ray ray) {
