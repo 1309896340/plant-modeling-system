@@ -1109,19 +1109,12 @@ class Scene {
             HitInfo_imgui tmp_obj;
             if (cur_obj->bvhtree != nullptr) {
               // 层次包围盒求交
-              // 将ray反变换到局部坐标系下，返回结果也要转换到
-              glm::mat4 model = cur_obj->transform.getModel();
-              glm::mat4 rmodel = glm::inverse(model);
-              Ray local_ray = ray;
-              local_ray.origin = glm::vec3(rmodel * glm::vec4(ray.origin,1.0f));
-              local_ray.dir = glm::normalize(glm::vec3(rmodel * glm::vec4(ray.dir,0.0f)));
-              HitInfo hit_obj = cur_obj->bvhtree->intersect(local_ray);
+              HitInfo hit_obj = cur_obj->bvhtree->intersect(ray, cur_obj->transform);
               if (hit_obj.isHit) {
                 // 将位置变换回世界坐标系下
                 tmp_obj.isHit    = true;
-                tmp_obj.hitPos   = glm::vec3(model * glm::vec4(hit_obj.hitPos,1.0f));
-                // tmp_obj.distance = hit_obj.distance;
-                tmp_obj.distance = glm::distance(tmp_obj.hitPos, ray.origin);
+                tmp_obj.hitPos   = hit_obj.hitPos;
+                tmp_obj.distance = hit_obj.distance;
                 tmp_obj.type     = 1;
                 // tmp_obj.id = 0; // 后面统一获取
               }

@@ -375,8 +375,14 @@ class BvhTree {
   }
 
   // tuple<bool, vec3, float, uint32_t> intersect(const vec3 &origin, const vec3 &dir, vec3 &hit_pos,float &distance, uint32_t &triangle_idx) {
-  HitInfo intersect(Ray ray) {
+  HitInfo intersect(Ray ray, Transform trans=Transform{}) {
     // 返回(是否击中, 击中位置, 距离, 三角索引)
+
+    Ray local_ray = ray;
+    glm::mat4 model = trans.getModel();
+    glm::mat4 rmodel = glm::inverse(model);
+    local_ray.origin = glm::vec3(rmodel * glm::vec4(ray.origin,1.0f));
+    local_ray.dir = glm::normalize(glm::vec3(rmodel * glm::vec4(ray.dir,0.0f)));
 
     deque<BvhNode*>  buf{this->root};
     vector<BvhNode*> hit_table;   // 所有击中包围盒的叶节点
@@ -384,7 +390,7 @@ class BvhTree {
       BvhNode* cur_node = buf.front();
       buf.pop_front();
 
-      if (!cur_node->box->hit(ray))
+      if (!cur_node->box->hit(local_ray))
         continue;
       // 击中，判断cur_node是否为叶节点，是则加入hit_table
       if (cur_node->left == nullptr && cur_node->right == nullptr) {
@@ -407,12 +413,16 @@ class BvhTree {
       for (int j = 0; j < 3; j++)
         pt[j] = glm::make_vec3(this->geometry->getVertices()[triangle.tidx[j]].position);
 
-      HitInfo tmp_obj = hit_triangle(ray, pt[0], pt[1], pt[2]);
+      HitInfo tmp_obj = hit_triangle(local_ray, pt[0], pt[1], pt[2]);
       if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
         tmp_obj.triangle_idx = cur_node->triangles[0];
         target_obj           = tmp_obj;
       }
     }
+    // 将交点反变换回世界坐标，并计算相应距离
+
+    target_obj.hitPos = glm::vec3(model * glm::vec4(target_obj.hitPos, 1.0f));
+    target_obj.distance = glm::distance(ray.origin, target_obj.hitPos);
 
     return target_obj;
   }
