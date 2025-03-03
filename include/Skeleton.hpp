@@ -104,7 +104,7 @@ public:
                 continue;
             }
 
-            cur->abs_transform = cur->transform * cur->parent->abs_transform;
+            cur->abs_transform = cur->parent->abs_transform * cur->transform;
 
             // vec3 ps = cur->abs_transform.getPosition();
             // printf("节点%p 起点位置：(%.4f, %.4f, %.4f)\n", cur, ps.x, ps.y, ps.z);

@@ -107,7 +107,7 @@ HitInfo hit_triangle(Ray ray, const vec3 &p1, const vec3 &p2, const vec3 &p3) {
     float t = t_det / det_base;
     float a1 = a1_det / det_base;
     float a2 = a2_det / det_base;
-    if (a1 >= 0 && a1 <= 1 && a2 >= 0 && a2 <= 1 && a1 + a2 <= 1 && t > 0.0f) {
+    if (a1 >= 0 && a2 >= 0 && a1 + a2 <= 1 && t > 0.0f) {
       // 击中
       target.isHit = true;
       target.distance = t;

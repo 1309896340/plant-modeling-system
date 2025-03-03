@@ -56,7 +56,7 @@ target("lsystem_demonstration")
             os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
-    set_enabled(true)
+    set_enabled(false)
 
 
 
@@ -88,7 +88,7 @@ target("geometry_test")
             os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
-    set_enabled(false)
+    set_enabled(true)
 
 -- 测试骨架
 target("skeleton_test")
