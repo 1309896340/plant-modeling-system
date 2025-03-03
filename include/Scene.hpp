@@ -375,15 +375,15 @@ class GeometryRenderObject {
     glBindVertexArray(0);
 
     // 同时初始化包围盒
-    mat4         model = this->transform.getModel();
-    vector<vec3> vertices(this->geometry->getVertices().size());
-    for (int i = 0; i < this->geometry->getVertices().size(); i++) {
-      vertices[i] = vec3(
-        model *
-        vec4(glm::make_vec3(this->geometry->getVertices()[i].position), 1.0f));
-    }
-    this->box                        = make_unique<BoundingBox>(vertices);
-    auto [box_vertices, box_indices] = this->box->genOpenGLRenderInfo();
+    // mat4         model = this->transform.getModel();
+    // vector<vec3> vertices(this->geometry->getVertices().size());
+    // for (int i = 0; i < this->geometry->getVertices().size(); i++) {
+    //   vertices[i] = vec3(
+    //     model *
+    //     vec4(glm::make_vec3(this->geometry->getVertices()[i].position), 1.0f));
+    // }
+    this->box                        = make_unique<BoundingBox>(this->geometry->getVertices());
+    auto [box_vertices, box_indices] = this->box->genOpenGLRenderInfo(this->transform);
     this->box_obj =
       make_unique<BoundingBoxRenderObject>(box_vertices, box_indices);
   }
@@ -442,12 +442,12 @@ class GeometryRenderObject {
       // 销毁当前的tree，完全重构
       this->bvhtree.reset();
     }
-    this->bvhtree = make_unique<BvhTree>(this->geometry, this->transform);
+    this->bvhtree = make_unique<BvhTree>(this->geometry);
     this->bvhtree->construct();
     // 生成顶点缓冲
     this->bvhbox_objs.clear();   // 释放所有旧的顶点缓冲（智能指针自动析构）
     this->bvhtree->traverse([this](BvhNode* node) {
-      auto [vertices, indices] = node->box->genOpenGLRenderInfo();
+      auto [vertices, indices] = node->box->genOpenGLRenderInfo(this->transform);
       this->bvhbox_objs.emplace_back(
         make_shared<BoundingBoxRenderObject>(vertices, indices));
     });
@@ -475,17 +475,17 @@ class GeometryRenderObject {
     glBindVertexArray(0);
 
     // 重新计算包围盒并更新包围盒的VBO
-    mat4         model = this->transform.getModel();
-    vector<vec3> vertices(this->geometry->getVertices().size());
-    for (int i = 0; i < this->geometry->getVertices().size(); i++) {
-      vertices[i] = vec3(
-        model *
-        vec4(glm::make_vec3(this->geometry->getVertices()[i].position), 1.0f));
-    }
+    // mat4         model = this->transform.getModel();
+    // vector<vec3> vertices(this->geometry->getVertices().size());
+    // for (int i = 0; i < this->geometry->getVertices().size(); i++) {
+    //   vertices[i] = vec3(
+    //     model *
+    //     vec4(glm::make_vec3(this->geometry->getVertices()[i].position), 1.0f));
+    // }
     // 计算包围盒的6个边界值
-    this->box->update(vertices);
+    this->box->update(this->geometry->getVertices());
     // 更新到OpenGL的顶点缓冲区
-    auto [bound_vertices, bound_indices] = this->box->genOpenGLRenderInfo();
+    auto [bound_vertices, bound_indices] = this->box->genOpenGLRenderInfo(this->transform);
     this->box_obj->update(bound_vertices, bound_indices);
 
     // 若启用了层次包围盒，则一同更新
@@ -1109,11 +1109,19 @@ class Scene {
             HitInfo_imgui tmp_obj;
             if (cur_obj->bvhtree != nullptr) {
               // 层次包围盒求交
-              HitInfo hit_obj = cur_obj->bvhtree->intersect(ray);
+              // 将ray反变换到局部坐标系下，返回结果也要转换到
+              glm::mat4 model = cur_obj->transform.getModel();
+              glm::mat4 rmodel = glm::inverse(model);
+              Ray local_ray = ray;
+              local_ray.origin = glm::vec3(rmodel * glm::vec4(ray.origin,1.0f));
+              local_ray.dir = glm::normalize(glm::vec3(rmodel * glm::vec4(ray.dir,0.0f)));
+              HitInfo hit_obj = cur_obj->bvhtree->intersect(local_ray);
               if (hit_obj.isHit) {
+                // 将位置变换回世界坐标系下
                 tmp_obj.isHit    = true;
-                tmp_obj.hitPos   = hit_obj.hitPos;
-                tmp_obj.distance = hit_obj.distance;
+                tmp_obj.hitPos   = glm::vec3(model * glm::vec4(hit_obj.hitPos,1.0f));
+                // tmp_obj.distance = hit_obj.distance;
+                tmp_obj.distance = glm::distance(tmp_obj.hitPos, ray.origin);
                 tmp_obj.type     = 1;
                 // tmp_obj.id = 0; // 后面统一获取
               }
