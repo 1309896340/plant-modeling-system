@@ -35,3 +35,7 @@ assets/textures
 *.exe
 *.out
 *.app
+
+# antlr4
+**/.antlr4
+**/.antlr
