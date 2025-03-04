@@ -1805,7 +1805,7 @@ class Scene {
 
       HitInfo tmp_obj = cur_obj->bvhtree->hit(ray, cur_obj->transform);
       if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
-        tmp_obj.geometry_name = cur_obj->name;
+        tmp_obj.geometryName = cur_obj->name;
         target_obj            = tmp_obj;
       }
     }
@@ -1997,13 +1997,13 @@ class Scene {
       if (PR_D >= PR)
         break;   // 光线死亡，不再弹射
 
-      shared_ptr<GeometryRenderObject> gobj = findGeometryRenderObjectByName(cur_obj.geometry_name);
+      shared_ptr<GeometryRenderObject> gobj = findGeometryRenderObjectByName(cur_obj.geometryName);
       assert(gobj != nullptr && "hit geometry not found!");
 
       shared_ptr<Geometry> geometry = gobj->geometry;
       mat4                 model    = gobj->transform.getModel();
 
-      TriangleSampler tri(geometry->getVertices(), geometry->getSurfaces()[cur_obj.triangle_idx], model);
+      TriangleSampler tri(geometry->getVertices(), geometry->getSurfaces()[cur_obj.triangleIdx], model);
       vec3            tri_norm = tri.calcNorm();
       vec3            wi       = tri.hemisphereSampleDir();
 

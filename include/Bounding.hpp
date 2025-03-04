@@ -37,8 +37,8 @@ struct Ray {
 struct HitInfo {
   bool     isHit{false};
   vec3     hitPos{0.0f, 0.0f, 0.0f};
-  uint32_t triangle_idx{0};
-  string   geometry_name;
+  uint32_t triangleIdx{0};
+  string   geometryName;
   float    distance{FLT_MAX};
 };
 
@@ -417,7 +417,7 @@ class BvhTree {
 
       HitInfo tmp_obj = hit_triangle(local_ray, pt[0], pt[1], pt[2]);
       if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
-        tmp_obj.triangle_idx = cur_node->triangles[0];
+        tmp_obj.triangleIdx = cur_node->triangles[0];
         target_obj           = tmp_obj;
       }
     }
