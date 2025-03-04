@@ -375,8 +375,10 @@ class BvhTree {
   }
 
   // tuple<bool, vec3, float, uint32_t> intersect(const vec3 &origin, const vec3 &dir, vec3 &hit_pos,float &distance, uint32_t &triangle_idx) {
-  HitInfo intersect(Ray ray, Transform trans=Transform{}) {
+  HitInfo hit(Ray ray, Transform trans) {
+    // 参数：ray为世界坐标系下的光线，trans为model变换
     // 返回(是否击中, 击中位置, 距离, 三角索引)
+    
 
     Ray local_ray = ray;
     glm::mat4 model = trans.getModel();

@@ -1109,7 +1109,7 @@ class Scene {
             HitInfo_imgui tmp_obj;
             if (cur_obj->bvhtree != nullptr) {
               // 层次包围盒求交
-              HitInfo hit_obj = cur_obj->bvhtree->intersect(ray, cur_obj->transform);
+              HitInfo hit_obj = cur_obj->bvhtree->hit(ray, cur_obj->transform);
               if (hit_obj.isHit) {
                 // 将位置变换回世界坐标系下
                 tmp_obj.isHit    = true;
@@ -1793,7 +1793,7 @@ class Scene {
   //   vec3 hit_pos;    // 世界坐标系下的击中位置
   // };
 
-  HitInfo hit_obj(Ray ray) {
+  HitInfo hit(Ray ray) {
     // 场景物体全局求交
     // 遍历this->objs所有元素，找到距离最近的相交物体
     // 返回击中物体名称、击中对象信息
@@ -1803,7 +1803,7 @@ class Scene {
     for (auto& cur_obj : this->objs) {
       assert(cur_obj->bvhtree != nullptr && "element in scene.objs must construct bvh-tree!");   // 假定都生成了bvh树
 
-      HitInfo tmp_obj = cur_obj->bvhtree->intersect(ray);
+      HitInfo tmp_obj = cur_obj->bvhtree->hit(ray, cur_obj->transform);
       if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
         tmp_obj.geometry_name = cur_obj->name;
         target_obj            = tmp_obj;
@@ -1956,7 +1956,7 @@ class Scene {
           vector<vec3> vec_buffer;
           vec3         wi = tri.hemisphereSampleDir();
           vec_buffer.push_back(tri_center + SURFACE_NORMAL_OFFSET * tri_norm);   // 三角起点
-          HitInfo new_obj = hit_obj({tri_center + SURFACE_NORMAL_OFFSET * tri_norm, wi});
+          HitInfo new_obj = this->hit({tri_center + SURFACE_NORMAL_OFFSET * tri_norm, wi});
           if (new_obj.isHit) {
             radiance = trace_ray({new_obj.hitPos, -wi}, new_obj, 0.85, &vec_buffer);
           }
@@ -2018,7 +2018,7 @@ class Scene {
 
       // ====================计算间接光照========================
       Ray     new_ray{cur_obj.hitPos + SURFACE_NORMAL_OFFSET * tri_norm, wi};   // 反向追踪上一根入射光线的发出对象
-      HitInfo new_obj = hit_obj(new_ray);
+      HitInfo new_obj = this->hit(new_ray);
       if (new_obj.isHit) {
         // printf("击中物体: %s\n", new_obj.geometry_name.c_str());
         // 找到光源物体
