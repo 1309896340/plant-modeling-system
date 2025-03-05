@@ -118,7 +118,7 @@ class GeometryGenerater : public GeometryCmd {
       // 为新节点重置上下文的transform
       context->transform = Transform();
       // 当前几何体的位置偏移将更新到下一个节点中
-      vec3 offset = std::get<float>(geometry->geom_parameters["height"]->getProp()) * _up;
+      vec3 offset = std::get<float>(geometry->parameters["height"]->getProp()) * _up;
       context->transform.translate(offset);
     }
     else if (name == "F") {   // 不构造几何体，也不生成节点
