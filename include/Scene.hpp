@@ -146,7 +146,7 @@ class LineDrawer {
     this->v_nums.clear();
     this->colors.clear();
   }
-  void updateVBO() {
+  void update() {
     glBindVertexArray(this->vao);
     glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
     glBufferData(GL_ARRAY_BUFFER, this->rays.size() * sizeof(vec3), this->rays.data(), GL_DYNAMIC_DRAW);
@@ -339,17 +339,23 @@ class BoundingBoxRenderObject {
   }
 };
 
-class GeometryRenderObject {
-  private:
-  void initVBO() {
+class OpenGLContext {
+  protected:
+  GLuint vao{0};
+  GLuint vbo{0};
+  GLuint ebo{0};
+
+  public:
+  GLuint texture{0};
+  OpenGLContext(GLsizei vertices_size, void* vertices_data, GLsizei surfaces_size, void* surfaces_data) {
     glGenVertexArrays(1, &this->vao);
     glBindVertexArray(this->vao);
 
     glGenBuffers(1, &this->vbo);
     glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
     glBufferData(GL_ARRAY_BUFFER,
-                 this->geometry->getVertices().size() * sizeof(Vertex),
-                 this->geometry->getVertices().data(),
+                 vertices_size,
+                 vertices_data,
                  GL_STATIC_DRAW);
 
     size_t stride = sizeof(Vertex);
@@ -369,34 +375,48 @@ class GeometryRenderObject {
     glGenBuffers(1, &this->ebo);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                 this->geometry->getSurfaces().size() * sizeof(Surface),
-                 this->geometry->getSurfaces().data(),
+                 surfaces_size,
+                 surfaces_data,
                  GL_STATIC_DRAW);
     glBindVertexArray(0);
-
-    // 同时初始化包围盒
-    // mat4         model = this->transform.getModel();
-    // vector<vec3> vertices(this->geometry->getVertices().size());
-    // for (int i = 0; i < this->geometry->getVertices().size(); i++) {
-    //   vertices[i] = vec3(
-    //     model *
-    //     vec4(glm::make_vec3(this->geometry->getVertices()[i].position), 1.0f));
-    // }
-    this->box                        = make_unique<BoundingBox>(this->geometry->getVertices());
-    auto [box_vertices, box_indices] = this->box->genOpenGLRenderInfo(this->transform);
-    this->box_obj =
-      make_unique<BoundingBoxRenderObject>(box_vertices, box_indices);
+  }
+  ~OpenGLContext() {
+    glDeleteBuffers(1, &this->vbo);
+    glDeleteBuffers(1, &this->ebo);
+    glDeleteVertexArrays(1, &this->vao);
   }
 
+  void updateBuffer(GLsizei vertices_size, void* vertices_data, GLsizei surfaces_size, void* surfaces_data) {
+    glBindVertexArray(this->vao);
+    glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
+    glBufferData(GL_ARRAY_BUFFER,
+                 vertices_size,
+                 vertices_data,
+                 GL_DYNAMIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                 surfaces_size,
+                 surfaces_data,
+                 GL_DYNAMIC_DRAW);
+    glBindVertexArray(0);
+  }
+
+  GLuint getVAO() const {
+    return this->vao;
+  }
+};
+
+class GeometryRenderObject : public OpenGLContext {
+  private:
   public:
   string               name;
   shared_ptr<Geometry> geometry;
   Transform            transform;
 
-  GLuint vao{0};
-  GLuint vbo{0};
-  GLuint ebo{0};
-  GLuint texture{0};
+  // GLuint vao{0};
+  // GLuint vbo{0};
+  // GLuint ebo{0};
+  // GLuint texture{0};
 
   RadiosityResult radiosity;   // 由compute_radiosity()更新
 
@@ -425,19 +445,29 @@ class GeometryRenderObject {
   // 暂时只是为了处理Ground作为aux元素却需要做光线碰撞的问题
   // 仅仅为了能将Ground从objs的其他对象中区分出来
 
-  GeometryRenderObject() = default;
+  static shared_ptr<GeometryRenderObject>
+  getInstance(const string& name, const shared_ptr<Geometry>& geometry, Transform transform = Transform{}) {
+    auto obj = make_shared<GeometryRenderObject>(name, geometry, transform);
+    return obj;
+  }
+
   GeometryRenderObject(const string& name, const shared_ptr<Geometry>& geometry, Transform transform)
-    : name(name)
+    : OpenGLContext(geometry->getVertices().size() * sizeof(Vertex),
+                    geometry->getVertices().data(),
+                    geometry->getSurfaces().size() * sizeof(Surface),
+                    geometry->getSurfaces().data())
+    , name(name)
     , geometry(geometry)
     , transform(transform) {
-    initVBO();
+    // 初始化包围盒
+    this->box                        = make_unique<BoundingBox>(this->geometry->getVertices());
+    auto [box_vertices, box_indices] = this->box->genOpenGLRenderInfo(this->transform);
+    this->box_obj =
+      make_unique<BoundingBoxRenderObject>(box_vertices, box_indices);
   }
-  GeometryRenderObject(const string& name, const shared_ptr<Geometry>& geometry)
-    : GeometryRenderObject(name, geometry, Transform()) {}
-
   void constructBvhTree() {
     // 构建bvh树，如果this->bvhtree不为空，则强制清空重建
-    
+
     if (this->bvhtree != nullptr) {
       // 销毁当前的tree，完全重构
       this->bvhtree.reset();
@@ -460,28 +490,9 @@ class GeometryRenderObject {
     }
   }
 
-  void updateVBO() {
-    glBindVertexArray(this->vao);
-    glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
-    glBufferData(GL_ARRAY_BUFFER,
-                 this->geometry->getVertices().size() * sizeof(Vertex),
-                 this->geometry->getVertices().data(),
-                 GL_DYNAMIC_DRAW);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
-                 this->geometry->getSurfaces().size() * sizeof(Surface),
-                 this->geometry->getSurfaces().data(),
-                 GL_DYNAMIC_DRAW);
-    glBindVertexArray(0);
+  void update() {
+    this->updateBuffer(this->geometry->getVertices().size() * sizeof(Vertex), this->geometry->getVertices().data(), this->geometry->getSurfaces().size() * sizeof(Surface), this->geometry->getSurfaces().data());
 
-    // 重新计算包围盒并更新包围盒的VBO
-    // mat4         model = this->transform.getModel();
-    // vector<vec3> vertices(this->geometry->getVertices().size());
-    // for (int i = 0; i < this->geometry->getVertices().size(); i++) {
-    //   vertices[i] = vec3(
-    //     model *
-    //     vec4(glm::make_vec3(this->geometry->getVertices()[i].position), 1.0f));
-    // }
     // 计算包围盒的6个边界值
     this->box->update(this->geometry->getVertices());
     // 更新到OpenGL的顶点缓冲区
@@ -489,28 +500,13 @@ class GeometryRenderObject {
     this->box_obj->update(bound_vertices, bound_indices);
 
     // 若启用了层次包围盒，则一同更新
-    if (this->bvhtree != nullptr) {
-      // // 更新所有节点的包围盒
-      // this->bvhtree->loadGeometry(this->geometry, this->transform);
-      // this->bvhtree->construct();
-      // // 更新所有包围盒的顶点缓冲
-      // this->bvhbox_objs.clear();   //
-      // 释放所有旧的顶点缓冲（智能指针自动析构）
-      // this->bvhtree->traverse([this](BvhNode* node) {
-      //   auto [vertices, indices] = node->box->genOpenGLRenderInfo();
-      //   this->bvhbox_objs.emplace_back(
-      //     make_shared<BoundingBoxRenderObject>(vertices, indices));
-      // });
+    if (this->bvhtree != nullptr)
       this->constructBvhTree();
-    }
   }
   ~GeometryRenderObject() {
 #ifndef NDEBUG
     printf("GeometryRenderObject : %s 被析构\n", this->name.c_str());
 #endif
-    glDeleteBuffers(1, &this->vbo);
-    glDeleteBuffers(1, &this->ebo);
-    glDeleteVertexArrays(1, &this->vao);
   }
 };
 
@@ -725,16 +721,16 @@ class Scene {
     // shared_ptr<Geometry>             lightBall = make_shared<Sphere>(0.07f, 36, 72);
     shared_ptr<Geometry>             lightBall = Mesh::Sphere(0.07f, 72, 36);
     shared_ptr<GeometryRenderObject> obj1 =
-      make_shared<GeometryRenderObject>("Light", lightBall);
+      GeometryRenderObject::getInstance("Light", lightBall);
     obj1->geometry->setColor(1.0f, 1.0f, 1.0f);
-    obj1->updateVBO();
+    obj1->update();
     this->addSceneObject(obj1, this->isShowLight, false, false, false);
 
     // 坐标轴
     shared_ptr<Geometry> axis = make_shared<CoordinateAxis>(0.1, 1.0f);
     // shared_ptr<Geometry>             axis = nullptr;  // todo 暂时先留空
     shared_ptr<GeometryRenderObject> obj2 =
-      make_shared<GeometryRenderObject>("Axis", axis);
+      GeometryRenderObject::getInstance("Axis", axis);
     this->addSceneObject(obj2, this->isShowAxis, false, false, false);
 
     // 游标
@@ -742,14 +738,14 @@ class Scene {
     shared_ptr<Geometry> cursor = Mesh::Sphere(0.05f, 72, 36);
     cursor->setColor(1.0f, 1.0f, 0.0f);
     shared_ptr<GeometryRenderObject> cursor_obj =
-      make_shared<GeometryRenderObject>("Cursor", cursor, Transform{vec3(0.0f, 2.0f, 0.0f)});
+      GeometryRenderObject::getInstance("Cursor", cursor, Transform{vec3(0.0f, 2.0f, 0.0f)});
     this->addSceneObject(cursor_obj, this->isShowCursor, false, false, false);
 
     // 地面
     // shared_ptr<Geometry> ground = make_shared<Ground>(20.0f, 20.0f);
     shared_ptr<Geometry> ground = Mesh::Plane(20.0f, 20.0f, 10, 10);
     // 为了让光线不在两个重叠面上抖动进而穿透，将Ground下移一个微小距离
-    shared_ptr<GeometryRenderObject> obj3 = make_shared<GeometryRenderObject>("Ground", ground, Transform({0.0f, -0.1f, 0.0f}));
+    shared_ptr<GeometryRenderObject> obj3 = GeometryRenderObject::getInstance("Ground", ground, Transform({0.0f, -0.1f, 0.0f}));
     obj3->texture                         = this->textures["fabric"];
     this->addSceneObject(obj3, true, false, true, true);
 
@@ -757,21 +753,21 @@ class Scene {
     // shared_ptr<Geometry> side_left = make_shared<Plane>(20.0f, 20.0f);
     shared_ptr<Geometry> side_left = Mesh::Plane(20.0f, 20.0f, 10, 10);
     side_left->setColor(0.0f, 0.0f, 1.0f);
-    shared_ptr<GeometryRenderObject> side_left_obj = make_shared<GeometryRenderObject>("Side_left", side_left, Transform({-10.0f, 9.9f, 0.0f}, _front, glm::radians(90.0f)));
+    shared_ptr<GeometryRenderObject> side_left_obj = GeometryRenderObject::getInstance("Side_left", side_left, Transform({-10.0f, 9.9f, 0.0f}, _front, glm::radians(90.0f)));
     this->addSceneObject(side_left_obj, true, false, true, true);
 
     // 后侧面
     // shared_ptr<Geometry> side_back = make_shared<Plane>(20.0f, 20.0f);
     shared_ptr<Geometry> side_back = Mesh::Plane(20.0f, 20.0f, 10, 10);
     side_back->setColor(0.0f, 1.0f, 0.0f);
-    shared_ptr<GeometryRenderObject> side_back_obj = make_shared<GeometryRenderObject>("Side_back", side_back, Transform({0.0f, 9.9f, -10.0f}, _right, glm::radians(90.0f)));
+    shared_ptr<GeometryRenderObject> side_back_obj = GeometryRenderObject::getInstance("Side_back", side_back, Transform({0.0f, 9.9f, -10.0f}, _right, glm::radians(90.0f)));
     this->addSceneObject(side_back_obj, true, false, true, true);
 
     // 上侧面
     // shared_ptr<Geometry> side_top = make_shared<Plane>(20.0f, 20.0f);
     shared_ptr<Geometry> side_top = Mesh::Plane(20.0f, 20.0f, 10, 10);
     side_top->setColor(1.0f, 0.0f, 0.0f);
-    shared_ptr<GeometryRenderObject> side_top_obj = make_shared<GeometryRenderObject>("Side_top", side_top, Transform({0.0f, 19.9f, 0.0f}, _right, glm::radians(180.0f)));
+    shared_ptr<GeometryRenderObject> side_top_obj = GeometryRenderObject::getInstance("Side_top", side_top, Transform({0.0f, 19.9f, 0.0f}, _right, glm::radians(180.0f)));
     this->addSceneObject(side_top_obj, true, false, true, true);
   }
 
@@ -1363,7 +1359,7 @@ class Scene {
               // context->imgui.cur->geometry->update();
               // printf("pname: %s\n", pname.c_str());
               context->imgui.cur->geometry->geom_parameters[pname]->notifyAll();
-              context->imgui.cur->updateVBO();
+              context->imgui.cur->update();
               // context->compute_radiosity();
             }
           }
@@ -1374,7 +1370,7 @@ class Scene {
                                  50)) {
               // context->imgui.cur->geometry->update();
               context->imgui.cur->geometry->topo_parameters[pname]->notifyAll();
-              context->imgui.cur->updateVBO();
+              context->imgui.cur->update();
               // context->compute_radiosity();
             }
           }
@@ -1601,7 +1597,7 @@ class Scene {
         lines["Coord"]->addLine(tri_center, tri_center + 0.15f * back, {0.0f, 0.0f, 1.0f});
       }
     }
-    lines["Coord"]->updateVBO();
+    lines["Coord"]->update();
   }
 
   void addSceneObject(const shared_ptr<GeometryRenderObject>& obj,
@@ -1669,7 +1665,7 @@ class Scene {
       //   stringstream ass;
       //   ass << name << "_Axis_" << geo_id;
       //   shared_ptr<GeometryRenderObject> robj =
-      //   make_shared<GeometryRenderObject>(make_shared<CoordinateAxis>(0.067,
+      //   GeometryRenderObject::getInstance(make_shared<CoordinateAxis>(0.067,
       //   0.6), node->getAbsTransform()); this->addSceneObject(ass.str(),
       //   robj);
       // }
@@ -1692,7 +1688,7 @@ class Scene {
       return;
     }
 
-    ptr           = make_shared<GeometryRenderObject>(name, geometry, transform);
+    ptr           = GeometryRenderObject::getInstance(name, geometry, transform);
     ptr->visible  = visible;
     ptr->listed   = listed;
     ptr->collided = collided;
@@ -1737,8 +1733,8 @@ class Scene {
     switch (light->type) {
     case Light::LightType::POINT: {
       render_obj =
-        // make_shared<GeometryRenderObject>("Light", make_shared<Sphere>(0.03, 36, 72));
-        make_shared<GeometryRenderObject>("Light", Mesh::Sphere(0.03, 72, 36));
+        // GeometryRenderObject::getInstance("Light", make_shared<Sphere>(0.03, 36, 72));
+        GeometryRenderObject::getInstance("Light", Mesh::Sphere(0.03, 72, 36));
       break;
     }
     case Light::LightType::PARALLEL: {
@@ -1806,7 +1802,7 @@ class Scene {
       HitInfo tmp_obj = cur_obj->bvhtree->hit(ray, cur_obj->transform);
       if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
         tmp_obj.geometryName = cur_obj->name;
-        target_obj            = tmp_obj;
+        target_obj           = tmp_obj;
       }
     }
 
@@ -1910,7 +1906,7 @@ class Scene {
   //       // printf("物体\"%s\"第(%d/%llu)面元 radiance: %.4f\n", name.c_str(), i, geometry->surfaces.size(), Lo);
   //     }
   //   }
-  //   lines["Ray"]->updateVBO(); // 调试
+  //   lines["Ray"]->update(); // 调试
   // }
 
   // 路径上每条光线的信息
@@ -1972,7 +1968,7 @@ class Scene {
         cur_obj->radiosity.radiant_flux[i] = irradiance * tri_area;
       }
     }
-    lines["Ray"]->updateVBO();   // 调试
+    lines["Ray"]->update();   // 调试
   }
 
   // 迭代版本
@@ -2200,7 +2196,7 @@ class Scene {
       // 启用材质，设置材质属性
       glBindTexture(GL_TEXTURE_2D, cur_obj->texture);
       // 绘制
-      glBindVertexArray(cur_obj->vao);
+      glBindVertexArray(cur_obj->getVAO());
       glDrawElements(GL_TRIANGLES, cur_obj->geometry->getSurfaces().size() * 3, GL_UNSIGNED_INT, nullptr);
 
       if (cur_obj->name == "Axis") {   // 恢复透视矩阵
@@ -2285,7 +2281,7 @@ class Scene {
     glClear(GL_DEPTH_BUFFER_BIT);
     for (auto& cur_obj : this->objs) {
       cur_shader->set("model", cur_obj->transform.getModel());
-      glBindVertexArray(cur_obj->vao);
+      glBindVertexArray(cur_obj->getVAO());
       glDrawElements(GL_TRIANGLES, cur_obj->geometry->getSurfaces().size() * 3, GL_UNSIGNED_INT, nullptr);
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
