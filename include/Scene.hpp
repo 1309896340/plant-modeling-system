@@ -515,6 +515,35 @@ void errorCallback(int code, const char* msg) {
   cout << msg << endl;
 }
 
+
+  struct SkyboxInfo {
+    GLuint vao{0};
+    GLuint vbo{0};
+    GLuint ebo{0};
+    GLuint texture{0};
+  };
+
+  struct DepthmapInfo
+  {
+    float  left{-10.0f};
+    float  right{10.0f};
+    float  bottom{-10.0f};
+    float  top{10.0f};
+    float  near{0.0f};
+    float  far{200.0f};
+    GLuint texture{0};
+    GLuint fbo{0};
+  };
+
+  struct FramebufferInfo{
+    GLuint fbo{0};
+    GLuint texture{0};
+    GLuint rbo{0};
+    GLuint vbo{0};
+    GLuint vao{0};
+    GLuint ebo{0};
+  };
+  
 class Scene {
   private:
   const float  FPS_SHOW_SPAN = 1.0f;   // 大约每过1秒显示一下fps
@@ -529,38 +558,12 @@ class Scene {
 
   GLuint ubo{0};
 
-
-
   // 用于CPU端存储天空盒图片
   PngImage cubemaps[6];
 
-  struct SkyboxInfo {
-    GLuint vao{0};
-    GLuint vbo{0};
-    GLuint ebo{0};
-    GLuint texture{0};
-  } skybox_obj;
-
-  struct
-  {
-    float  left{-10.0f};
-    float  right{10.0f};
-    float  bottom{-10.0f};
-    float  top{10.0f};
-    float  near{0.0f};
-    float  far{200.0f};
-    GLuint texture{0};
-    GLuint fbo{0};
-  } depthmap;
-
-  struct {
-    GLuint fbo{0};
-    GLuint texture{0};
-    GLuint rbo{0};
-    GLuint vbo{0};
-    GLuint vao{0};
-    GLuint ebo{0};
-  } framebuffer;
+  SkyboxInfo skybox;
+  DepthmapInfo depthmap;
+  FramebufferInfo framebuffer;
 
   bool isShowGround{true};
   bool isShowAxis{true};
@@ -787,23 +790,23 @@ class Scene {
     };
     vector<uint32_t> surfaces = {1, 5, 7, 1, 7, 3, 0, 2, 6, 0, 6, 4, 5, 4, 6, 5, 6, 7, 0, 1, 3, 0, 3, 2, 4, 5, 1, 4, 1, 0, 3, 7, 6, 3, 6, 2};
 
-    glGenVertexArrays(1, &this->skybox_obj.vao);
-    glBindVertexArray(this->skybox_obj.vao);
+    glGenVertexArrays(1, &this->skybox.vao);
+    glBindVertexArray(this->skybox.vao);
 
-    glGenBuffers(1, &this->skybox_obj.vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, this->skybox_obj.vbo);
+    glGenBuffers(1, &this->skybox.vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, this->skybox.vbo);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vec3), vertices.data(), GL_STATIC_DRAW);
 
-    glGenBuffers(1, &this->skybox_obj.ebo);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->skybox_obj.ebo);
+    glGenBuffers(1, &this->skybox.ebo);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->skybox.ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, surfaces.size() * sizeof(GLuint), surfaces.data(), GL_STATIC_DRAW);
 
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
     glEnableVertexAttribArray(0);
 
     // 2. 加载纹理
-    glGenTextures(1, &this->skybox_obj.texture);
-    glBindTexture(GL_TEXTURE_CUBE_MAP, this->skybox_obj.texture);
+    glGenTextures(1, &this->skybox.texture);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, this->skybox.texture);
 
     vector<string> skybox_texture_names = {"px", "nx", "py", "ny", "pz", "nz"};
     for (int i = 0; i < skybox_texture_names.size(); i++) {
@@ -2144,8 +2147,8 @@ class Scene {
     glDepthMask(GL_FALSE);
     cur_shader = this->shaders["skybox"];
     cur_shader->use();
-    glBindTexture(GL_TEXTURE_CUBE_MAP, this->skybox_obj.texture);
-    glBindVertexArray(this->skybox_obj.vao);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, this->skybox.texture);
+    glBindVertexArray(this->skybox.vao);
     glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, nullptr);
     glDepthMask(GL_TRUE);
 
