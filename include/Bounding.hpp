@@ -182,25 +182,25 @@ class BoundingBox {
   float getYWidth() const { return max_bound.y - min_bound.y; }
   float getZWidth() const { return max_bound.z - min_bound.z; }
 
-  // tuple<vector<vec3>, vector<uint32_t>>
-  // genOpenGLRenderInfo(Transform trans) const {
-  //   // 用于将包围盒的min_bound,max_bound生成可用GL_LINES绘制的顶点和索引数据
-  //   vec3         max_xyz  = this->max_bound;
-  //   vec3         min_xyz  = this->min_bound;
-  //   vector<vec3> vertices = {min_xyz,
-  //                            {min_xyz.x, min_xyz.y, max_xyz.z},
-  //                            {min_xyz.x, max_xyz.y, min_xyz.z},
-  //                            {min_xyz.x, max_xyz.y, max_xyz.z},
-  //                            {max_xyz.x, min_xyz.y, min_xyz.z},
-  //                            {max_xyz.x, min_xyz.y, max_xyz.z},
-  //                            {max_xyz.x, max_xyz.y, min_xyz.z},
-  //                            max_xyz};
-  //   glm::mat4    transMat = trans.getModel();
-  //   for (uint32_t i = 0; i < vertices.size(); i++)
-  //     vertices[i] = glm::vec3(transMat * glm::vec4(vertices[i], 1.0f));
-  //   vector<uint32_t> indices = {0, 1, 0, 2, 0, 4, 1, 3, 1, 5, 2, 3, 2, 6, 4, 6, 4, 5, 3, 7, 5, 7, 6, 7};
-  //   return make_tuple(vertices, indices);
-  // }
+  tuple<vector<vec3>, vector<uint32_t>>
+  genOpenGLRenderInfo(Transform trans) const {
+    // 用于将包围盒的min_bound,max_bound生成可用GL_LINES绘制的顶点和索引数据
+    vec3         max_xyz  = this->max_bound;
+    vec3         min_xyz  = this->min_bound;
+    vector<vec3> vertices = {min_xyz,
+                             {min_xyz.x, min_xyz.y, max_xyz.z},
+                             {min_xyz.x, max_xyz.y, min_xyz.z},
+                             {min_xyz.x, max_xyz.y, max_xyz.z},
+                             {max_xyz.x, min_xyz.y, min_xyz.z},
+                             {max_xyz.x, min_xyz.y, max_xyz.z},
+                             {max_xyz.x, max_xyz.y, min_xyz.z},
+                             max_xyz};
+    glm::mat4    transMat = trans.getModel();
+    for (uint32_t i = 0; i < vertices.size(); i++)
+      vertices[i] = glm::vec3(transMat * glm::vec4(vertices[i], 1.0f));
+    vector<uint32_t> indices = {0, 1, 0, 2, 0, 4, 1, 3, 1, 5, 2, 3, 2, 6, 4, 6, 4, 5, 3, 7, 5, 7, 6, 7};
+    return make_tuple(vertices, indices);
+  }
 
   bool hit(Ray ray) {
     vec3 in_bound  = this->min_bound;
@@ -238,7 +238,6 @@ class BvhTree {
   // 由构造时传入的shared_ptr<Geometry>的顶点构造的层次包围盒，为目标的局部坐标系下的顶点位置
   private:
   BvhNode* root{nullptr};
-  uint32_t nodeSize{0};
 
   // 为了避免数据容易，这里修改为直接对Geometry对象进行索引
   // vector<vec3> vertices;
@@ -246,14 +245,23 @@ class BvhTree {
   shared_ptr<Geometry> geometry{nullptr};
 
   public:
-  BvhTree() = delete;
+  BvhTree() = default;
 
   BvhTree(const shared_ptr<Geometry>& geometry)
     : geometry(geometry) {}
 
-  uint32_t size() const {
-    return this->nodeSize;
-  }
+  // void loadGeometry(const shared_ptr<Geometry> &geometry, Transform transform) {
+  //   // 深拷贝一份geometry并对其顶点应用transform的变换
+  //   this->vertices.resize(geometry->getVertices().size());
+  //   mat4 model = transform.getModel();
+  //   for (int i = 0; i < geometry->getVertices().size(); i++) {
+  //     vec3 pt = vec3(
+  //         model * vec4(glm::make_vec3(geometry->getVertices()[i].position), 1.0f));
+  //     memcpy(&vertices[i], glm::value_ptr(pt), 3 * sizeof(float));
+  //   }
+  //   this->surfaces = geometry->getSurfaces(); // 拷贝构造
+  // }
+
   void construct() {
     // 先生成根节点
     BvhNode* cur_node = new BvhNode();
@@ -261,8 +269,6 @@ class BvhTree {
       cur_node->triangles.push_back(i);
     cur_node->box    = make_shared<BoundingBox>(this->geometry->getVertices());
     cur_node->parent = nullptr;
-
-    this->nodeSize = 1;
 
     this->root = cur_node;
     // 开始划分，创建一个队列，以back进front出的顺序，记录待划分节点
@@ -336,11 +342,8 @@ class BvhTree {
         cur_node->left            = new BvhNode();
         cur_node->left->parent    = cur_node;
         cur_node->left->triangles = left_triangles;
-        cur_node->left->box       = make_shared<BoundingBox>(
-          this->geometry->getVertices(),
-          this->geometry->getSurfaces(),
-          left_triangles);
-        this->nodeSize++;
+        cur_node->left->box =
+          make_shared<BoundingBox>(this->geometry->getVertices(), this->geometry->getSurfaces(), left_triangles);
         if (left_triangles.size() > 1)
           node_buf.push_back(cur_node->left);
       }
@@ -350,7 +353,6 @@ class BvhTree {
         cur_node->right->triangles = right_triangles;
         cur_node->right->box =
           make_shared<BoundingBox>(this->geometry->getVertices(), this->geometry->getSurfaces(), right_triangles);
-        this->nodeSize++;
         if (right_triangles.size() > 1)
           node_buf.push_back(cur_node->right);
       }
@@ -376,13 +378,13 @@ class BvhTree {
   HitInfo hit(Ray ray, Transform trans) {
     // 参数：ray为世界坐标系下的光线，trans为model变换
     // 返回(是否击中, 击中位置, 距离, 三角索引)
+    
 
-
-    Ray       local_ray = ray;
-    glm::mat4 model     = trans.getModel();
-    glm::mat4 rmodel    = glm::inverse(model);
-    local_ray.origin    = glm::vec3(rmodel * glm::vec4(ray.origin, 1.0f));
-    local_ray.dir       = glm::normalize(glm::vec3(rmodel * glm::vec4(ray.dir, 0.0f)));
+    Ray local_ray = ray;
+    glm::mat4 model = trans.getModel();
+    glm::mat4 rmodel = glm::inverse(model);
+    local_ray.origin = glm::vec3(rmodel * glm::vec4(ray.origin,1.0f));
+    local_ray.dir = glm::normalize(glm::vec3(rmodel * glm::vec4(ray.dir,0.0f)));
 
     deque<BvhNode*>  buf{this->root};
     vector<BvhNode*> hit_table;   // 所有击中包围盒的叶节点
@@ -416,12 +418,12 @@ class BvhTree {
       HitInfo tmp_obj = hit_triangle(local_ray, pt[0], pt[1], pt[2]);
       if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
         tmp_obj.triangleIdx = cur_node->triangles[0];
-        target_obj          = tmp_obj;
+        target_obj           = tmp_obj;
       }
     }
     // 将交点反变换回世界坐标，并计算相应距离
 
-    target_obj.hitPos   = glm::vec3(model * glm::vec4(target_obj.hitPos, 1.0f));
+    target_obj.hitPos = glm::vec3(model * glm::vec4(target_obj.hitPos, 1.0f));
     target_obj.distance = glm::distance(ray.origin, target_obj.hitPos);
 
     return target_obj;
