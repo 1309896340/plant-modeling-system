@@ -76,3 +76,210 @@ updateAttitude --"回传"--> attitude_shadow --> updateAttitudeFromShadow --> at
 4. `updateToward()`在更新`toward`后会自动调用`updateAttitude()` 
 5. `updateAttitude()`会计算姿态角并更新`theta`、`phi`、`theta_s`、`phi_s` 但不会继续调用(否则会产生递归死循环)
 
+2025年
+
+3月6日：
+
+当前修改的结构为
+```mermaid
+classDiagram
+  direction LR
+  class Geometry{
+    <<Abstract>>
+    #vector~Vertex~ vertices
+    #vector~Surface~ surfaces
+  }
+  class GeometryRenderObject{
+    -shared_ptr~Geometry~ geometry
+    -shared_ptr~BoundingBox~ box
+    -shared_ptr~BoundingBoxRenderObject~ box_obj
+    -shared_ptr~BvhTree~ bvhtree
+    -vector~shared_ptr~BoundingBoxRenderObject~~ bvhtree_objs
+    +constructBvhTree()
+    +destroyBvhTree()
+  }
+  class BoundingBoxRenderObject{
+    -shared_ptr~BoundingBox~ box
+  }
+  class BoundingBox{
+    -vec3 minbound, maxbound
+    +updateBoundary(vertices)
+    +getCenter() vec3
+    +hit(ray) bool
+  }
+  class OpenGLContext{
+    <<Abstract>>
+    #GLuint vao,vbo,ebo
+    #size_t drawSize
+    +Transform transform
+    +GLuint texture
+    *init()
+    *update()
+  }
+  class BvhTree{
+    -BvhNode *root
+    -shared_ptr~Geometry~ geometry
+    +construct()
+    +hit(ray) bool
+  }
+  class Transform{
+    -vec3 position
+    -quat attitude
+    +translate(offset)
+    +rotate(offset)
+    +getModel() mat4
+  }
+  GeometryRenderObject *-- Geometry
+  OpenGLContext <|-- GeometryRenderObject
+  BvhTree *-- Geometry
+  GeometryRenderObject o-- BvhTree
+  OpenGLContext *-- Transform
+  GeometryRenderObject o-- BoundingBoxRenderObject
+  BoundingBoxRenderObject *-- BoundingBox
+  OpenGLContext <|-- BoundingBoxRenderObject
+```
+
+但在经过一些思考后，发现如果能将GeometryRenderObject独立出非渲染部分的逻辑和属性，形成另一个类GeometryObject，似乎能够让结构更加清晰
+
+```mermaid
+classDiagram
+	direction LR
+	class OpenGLContext{
+		<<Abstract>>
+	    #GLuint vao,vbo,ebo
+	    #size_t drawSize
+	    +GLuint texture
+	    *init()
+	    *update()
+	}
+	class GeometryRenderObject{
+		-shared_ptr~GeometryObject~ obj
+	}
+	class GeometryObject{
+		-shared_ptr~Geometry~ geometry
+		-shared_ptr~BoundingBox~ box
+		-shared_ptr~BvhTree~ bvhtree
+		+Transform transform
+	}
+	class Geometry{
+		<<Abstract>>
+		#vector~Vertex~ vertices
+		#vector~Surface~ surfaces
+	}
+	
+	class BoundingBox{
+		-vec3 minbound, maxbound
+		+updateBoundary(vertices)
+		+getCenter() vec3
+		+hit(ray) bool
+	}
+	class BoundingBoxRenderObject{
+		-shared_ptr~BoundingBox~ box
+	}
+	class Transform{
+		-vec3 position
+		-quat attitude
+		+translate(offset)
+		+rotate(offset)
+		+getModel() mat4
+	}
+	class BvhTree{
+		-BvhNode *root
+		-shared_ptr~Geometry~ geometry
+		+construct()
+		+hit(ray) bool
+	}
+	OpenGLContext <|-- GeometryRenderObject
+	GeometryRenderObject *-- GeometryObject
+	GeometryObject *-- Geometry
+	BoundingBoxRenderObject *-- BoundingBox
+	OpenGLContext <|-- BoundingBoxRenderObject
+	GeometryObject *-- Transform
+	GeometryObject o-- BvhTree
+	GeometryObject *-- BoundingBox
+```
+
+进一步思考后，考虑设计为如下结构
+
+```mermaid
+classDiagram
+	direction TB
+	class OpenGLContext{
+		<<Abstract>>
+	    #GLuint vao,vbo,ebo
+	    #size_t drawSize
+	    +GLuint texture
+	    *init()
+	    *update()
+	}
+	class GeometryRenderObject{
+		+GeometryRenderObject(geometryobject)
+		*init()
+		*update()
+	}
+	class BoundingBoxRenderObject{
+		+BoundingBoxRenderObject(boundingbox)
+		*init()
+		*update()
+	}
+	class GeometryObject{
+		-shared_ptr~Geometry~ geometry
+		-shared_ptr~BoundingBox~ box
+		-shared_ptr~BvhTree~ bvhtree
+		-shared_ptr~OpenGLContext~ context
+		+Transform transform
+		+Status status
+		+update()
+	}
+	class Status{
+		+bool collided
+		+bool visible
+		+bool listed
+		+bool lighted
+		+bool selected
+	}
+	class Geometry{
+		<<Abstract>>
+		#vector~Vertex~ vertices
+		#vector~Surface~ surfaces
+	}
+	
+	class BoundingBox{
+		-vec3 minbound, maxbound
+		-shared_ptr~OpenGLContext~ context
+		+updateBoundary(vertices)
+		+getCenter() vec3
+		+hit(ray) bool
+	}
+	class Transform{
+		-vec3 position
+		-quat attitude
+		+translate(offset)
+		+rotate(offset)
+		+getModel() mat4
+	}
+	class BvhTree{
+		-BvhNode *root
+		-shared_ptr~Geometry~ geometry
+		+construct()
+		+hit(ray) bool
+	}
+	class BvhNode{
+		+BvhNode *left, *right, *parent
+		+vector~int~ triangles
+		+shared_ptr~BoundingBox~ box
+	}
+	OpenGLContext <|-- GeometryRenderObject
+	GeometryObject *-- Geometry
+	OpenGLContext <|-- BoundingBoxRenderObject
+	BoundingBox  *-- BoundingBoxRenderObject
+	GeometryObject o-- GeometryRenderObject
+	GeometryObject *-- Transform
+	GeometryObject o-- BvhTree
+	GeometryObject *-- BoundingBox
+	GeometryObject *-- Status
+	BvhTree *-- BvhNode
+	BvhNode *-- BoundingBox
+```
+
+
