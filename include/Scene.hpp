@@ -64,7 +64,7 @@ std::mt19937_64 rdgen;
 // 仅用于该文件内的调试
 static void BK(int n) { printf("break %d\n", n); }
 
-namespace {
+namespace Scene {
 using namespace std;
 using glm::mat4;
 using glm::quat;
@@ -285,44 +285,17 @@ public:
   }
 };
 
-class OpenGLContext {
-protected:
-  GLuint vao{0}, vbo{0}, ebo{0};
-  uint32_t drawSize{0};
-
-public:
-  Transform transform{};
-  GLuint texture{0};
-  OpenGLContext(Transform transform) : transform(transform) {
-    glGenVertexArrays(1, &this->vao);
-    glBindVertexArray(this->vao);
-    glGenBuffers(1, &this->vbo);
-    glGenBuffers(1, &this->ebo);
-    glBindVertexArray(0);
-  }
-
-  virtual void init() = 0;
-  virtual void update() = 0;
-
-  GLuint getVAO() const { return this->vao; }
-  size_t getSize() const { return this->drawSize; }
-
-  virtual ~OpenGLContext() {
-    glDeleteBuffers(1, &this->vbo);
-    glDeleteBuffers(1, &this->ebo);
-    glDeleteVertexArrays(1, &this->vao);
-  }
-};
-
 class BoundingBoxRenderObject : public OpenGLContext {
 private:
-  shared_ptr<BoundingBox> box{nullptr};
+  BoundingBox *box{nullptr};
+  Transform transform;
 
 public:
   BoundingBoxRenderObject() = delete;
 
-  BoundingBoxRenderObject(shared_ptr<BoundingBox> box, Transform transform)
-      : OpenGLContext(transform), box(box) {
+  BoundingBoxRenderObject(BoundingBox *box, Transform transform)
+      : OpenGLContext(), transform(transform),
+        box(box) {
     // printf("初始化包围盒渲染对象 vao:%d vbo:%d ebo: %d\n", this->vao,
     // this->vbo, this->ebo);
   }
@@ -389,66 +362,82 @@ struct Status {
   bool lighted{true};
 };
 
-class GeometryRenderObject : public OpenGLContext {
+// 向前声明
+class GeometryRenderObject;
+
+class GeometryObject {
 private:
-public:
   string name;
-  shared_ptr<Geometry> geometry;
+  shared_ptr<Geometry> geometry{nullptr};
+  unique_ptr<BoundingBox> box{nullptr};
+  unique_ptr<BvhTree> bvhtree{nullptr};
+
+public:
+  unique_ptr<OpenGLContext> context{nullptr};
+  Transform transform;
+  Status status;
+
+  // vector<shared_ptr<BoundingBoxRenderObject>> bvhtree_objs; // 临时使用
 
   RadiosityResult radiosity; // 由compute_radiosity()更新
 
-  // 最外层包围盒
-  shared_ptr<BoundingBox> box{nullptr};
-  shared_ptr<BoundingBoxRenderObject> box_obj{nullptr};
+  string getName() const { return this->name; }
+  BvhTree *getBvhTree() { return this->bvhtree.get(); }
+  BoundingBox *getBoundingBox() { return this->box.get(); }
+  Geometry *getGeometry() { return this->geometry.get(); }
 
-  // 层次包围盒
-  shared_ptr<BvhTree> bvhtree{nullptr};
-  vector<shared_ptr<BoundingBoxRenderObject>> bvhbox_objs;
+  GeometryObject(string name, shared_ptr<Geometry> geometry,
+                 Transform transform = Transform{}, bool useBvh = false);
 
-  // 与计算着色器之间数据交换的上下文信息
-  // struct {
-  //   GLuint position_texture; // geometry中所有顶点位置
-  //   GLuint index_texture;    // geometry中所有三角索引
-  //   GLuint output_texture;   // 计算着色器输出结果
-  // } ctx;
+  void update() {
+    // 1. 组件更新
+    // geometry更新(由imgui激活对应参数的观察者实现)
+    
+    // bangdingbox更新
+    this->box->update(this->geometry->getVertices());
+    // bvhtree更新
+    if (this->bvhtree != nullptr) {
+      this->bvhtree = make_unique<BvhTree>(this->geometry.get()); // 自动析构释放资源
+      this->bvhtree->construct();
+    }
 
-  // 用于分组的属性
-  Status status;
+    // 2. 图形缓冲区更新
+    // geometry更新
+    this->context->update();
 
-  static shared_ptr<GeometryRenderObject>
-  getInstance(const string &name, const shared_ptr<Geometry> &geometry,
-              Transform transform = Transform{}) {
-    auto obj = make_shared<GeometryRenderObject>(name, geometry, transform);
-    obj->init();
-    obj->update();
-    return obj;
+    // boundingbox更新
+    this->box->context->update();
+
+    // bvhtree更新 (bvhtree->construct()后每个node->box都会重建，需要重新初始化)
+    this->bvhtree->traverse([this](BvhNode *node) {
+      node->box->context = make_unique<BoundingBoxRenderObject>(
+          node->box.get(), this->transform);
+      node->box->context->init();
+    });
   }
 
-  GeometryRenderObject(const string &name, shared_ptr<Geometry> geometry,
-                       Transform transform)
-      : OpenGLContext(transform), name(name), geometry(geometry) {
+};
 
-    printf("初始化对象:\"%s\" vao:%d vbo:%d ebo: %d\n", this->name.c_str(),
-           this->vao, this->vbo, this->ebo);
+class GeometryRenderObject : public OpenGLContext {
+private:
+  GeometryObject *obj{nullptr};
 
-    // 初始化包围盒
-    this->box = make_shared<BoundingBox>(this->geometry->getVertices());
-    // auto [box_vertices, box_indices] =
-    // this->box->genOpenGLRenderInfo(this->transform);
-    this->box_obj =
-        make_shared<BoundingBoxRenderObject>(this->box, this->transform);
-    this->box_obj->init();
-    // this->box_obj->update();
-  }
-  // ~GeometryRenderObject() {
-  //   printf("销毁对象:\"%s\" vao:%d vbo:%d ebo: %d\n", this->name.c_str(),
-  //   this->vao, this->vbo, this->ebo);
-  // }
+public:
+  GeometryRenderObject(GeometryObject *obj) : OpenGLContext(), obj(obj) {}
 
   virtual void init() {
+    if (this->obj == nullptr) {
+      cerr << "GeometryRenderObject没有初始化有效的GeometryObject实例!" << endl;
+      return;
+    }
+    Geometry *geometry = this->obj->getGeometry();
+
+    assert(geometry != nullptr &&
+           "GeometryRenderObject::init() geometry is null!");
+
     glBindVertexArray(this->vao);
-    auto &vertices = this->geometry->getVertices();
-    auto &surfaces = this->geometry->getSurfaces();
+    auto &vertices = geometry->getVertices();
+    auto &surfaces = geometry->getSurfaces();
     glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex),
                  vertices.data(), GL_STATIC_DRAW);
@@ -471,59 +460,58 @@ public:
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, surfaces.size() * sizeof(Surface),
                  surfaces.data(), GL_STATIC_DRAW);
     glBindVertexArray(0);
+
+    this->drawSize = surfaces.size() * 3;
   }
   virtual void update() {
+    if (this->obj == nullptr) {
+      cerr << "GeometryRenderObject没有初始化有效的GeometryObject实例!" << endl;
+      return;
+    }
+
+    Geometry *geometry = this->obj->getGeometry();
+    assert(geometry != nullptr &&
+           "GeometryRenderObjecy::update() geometry is null!");
     // 将geometry中的顶点属性更新到顶点缓冲区
-    auto &vertices = this->geometry->getVertices();
+    auto &vertices = geometry->getVertices();
     glBindVertexArray(this->vao);
     glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
     glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(Vertex),
                  vertices.data(), GL_DYNAMIC_DRAW);
-    auto &surfaces = this->geometry->getSurfaces();
+    auto &surfaces = geometry->getSurfaces();
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, surfaces.size() * sizeof(Surface),
                  surfaces.data(), GL_DYNAMIC_DRAW);
     glBindVertexArray(0);
-    // 更新普通包围盒
-    this->box->update(this->geometry->getVertices());
-    this->box_obj->update();
-
-    // 若启用了层次包围盒，则一同更新
-    if (this->bvhtree != nullptr)
-      this->constructBvhTree();
-  }
-
-  void constructBvhTree() {
-    // 构建bvh树，如果this->bvhtree不为空，则强制清空重建
-
-    this->destroyBvhTree();
-    this->bvhtree = make_shared<BvhTree>(this->geometry);
-    this->bvhtree->construct();
-    this->bvhtree->traverse([this](BvhNode *node) {
-      auto tmp =
-          make_shared<BoundingBoxRenderObject>(node->box, this->transform);
-      tmp->init();
-      this->bvhbox_objs.emplace_back(tmp);
-    });
-  }
-
-  void destroyBvhTree() {
-    if (this->bvhtree != nullptr) {
-      this->bvhtree.reset();
-      this->bvhbox_objs.clear();
-    }
-  }
-
-  ~GeometryRenderObject() {
-#ifndef NDEBUG
-    // printf("GeometryRenderObject : %s 被析构\n", this->name.c_str());
-    printf("销毁对象:\"%s\" vao:%d vbo:%d ebo: %d\n", this->name.c_str(),
-           this->vao, this->vbo, this->ebo);
-#endif
   }
 };
 
-void errorCallback(int code, const char *msg) {
+inline GeometryObject::GeometryObject(string name,
+                                      shared_ptr<Geometry> geometry,
+                                      Transform transform, bool useBvh)
+    : name(name), geometry(geometry), transform(transform) {
+  // 构造普通包围盒
+  this->box = make_unique<BoundingBox>(geometry->getVertices());
+  this->box->context =
+      make_unique<BoundingBoxRenderObject>(this->box.get(), this->transform);
+  this->box->context->init();
+  // (按需)构造层次包围盒
+  if (useBvh) {
+    this->bvhtree = make_unique<BvhTree>(geometry.get());
+    this->bvhtree->construct();
+    this->bvhtree->traverse([transform](BvhNode *node) {
+      node->box->context =
+          make_unique<BoundingBoxRenderObject>(node->box.get(), transform);   
+      node->box->context->init();
+    });
+  }
+
+  // 初始化图形上下文
+  this->context = make_unique<GeometryRenderObject>(this);
+  this->context->init();
+}
+
+inline void errorCallback(int code, const char *msg) {
   cerr << "errors occured! error code: " << code << endl;
   cout << msg << endl;
 }
@@ -590,10 +578,10 @@ private:
     bool start_record{true};
     ImVec2 mouse_pos{0, 0};
     // vector<string> items;
-    shared_ptr<GeometryRenderObject> cur{nullptr};
+    shared_ptr<GeometryObject> cur{nullptr};
     // int                              highlighted_idx = 0;
     int32_t selected_idx = 0;
-    vector<shared_ptr<GeometryRenderObject>> list_items;
+    vector<shared_ptr<GeometryObject>> list_items;
     bool changeGeometryListView{true};
     // ranges::filter_view<input_range Vw,
     // indirect_unary_predicate<iterator_t<Vw>> Pr>
@@ -612,7 +600,7 @@ private:
 public:
   map<string, Shader *> shaders;
   map<string, GLuint> textures;
-  vector<shared_ptr<GeometryRenderObject>> objs;
+  vector<shared_ptr<GeometryObject>> objs;
   // map<string, shared_ptr<GeometryRenderObject>> aux;
 
   map<string, shared_ptr<LineDrawer>> lines;
@@ -743,65 +731,60 @@ public:
     // shared_ptr<Geometry>             lightBall = make_shared<Sphere>(0.07f,
     // 36, 72);
     shared_ptr<Geometry> lightBall = Mesh::Sphere(0.07f, 72, 36);
-    shared_ptr<GeometryRenderObject> obj1 =
-        GeometryRenderObject::getInstance("Light", lightBall);
-    obj1->geometry->setColor(1.0f, 1.0f, 1.0f);
-    obj1->update();
+    lightBall->update();
+    lightBall->setColor(1.0f, 1.0f, 1.0f);
+    shared_ptr<GeometryObject> obj1 =
+        make_shared<GeometryObject>("Light", lightBall);
     this->addSceneObject(obj1, this->isShowLight, false, false, false);
 
     // 坐标轴
     shared_ptr<Geometry> axis = make_shared<CoordinateAxis>(0.1, 1.0f);
     // shared_ptr<Geometry>             axis = nullptr;  // todo 暂时先留空
-    shared_ptr<GeometryRenderObject> obj2 =
-        GeometryRenderObject::getInstance("Axis", axis);
+    shared_ptr<GeometryObject> obj2 = make_shared<GeometryObject>("Axis", axis);
     this->addSceneObject(obj2, this->isShowAxis, false, false, false);
 
     // 游标
     // shared_ptr<Geometry> cursor = make_shared<Sphere>(0.05, 36, 72);
     shared_ptr<Geometry> cursor = Mesh::Sphere(0.05f, 72, 36);
     cursor->setColor(1.0f, 1.0f, 0.0f);
-    shared_ptr<GeometryRenderObject> cursor_obj =
-        GeometryRenderObject::getInstance("Cursor", cursor,
-                                          Transform{vec3(0.0f, 2.0f, 0.0f)});
+    shared_ptr<GeometryObject> cursor_obj = make_shared<GeometryObject>(
+        "Cursor", cursor, Transform({vec3(0.0f, 2.0f, 0.0f)}));
     this->addSceneObject(cursor_obj, this->isShowCursor, false, false, false);
 
     // 地面
     // shared_ptr<Geometry> ground = make_shared<Ground>(20.0f, 20.0f);
     shared_ptr<Geometry> ground = Mesh::Plane(20.0f, 20.0f, 10, 10);
     // 为了让光线不在两个重叠面上抖动进而穿透，将Ground下移一个微小距离
-    shared_ptr<GeometryRenderObject> obj3 = GeometryRenderObject::getInstance(
-        "Ground", ground, Transform({0.0f, -0.1f, 0.0f}));
-    obj3->texture = this->textures["fabric"];
+    shared_ptr<GeometryObject> obj3 = make_shared<GeometryObject>(
+        "Ground", ground, Transform({0.0f, -0.1f, 0.0f}), true);
+    obj3->context->texture = this->textures["fabric"];
     this->addSceneObject(obj3, true, false, true, true);
 
     // 左侧面
     // shared_ptr<Geometry> side_left = make_shared<Plane>(20.0f, 20.0f);
     shared_ptr<Geometry> side_left = Mesh::Plane(20.0f, 20.0f, 10, 10);
     side_left->setColor(0.0f, 0.0f, 1.0f);
-    shared_ptr<GeometryRenderObject> side_left_obj =
-        GeometryRenderObject::getInstance(
-            "Side_left", side_left,
-            Transform({-10.0f, 9.9f, 0.0f}, _front, glm::radians(90.0f)));
+    shared_ptr<GeometryObject> side_left_obj = make_shared<GeometryObject>(
+        "Side_left", side_left,
+        Transform({-10.0f, 9.9f, 0.0f}, _front, glm::radians(90.0f)), true);
     this->addSceneObject(side_left_obj, true, false, true, true);
 
     // 后侧面
     // shared_ptr<Geometry> side_back = make_shared<Plane>(20.0f, 20.0f);
     shared_ptr<Geometry> side_back = Mesh::Plane(20.0f, 20.0f, 10, 10);
     side_back->setColor(0.0f, 1.0f, 0.0f);
-    shared_ptr<GeometryRenderObject> side_back_obj =
-        GeometryRenderObject::getInstance(
-            "Side_back", side_back,
-            Transform({0.0f, 9.9f, -10.0f}, _right, glm::radians(90.0f)));
+    shared_ptr<GeometryObject> side_back_obj = make_shared<GeometryObject>(
+        "Side_back", side_back,
+        Transform({0.0f, 9.9f, -10.0f}, _right, glm::radians(90.0f)), true);
     this->addSceneObject(side_back_obj, true, false, true, true);
 
     // 上侧面
     // shared_ptr<Geometry> side_top = make_shared<Plane>(20.0f, 20.0f);
     shared_ptr<Geometry> side_top = Mesh::Plane(20.0f, 20.0f, 10, 10);
     side_top->setColor(1.0f, 0.0f, 0.0f);
-    shared_ptr<GeometryRenderObject> side_top_obj =
-        GeometryRenderObject::getInstance(
-            "Side_top", side_top,
-            Transform({0.0f, 19.9f, 0.0f}, _right, glm::radians(180.0f)));
+    shared_ptr<GeometryObject> side_top_obj = make_shared<GeometryObject>(
+        "Side_top", side_top,
+        Transform({0.0f, 19.9f, 0.0f}, _right, glm::radians(180.0f)), true);
     this->addSceneObject(side_top_obj, true, false, true, true);
   }
 
@@ -993,34 +976,28 @@ public:
   // }
 
   void showAxis() {
-    shared_ptr<GeometryRenderObject> ptr =
-        findGeometryRenderObjectByName("Axis");
+    shared_ptr<GeometryObject> ptr = findGeometryObjectByName("Axis");
     if (ptr)
       ptr->status.visible = true;
   }
   void hideAxis() {
-    shared_ptr<GeometryRenderObject> ptr =
-        findGeometryRenderObjectByName("Axis");
+    shared_ptr<GeometryObject> ptr = findGeometryObjectByName("Axis");
     ptr->status.visible = false;
   }
   void showGround() {
-    shared_ptr<GeometryRenderObject> ptr =
-        findGeometryRenderObjectByName("Ground");
+    shared_ptr<GeometryObject> ptr = findGeometryObjectByName("Ground");
     ptr->status.visible = true;
   }
   void hideGround() {
-    shared_ptr<GeometryRenderObject> ptr =
-        findGeometryRenderObjectByName("Ground");
+    shared_ptr<GeometryObject> ptr = findGeometryObjectByName("Ground");
     ptr->status.visible = false;
   }
   void showCursor() {
-    shared_ptr<GeometryRenderObject> ptr =
-        findGeometryRenderObjectByName("Cursor");
+    shared_ptr<GeometryObject> ptr = findGeometryObjectByName("Cursor");
     ptr->status.visible = true;
   };
   void hideCursor() {
-    shared_ptr<GeometryRenderObject> ptr =
-        findGeometryRenderObjectByName("Cursor");
+    shared_ptr<GeometryObject> ptr = findGeometryObjectByName("Cursor");
     ptr->status.visible = false;
   };
 
@@ -1040,16 +1017,15 @@ public:
       for (int i = 0; i < cur_obj->radiosity.radiant_flux.size(); i++) {
         flux_sum += cur_obj->radiosity.radiant_flux[i];
       }
-      printf("%s : (%.2f, %.2f, %.2f)\n", cur_obj->name.c_str(), flux_sum.r,
-             flux_sum.g, flux_sum.b);
+      printf("%s : (%.2f, %.2f, %.2f)\n", cur_obj->getName().c_str(),
+             flux_sum.r, flux_sum.g, flux_sum.b);
     }
   }
 
-  shared_ptr<GeometryRenderObject>
-  findGeometryRenderObjectByName(const string &name) {
+  shared_ptr<GeometryObject> findGeometryObjectByName(const string &name) {
     auto iter = find_if(this->objs.begin(), this->objs.end(),
-                        [&](shared_ptr<GeometryRenderObject> gro) {
-                          return gro->name.compare(name) == 0;
+                        [&](shared_ptr<GeometryObject> gro) {
+                          return gro->getName().compare(name) == 0;
                         });
     if (iter == this->objs.end())
       return nullptr;
@@ -1154,9 +1130,9 @@ public:
               continue;
 
             HitInfo_imgui tmp_obj;
-            if (cur_obj->bvhtree != nullptr) {
+            if (cur_obj->getBvhTree() != nullptr) {
               // 层次包围盒求交
-              HitInfo hit_obj = cur_obj->bvhtree->hit(ray, cur_obj->transform);
+              HitInfo hit_obj = cur_obj->getBvhTree()->hit(ray, cur_obj->transform);
               if (hit_obj.isHit) {
                 // 将位置变换回世界坐标系下
                 tmp_obj.isHit = true;
@@ -1167,9 +1143,12 @@ public:
               }
             } else {
               // 普通外层包围盒求交
-              if (cur_obj->box->hit(ray)) {
+              assert(cur_obj->getBoundingBox() != nullptr &&
+                     "Scene::imgui_interact() hit测试中, 包围盒为空!");
+              BoundingBox *box = cur_obj->getBoundingBox();
+              if (box->hit(ray)) {
                 tmp_obj.isHit = true;
-                tmp_obj.hitPos = cur_obj->box->getBoxCenter();
+                tmp_obj.hitPos = box->getBoxCenter();
                 tmp_obj.distance = glm::distance(ray.origin, tmp_obj.hitPos);
                 tmp_obj.type = 0;
                 // tmp_obj.id = 0; // 后面统一获取
@@ -1196,12 +1175,15 @@ public:
                 obj->status.selected = false;
               // if (imgui.cur->listed)
               //     imgui.cur->selected = true;
-              this->camera.setAnchor(imgui.cur->box->getBoxCenter());
+              BoundingBox *box = imgui.cur->getBoundingBox();
+              assert(box != nullptr &&
+                     "Scene::imgui_interact() boundingbox为空!");
+              this->camera.setAnchor(box->getBoxCenter());
             }
             switch (target_obj.type) {
             case 1: {
-              shared_ptr<GeometryRenderObject> ptr1 =
-                  findGeometryRenderObjectByName("Cursor");
+              shared_ptr<GeometryObject> ptr1 =
+                  findGeometryObjectByName("Cursor");
               if (ptr1)
                 ptr1->transform.setPosition(target_obj.hitPos);
               // printf("选中点位置：(%.2f, %.2f, %.2f)\n",
@@ -1243,10 +1225,10 @@ public:
 
   void updateGeometryListView() {
     auto tmp_item_view =
-        this->objs |
-        ranges::views::filter(
-            [](shared_ptr<GeometryRenderObject> obj) { return obj->status.listed; });
-    this->imgui.list_items = vector<shared_ptr<GeometryRenderObject>>(
+        this->objs | ranges::views::filter([](shared_ptr<GeometryObject> obj) {
+          return obj->status.listed;
+        });
+    this->imgui.list_items = vector<shared_ptr<GeometryObject>>(
         tmp_item_view.begin(), tmp_item_view.end());
   }
   void addSoftReturnsToText(std::string &str, float multilineWidth) {
@@ -1358,8 +1340,7 @@ public:
       ImGui::SliderFloat3(TEXT("位置"), glm::value_ptr(this->light.position),
                           -20.0f, 20.f);
       // 暂时这么写
-      shared_ptr<GeometryRenderObject> ptr =
-          findGeometryRenderObjectByName("Light");
+      shared_ptr<GeometryObject> ptr = findGeometryObjectByName("Light");
       if (ptr)
         ptr->transform.setPosition(light.position);
       ImGui::TreePop();
@@ -1379,7 +1360,7 @@ public:
       if (ImGui::BeginListBox(TEXT("物体"))) {
         for (int i = 0; i < this->imgui.list_items.size(); i++) {
           const bool is_selected = (imgui.selected_idx == i);
-          if (ImGui::Selectable(this->imgui.list_items[i]->name.c_str(),
+          if (ImGui::Selectable(this->imgui.list_items[i]->getName().c_str(),
                                 is_selected))
             imgui.selected_idx = i;
         }
@@ -1403,8 +1384,8 @@ public:
       // 显示参数
       if (!imgui.list_items.empty() && this->imgui.cur != nullptr &&
           this->imgui.cur->status.listed &&
-          (!this->imgui.cur->geometry->geom_parameters.empty() ||
-           !this->imgui.cur->geometry->topo_parameters.empty())) {
+          (!this->imgui.cur->getGeometry()->geom_parameters.empty() ||
+           !this->imgui.cur->getGeometry()->topo_parameters.empty())) {
         ImGui::Text(TEXT("形体参数"));
         struct visitor {
           // uint32_t, int32_t, float, double, bool, char, glm::vec3
@@ -1416,7 +1397,7 @@ public:
             if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
               // context->imgui.cur->geometry->update();
               // printf("pname: %s\n", pname.c_str());
-              context->imgui.cur->geometry->geom_parameters[pname]->notifyAll();
+               context->imgui.cur->getGeometry()->geom_parameters[pname]->notifyAll();
               context->imgui.cur->update();
               // context->compute_radiosity();
             }
@@ -1425,7 +1406,7 @@ public:
             if (ImGui::SliderInt(this->pname.c_str(),
                                  reinterpret_cast<int *>(&arg), 2, 50)) {
               // context->imgui.cur->geometry->update();
-              context->imgui.cur->geometry->topo_parameters[pname]->notifyAll();
+               context->imgui.cur->getGeometry()->topo_parameters[pname]->notifyAll();
               context->imgui.cur->update();
               // context->compute_radiosity();
             }
@@ -1436,9 +1417,9 @@ public:
           void operator()(char &arg) {}
           void operator()(glm::vec3 &arg) {}
         };
-        for (auto &[name, arg_val] : imgui.cur->geometry->geom_parameters)
+        for (auto &[name, arg_val] : imgui.cur->getGeometry()->geom_parameters)
           std::visit(visitor(name, this), arg_val->getProp());
-        for (auto &[name, arg_val] : imgui.cur->geometry->topo_parameters)
+        for (auto &[name, arg_val] : imgui.cur->getGeometry()->topo_parameters)
           std::visit(visitor(name, this), arg_val->getProp());
       }
       ImGui::TreePop();
@@ -1650,8 +1631,9 @@ public:
     lines["Coord"]->clear();
     for (auto &cur_obj : this->objs) {
       mat4 model = cur_obj->transform.getModel();
-      for (auto &triangle : cur_obj->geometry->getSurfaces()) {
-        TriangleSampler tri(cur_obj->geometry->getVertices(), triangle, model);
+      for (auto &triangle : cur_obj->getGeometry()->getSurfaces()) {
+        TriangleSampler tri(cur_obj->getGeometry()->getVertices(), triangle,
+                            model);
         vec3 tri_center = tri.calcCenter();
         // vec3 tri_norm = tri.calcNorm();
         // printf("三角中心： (%.2f,%.2f,%.2f)\n", tri_center.x, tri_center.y,
@@ -1669,15 +1651,14 @@ public:
     lines["Coord"]->update();
   }
 
-  void addSceneObject(const shared_ptr<GeometryRenderObject> &obj,
+  void addSceneObject(const shared_ptr<GeometryObject> &obj,
                       bool visible = true, bool listed = false,
                       bool collided = false, bool lighted = false) {
 
-    shared_ptr<GeometryRenderObject> ptr =
-        findGeometryRenderObjectByName(obj->name);
+    shared_ptr<GeometryObject> ptr = findGeometryObjectByName(obj->getName());
     if (ptr != nullptr) {
       cout << "scene cannot add \"SceneObject aux\" with an existed name \""
-           << obj->name << "\"" << endl;
+           << obj->getName() << "\"" << endl;
       return;
     }
     obj->status.visible = visible;
@@ -1692,8 +1673,8 @@ public:
   void remove(const string &name) {
     // 移除objs中的物体，同时销毁相应的GeometryRenderObject，自动释放OpenGL缓冲区
     auto obj_ptr = find_if(this->objs.begin(), this->objs.end(),
-                           [name](shared_ptr<GeometryRenderObject> obj) {
-                             return obj->name.compare(name) == 0;
+                           [name](shared_ptr<GeometryObject> obj) {
+                             return obj->getName().compare(name) == 0;
                            });
     if (obj_ptr != this->objs.end())
       this->objs.erase(obj_ptr);
@@ -1707,8 +1688,9 @@ public:
            << endl;
       return;
     }
-    erase_if(this->objs, [&](shared_ptr<GeometryRenderObject> obj) {
-      return regex_match(obj->name, this->check_skeleton_node_name_pattern);
+    erase_if(this->objs, [&](shared_ptr<GeometryObject> obj) {
+      return regex_match(obj->getName(),
+                         this->check_skeleton_node_name_pattern);
     });
     this->skeletons.erase(skptr);
   }
@@ -1761,14 +1743,14 @@ public:
            Transform transform, bool visible = true, bool listed = true,
            bool collided = true, bool lighted = true) {
 
-    shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName(name);
+    shared_ptr<GeometryObject> ptr = findGeometryObjectByName(name);
     if (ptr != nullptr) {
       cout << "scene cannot add \"SceneObject aux\" with an existed name \""
            << name << "\"" << endl;
       return;
     }
 
-    ptr = GeometryRenderObject::getInstance(name, geometry, transform);
+    ptr = make_shared<GeometryObject>(name, geometry, transform, collided);
     ptr->status.visible = visible;
     ptr->status.listed = listed;
     ptr->status.collided = collided;
@@ -1784,7 +1766,7 @@ public:
     updateGeometryListView();
     auto fptr = find_if(
         this->imgui.list_items.begin(), this->imgui.list_items.end(),
-        [](shared_ptr<GeometryRenderObject> obj) { return obj->status.selected; });
+        [](shared_ptr<GeometryObject> obj) { return obj->status.selected; });
     if (fptr != this->imgui.list_items.end())
       this->imgui.selected_idx =
           std::distance(this->imgui.list_items.begin(), fptr);
@@ -1802,7 +1784,7 @@ public:
   }
 
   void addLight(const string &name, const shared_ptr<Light> &light) {
-    shared_ptr<GeometryRenderObject> ptr = findGeometryRenderObjectByName(name);
+    shared_ptr<GeometryObject> ptr = findGeometryObjectByName(name);
     if (ptr != nullptr) {
       cerr << "scene cannot add object with an existed name!" << endl;
       return;
@@ -1810,14 +1792,13 @@ public:
     this->lights.emplace_back(light);
 
     // 建立渲染对象，加入到aux中，不同子类建立的可视化对象不一样
-    shared_ptr<GeometryRenderObject> render_obj = nullptr;
+    shared_ptr<GeometryObject> render_obj = nullptr;
     switch (light->type) {
     case Light::LightType::POINT: {
       render_obj =
           // GeometryRenderObject::getInstance("Light",
           // make_shared<Sphere>(0.03, 36, 72));
-          GeometryRenderObject::getInstance("Light",
-                                            Mesh::Sphere(0.03, 72, 36));
+          make_shared<GeometryObject>("Light", Mesh::Sphere(0.03, 72, 36));
       break;
     }
     case Light::LightType::PARALLEL: {
@@ -1880,13 +1861,13 @@ public:
     HitInfo target_obj;
     // string target_name;
     for (auto &cur_obj : this->objs) {
-      assert(
-          cur_obj->bvhtree != nullptr && "element in scene.objs must construct "
-                                         "bvh-tree!"); // 假定都生成了bvh树
+      BvhTree *tree = cur_obj->getBvhTree();
+      assert(tree != nullptr && "element in scene.objs must construct "
+                                "bvh-tree!"); // 假定都生成了bvh树
 
-      HitInfo tmp_obj = cur_obj->bvhtree->hit(ray, cur_obj->transform);
+      HitInfo tmp_obj = tree->hit(ray, cur_obj->transform);
       if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
-        tmp_obj.geometryName = cur_obj->name;
+        tmp_obj.geometryName = cur_obj->getName();
         target_obj = tmp_obj;
       }
     }
@@ -2022,7 +2003,7 @@ public:
       //   continue;
 
       mat4 model = cur_obj->transform.getModel();
-      shared_ptr<Geometry> geometry = cur_obj->geometry;
+      Geometry *geometry = cur_obj->getGeometry();
 
       cur_obj->radiosity.radiant_flux.resize(geometry->getSurfaces().size());
 
@@ -2095,11 +2076,11 @@ public:
       if (PR_D >= PR)
         break; // 光线死亡，不再弹射
 
-      shared_ptr<GeometryRenderObject> gobj =
-          findGeometryRenderObjectByName(cur_obj.geometryName);
+      shared_ptr<GeometryObject> gobj =
+          findGeometryObjectByName(cur_obj.geometryName);
       assert(gobj != nullptr && "hit geometry not found!");
 
-      shared_ptr<Geometry> geometry = gobj->geometry;
+      Geometry *geometry = gobj->getGeometry();
       mat4 model = gobj->transform.getModel();
 
       TriangleSampler tri(geometry->getVertices(),
@@ -2128,8 +2109,9 @@ public:
         RayInfo ray_info;
         ray_info.BRDF =
             vec3(1.0f, 1.0f, 1.0f) / PI; // 假定理想朗伯体，完全漫反射
-        ray_info.cosine = glm::dot(
-            cur_ray.dir, tri_norm); // 出射余弦量(三角面元法线与出射光夹角)
+        ray_info.cosine =
+            glm::dot(cur_ray.dir,
+                     tri_norm);     // 出射余弦量(三角面元法线与出射光夹角)
         if (ray_info.cosine < 0.0f) // 跳过本次wi的半球采样
           continue;
         ray_stack.emplace_back(ray_info);
@@ -2278,13 +2260,13 @@ public:
       } else {
         cur_shader->set("useLight", false);
       }
-      if (cur_obj->texture != 0) {
+      if (cur_obj->context->texture != 0) {
         cur_shader->set("useTexture", true);
       } else {
         cur_shader->set("useTexture", false);
       }
       mat4 model = cur_obj->transform.getModel();
-      if (cur_obj->name == "Axis") {
+      if (cur_obj->getName() == "Axis") {
         // 只记录view中的姿态，不记录位置偏移
         // 因此需要关闭view，在这里转为model表示
         cur_shader->set("disable_view", true);
@@ -2302,13 +2284,13 @@ public:
 
       cur_shader->set("model", model);
       // 启用材质，设置材质属性
-      glBindTexture(GL_TEXTURE_2D, cur_obj->texture);
+      glBindTexture(GL_TEXTURE_2D, cur_obj->context->texture);
       // 绘制
-      glBindVertexArray(cur_obj->getVAO());
-      glDrawElements(GL_TRIANGLES, cur_obj->geometry->getSurfaces().size() * 3,
-                     GL_UNSIGNED_INT, nullptr);
+      glBindVertexArray(cur_obj->context->getVAO());
+      glDrawElements(GL_TRIANGLES, cur_obj->context->getSize(), GL_UNSIGNED_INT,
+                     nullptr);
 
-      if (cur_obj->name == "Axis") { // 恢复透视矩阵
+      if (cur_obj->getName() == "Axis") { // 恢复透视矩阵
         glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4),
                         glm::value_ptr(this->camera.getProject()));
       }
@@ -2334,18 +2316,23 @@ public:
     cur_shader->set("lineColor", glm::vec3(0.0f, 1.0f, 1.0f));
     for (auto &cur_obj : this->objs) {
       if (cur_obj->status.selected) {
-        if (cur_obj->bvhtree != nullptr && this->isShowBvhFrame) {
+        BvhTree *tree = cur_obj->getBvhTree();
+        // assert(tree != nullptr && "Scene::render() bvhtree is null!");
+        if (tree != nullptr && this->isShowBvhFrame) {
           // 渲染层次包围盒
-          for (const shared_ptr<BoundingBoxRenderObject> &bb_obj :
-               cur_obj->bvhbox_objs) {
-            glBindVertexArray(bb_obj->getVAO());
-            glDrawElements(GL_LINES, bb_obj->getSize(), GL_UNSIGNED_INT,
-                           nullptr);
-          }
+          tree->traverse([](BvhNode *node) {
+            assert(node->box->context !=nullptr);
+            glBindVertexArray(node->box->context->getVAO());
+            glDrawElements(GL_LINES, node->box->context->getSize(),
+                           GL_UNSIGNED_INT, nullptr);
+          });
         } else {
           // 渲染整体包围盒
-          glBindVertexArray(cur_obj->box_obj->getVAO());
-          glDrawElements(GL_LINES, 24, GL_UNSIGNED_INT, nullptr);
+          BoundingBox *box = cur_obj->getBoundingBox();
+          assert(box != nullptr && "Scene::render() Boundingbox失效!");
+          glBindVertexArray(box->context->getVAO());
+          glDrawElements(GL_LINES, box->context->getSize(), GL_UNSIGNED_INT,
+                         nullptr);
         }
       }
     }
@@ -2388,9 +2375,9 @@ public:
     glClear(GL_DEPTH_BUFFER_BIT);
     for (auto &cur_obj : this->objs) {
       cur_shader->set("model", cur_obj->transform.getModel());
-      glBindVertexArray(cur_obj->getVAO());
-      glDrawElements(GL_TRIANGLES, cur_obj->geometry->getSurfaces().size() * 3,
-                     GL_UNSIGNED_INT, nullptr);
+      glBindVertexArray(cur_obj->context->getVAO());
+      glDrawElements(GL_TRIANGLES, cur_obj->context->getSize(), GL_UNSIGNED_INT,
+                     nullptr);
     }
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
   }
@@ -2455,7 +2442,8 @@ public:
   }
 };
 
-void framebufferResizeCallback(GLFWwindow *window, int width, int height) {
+inline void framebufferResizeCallback(GLFWwindow *window, int width,
+                                      int height) {
   Scene *scene = (Scene *)glfwGetWindowUserPointer(window);
   assert(scene != nullptr && "scene is nullptr");
   scene->setWindowSize(width, height);
@@ -2466,4 +2454,4 @@ void framebufferResizeCallback(GLFWwindow *window, int width, int height) {
   scene->resize_framebuffer();
 }
 
-} // namespace
+} // namespace Scene

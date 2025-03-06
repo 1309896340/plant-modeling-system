@@ -10,7 +10,7 @@ using namespace std;
 int main(int argc, char** argv) {
 
   try {
-    Scene scene;
+    Scene::Scene scene;
 
     scene.showAxis();
     scene.camera.setPosition(glm::vec3(26.28f, 17.37f, 19.27f));
@@ -25,9 +25,9 @@ int main(int argc, char** argv) {
     scene.add("Cylinder", Composition::Cylinder(2.5f, 5.0f, 72, 10, 20), {5.0f, 0.05f, 0.0f});
     scene.add("Cone", Composition::Cone(2.0f, 3.0f, 72, 10, 20), {0.0f, 0.05f, 6.0f});
 
-    for(auto &obj: scene.objs)
-      if (obj->status.collided)
-          obj->constructBvhTree();
+    // for(auto &obj: scene.objs)
+    //   if (obj->status.collided)
+    //       obj->constructBvhTree();
 
     scene.mainloop();
   }

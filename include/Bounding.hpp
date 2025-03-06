@@ -20,7 +20,9 @@
 #include <Eigen/Dense>
 
 #include "Geometry.hpp"
+#include "Renderer.hpp"
 #include "Transform.hpp"
+
 
 namespace {
 using namespace std;
@@ -130,9 +132,11 @@ HitInfo hit_triangle(Ray ray, const vec3& p1, const vec3& p2, const vec3& p3) {
 }
 
 class BoundingBox {
+  private:
   public:
-  vec3 min_bound{0.0f, 0.0f, 0.0f};
-  vec3 max_bound{0.0f, 0.0f, 0.0f};
+  unique_ptr<OpenGLContext> context{nullptr};
+  vec3                      min_bound{0.0f, 0.0f, 0.0f};
+  vec3                      max_bound{0.0f, 0.0f, 0.0f};
   // BoundingBox() = default;
   BoundingBox(vec3 min_bound, vec3 max_bound)
     : min_bound(min_bound)
@@ -231,7 +235,7 @@ struct BvhNode {
 
   // 记录该节点的包围盒所包含的三角的索引，被索引目标是BvhTree::surfaces
   vector<uint32_t>        triangles;
-  shared_ptr<BoundingBox> box;
+  unique_ptr<BoundingBox> box;
 };
 
 class BvhTree {
@@ -242,12 +246,12 @@ class BvhTree {
   // 为了避免数据容易，这里修改为直接对Geometry对象进行索引
   // vector<vec3> vertices;
   // vector<Surface> surfaces;
-  shared_ptr<Geometry> geometry{nullptr};
+  Geometry *geometry{nullptr};
 
   public:
-  BvhTree() = default;
+  BvhTree() = delete;
 
-  BvhTree(const shared_ptr<Geometry>& geometry)
+  BvhTree(Geometry *geometry)
     : geometry(geometry) {}
 
   // void loadGeometry(const shared_ptr<Geometry> &geometry, Transform transform) {
@@ -267,7 +271,7 @@ class BvhTree {
     BvhNode* cur_node = new BvhNode();
     for (int i = 0; i < this->geometry->getSurfaces().size(); i++)
       cur_node->triangles.push_back(i);
-    cur_node->box    = make_shared<BoundingBox>(this->geometry->getVertices());
+    cur_node->box    = make_unique<BoundingBox>(this->geometry->getVertices());
     cur_node->parent = nullptr;
 
     this->root = cur_node;
@@ -343,7 +347,7 @@ class BvhTree {
         cur_node->left->parent    = cur_node;
         cur_node->left->triangles = left_triangles;
         cur_node->left->box =
-          make_shared<BoundingBox>(this->geometry->getVertices(), this->geometry->getSurfaces(), left_triangles);
+          make_unique<BoundingBox>(this->geometry->getVertices(), this->geometry->getSurfaces(), left_triangles);
         if (left_triangles.size() > 1)
           node_buf.push_back(cur_node->left);
       }
@@ -352,7 +356,7 @@ class BvhTree {
         cur_node->right->parent    = cur_node;
         cur_node->right->triangles = right_triangles;
         cur_node->right->box =
-          make_shared<BoundingBox>(this->geometry->getVertices(), this->geometry->getSurfaces(), right_triangles);
+          make_unique<BoundingBox>(this->geometry->getVertices(), this->geometry->getSurfaces(), right_triangles);
         if (right_triangles.size() > 1)
           node_buf.push_back(cur_node->right);
       }
@@ -378,13 +382,13 @@ class BvhTree {
   HitInfo hit(Ray ray, Transform trans) {
     // 参数：ray为世界坐标系下的光线，trans为model变换
     // 返回(是否击中, 击中位置, 距离, 三角索引)
-    
 
-    Ray local_ray = ray;
-    glm::mat4 model = trans.getModel();
-    glm::mat4 rmodel = glm::inverse(model);
-    local_ray.origin = glm::vec3(rmodel * glm::vec4(ray.origin,1.0f));
-    local_ray.dir = glm::normalize(glm::vec3(rmodel * glm::vec4(ray.dir,0.0f)));
+
+    Ray       local_ray = ray;
+    glm::mat4 model     = trans.getModel();
+    glm::mat4 rmodel    = glm::inverse(model);
+    local_ray.origin    = glm::vec3(rmodel * glm::vec4(ray.origin, 1.0f));
+    local_ray.dir       = glm::normalize(glm::vec3(rmodel * glm::vec4(ray.dir, 0.0f)));
 
     deque<BvhNode*>  buf{this->root};
     vector<BvhNode*> hit_table;   // 所有击中包围盒的叶节点
@@ -418,12 +422,12 @@ class BvhTree {
       HitInfo tmp_obj = hit_triangle(local_ray, pt[0], pt[1], pt[2]);
       if (tmp_obj.isHit && tmp_obj.distance < target_obj.distance) {
         tmp_obj.triangleIdx = cur_node->triangles[0];
-        target_obj           = tmp_obj;
+        target_obj          = tmp_obj;
       }
     }
     // 将交点反变换回世界坐标，并计算相应距离
 
-    target_obj.hitPos = glm::vec3(model * glm::vec4(target_obj.hitPos, 1.0f));
+    target_obj.hitPos   = glm::vec3(model * glm::vec4(target_obj.hitPos, 1.0f));
     target_obj.distance = glm::distance(ray.origin, target_obj.hitPos);
 
     return target_obj;
