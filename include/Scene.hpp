@@ -381,6 +381,14 @@ public:
   }
 };
 
+struct Status {
+  bool selected{false};
+  bool visible{true};
+  bool collided{false};
+  bool listed{true};
+  bool lighted{true};
+};
+
 class GeometryRenderObject : public OpenGLContext {
 private:
 public:
@@ -405,11 +413,7 @@ public:
   // } ctx;
 
   // 用于分组的属性
-  bool selected{false};
-  bool visible{true};
-  bool collided{false};
-  bool listed{true};
-  bool lighted{true};
+  Status status;
 
   static shared_ptr<GeometryRenderObject>
   getInstance(const string &name, const shared_ptr<Geometry> &geometry,
@@ -992,32 +996,32 @@ public:
     shared_ptr<GeometryRenderObject> ptr =
         findGeometryRenderObjectByName("Axis");
     if (ptr)
-      ptr->visible = true;
+      ptr->status.visible = true;
   }
   void hideAxis() {
     shared_ptr<GeometryRenderObject> ptr =
         findGeometryRenderObjectByName("Axis");
-    ptr->visible = false;
+    ptr->status.visible = false;
   }
   void showGround() {
     shared_ptr<GeometryRenderObject> ptr =
         findGeometryRenderObjectByName("Ground");
-    ptr->visible = true;
+    ptr->status.visible = true;
   }
   void hideGround() {
     shared_ptr<GeometryRenderObject> ptr =
         findGeometryRenderObjectByName("Ground");
-    ptr->visible = false;
+    ptr->status.visible = false;
   }
   void showCursor() {
     shared_ptr<GeometryRenderObject> ptr =
         findGeometryRenderObjectByName("Cursor");
-    ptr->visible = true;
+    ptr->status.visible = true;
   };
   void hideCursor() {
     shared_ptr<GeometryRenderObject> ptr =
         findGeometryRenderObjectByName("Cursor");
-    ptr->visible = false;
+    ptr->status.visible = false;
   };
 
   void show_info() {
@@ -1030,7 +1034,7 @@ public:
   void printRadiosityInfo() {
     printf("============================output============================\n");
     for (auto &cur_obj : this->objs) {
-      if (!cur_obj->listed)
+      if (!cur_obj->status.listed)
         continue;
       vec3 flux_sum{0.0f, 0.0f, 0.0f};
       for (int i = 0; i < cur_obj->radiosity.radiant_flux.size(); i++) {
@@ -1146,7 +1150,7 @@ public:
           // bool isisHit = false;
           HitInfo_imgui target_obj;
           for (auto &cur_obj : this->objs) {
-            if (!cur_obj->collided)
+            if (!cur_obj->status.collided)
               continue;
 
             HitInfo_imgui tmp_obj;
@@ -1189,7 +1193,7 @@ public:
             this->imgui.selected_idx = target_obj.id; // 可能会赋值-1
             if (imgui.cur != nullptr) {
               for (auto &obj : this->objs) // 互斥选中
-                obj->selected = false;
+                obj->status.selected = false;
               // if (imgui.cur->listed)
               //     imgui.cur->selected = true;
               this->camera.setAnchor(imgui.cur->box->getBoxCenter());
@@ -1241,7 +1245,7 @@ public:
     auto tmp_item_view =
         this->objs |
         ranges::views::filter(
-            [](shared_ptr<GeometryRenderObject> obj) { return obj->listed; });
+            [](shared_ptr<GeometryRenderObject> obj) { return obj->status.listed; });
     this->imgui.list_items = vector<shared_ptr<GeometryRenderObject>>(
         tmp_item_view.begin(), tmp_item_view.end());
   }
@@ -1382,12 +1386,12 @@ public:
         // 回传选中状态
         if (!this->imgui.list_items.empty()) {
           for (int i = 0; i < this->imgui.list_items.size(); i++)
-            this->imgui.list_items[i]->selected = false;
+            this->imgui.list_items[i]->status.selected = false;
           // assert(this->imgui.selected_idx != -1);
           if (this->imgui.selected_idx != -1) {
 
             this->imgui.cur = this->imgui.list_items[this->imgui.selected_idx];
-            this->imgui.cur->selected = true;
+            this->imgui.cur->status.selected = true;
             // printf("选中项为 : %s\n",
             // imgui.list_items[this->imgui.selected_idx]->name.c_str());
           }
@@ -1398,7 +1402,7 @@ public:
 
       // 显示参数
       if (!imgui.list_items.empty() && this->imgui.cur != nullptr &&
-          this->imgui.cur->listed &&
+          this->imgui.cur->status.listed &&
           (!this->imgui.cur->geometry->geom_parameters.empty() ||
            !this->imgui.cur->geometry->topo_parameters.empty())) {
         ImGui::Text(TEXT("形体参数"));
@@ -1676,10 +1680,10 @@ public:
            << obj->name << "\"" << endl;
       return;
     }
-    obj->visible = visible;
-    obj->listed = listed;
-    obj->collided = collided;
-    obj->lighted = lighted;
+    obj->status.visible = visible;
+    obj->status.listed = listed;
+    obj->status.collided = collided;
+    obj->status.lighted = lighted;
     this->objs.emplace_back(obj);
 
     updateGeometryListView();
@@ -1765,22 +1769,22 @@ public:
     }
 
     ptr = GeometryRenderObject::getInstance(name, geometry, transform);
-    ptr->visible = visible;
-    ptr->listed = listed;
-    ptr->collided = collided;
-    ptr->lighted = lighted;
+    ptr->status.visible = visible;
+    ptr->status.listed = listed;
+    ptr->status.collided = collided;
+    ptr->status.lighted = lighted;
     this->objs.emplace_back(ptr);
 
     // 加入对场景元素的默认选择，总是选中最后加入的物体，并取消选择其他物体
     for (auto &cur_obj : this->objs)
-      cur_obj->selected = false;
-    ptr->selected = true;
+      cur_obj->status.selected = false;
+    ptr->status.selected = true;
 
     // 初始化Scene::imgui::selected_idx
     updateGeometryListView();
     auto fptr = find_if(
         this->imgui.list_items.begin(), this->imgui.list_items.end(),
-        [](shared_ptr<GeometryRenderObject> obj) { return obj->selected; });
+        [](shared_ptr<GeometryRenderObject> obj) { return obj->status.selected; });
     if (fptr != this->imgui.list_items.end())
       this->imgui.selected_idx =
           std::distance(this->imgui.list_items.begin(), fptr);
@@ -2012,7 +2016,7 @@ public:
     lines["Ray"]->clear();
     // 遍历每个场景(非aux)物体
     for (auto &cur_obj : this->objs) {
-      if (!cur_obj->listed)
+      if (!cur_obj->status.listed)
         continue;
       // if (!cur_obj->isSelected) // 暂时只计算被选中目标
       //   continue;
@@ -2261,9 +2265,9 @@ public:
     for (auto &cur_obj : this->objs) {
       glViewport(0, 0, width, height);
       cur_shader->set("disable_view", false);
-      if (!cur_obj->visible)
+      if (!cur_obj->status.visible)
         continue;
-      if (cur_obj->lighted) {
+      if (cur_obj->status.lighted) {
         cur_shader->set("useLight", true);
         cur_shader->set("lightPos", this->light.position);
         cur_shader->set("lightColor", this->light.color);
@@ -2329,7 +2333,7 @@ public:
     cur_shader->use();
     cur_shader->set("lineColor", glm::vec3(0.0f, 1.0f, 1.0f));
     for (auto &cur_obj : this->objs) {
-      if (cur_obj->selected) {
+      if (cur_obj->status.selected) {
         if (cur_obj->bvhtree != nullptr && this->isShowBvhFrame) {
           // 渲染层次包围盒
           for (const shared_ptr<BoundingBoxRenderObject> &bb_obj :

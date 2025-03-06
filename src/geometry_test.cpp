@@ -26,7 +26,7 @@ int main(int argc, char** argv) {
     scene.add("Cone", Composition::Cone(2.0f, 3.0f, 72, 10, 20), {0.0f, 0.05f, 6.0f});
 
     for(auto &obj: scene.objs)
-      if (obj->collided)
+      if (obj->status.collided)
           obj->constructBvhTree();
 
     scene.mainloop();
