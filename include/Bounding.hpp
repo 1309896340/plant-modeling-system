@@ -150,9 +150,9 @@ class BoundingBox {
     this->update(vertices, surfaces, indices);
   }
 
-  OpenGLContext *getContext() const {
-    return this->context.get();
-  }
+  // OpenGLContext *getContext() const {
+  //   return this->context.get();
+  // }
 
   void update(const vector<Vertex>& vertices, const vector<Surface>& surfaces, const vector<uint32_t>& indices) {
     vec3 default_bound = glm::make_vec3(vertices[surfaces[indices[0]].tidx[0]].position);

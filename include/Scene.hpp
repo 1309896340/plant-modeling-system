@@ -178,7 +178,7 @@ struct RadiosityResult {
   vector<vec3> radiant_flux;
 };
 
-Pixel cubemap_sample(PngImage* cubmaps, vec3 dir) {
+inline Pixel cubemap_sample(PngImage* cubmaps, vec3 dir) {
   dir = glm::normalize(dir);
   // cubmaps顺序 px nx py ny pz nz
   uint8_t map_idx{0};
@@ -305,10 +305,10 @@ class BoundingBoxRenderObject : public OpenGLContext {
     // printf("初始化包围盒渲染对象 vao:%d vbo:%d ebo: %d\n", this->vao,
     // this->vbo, this->ebo);
   }
-  ~BoundingBoxRenderObject() {
-    // printf("销毁包围盒渲染对象 vao:%d vbo:%d ebo: %d\n", this->vao,
-    // this->vbo, this->ebo);
-  }
+  // ~BoundingBoxRenderObject() {
+  //   printf("销毁包围盒渲染对象 vao:%d vbo:%d ebo: %d\n", this->vao,
+  //   this->vbo, this->ebo);
+  // }
 
   tuple<vector<vec3>, vector<uint32_t>> genOpenGLRawData() {
     vec3         max_xyz  = this->box->max_bound;
@@ -405,7 +405,7 @@ class GeometryObject {
     this->context->update();
 
     // boundingbox更新
-    this->box->getContext()->update();
+    this->box->context->update();
 
     // bvhtree更新 (bvhtree->construct()后每个node->box都会重建，需要重新初始化)
     this->bvhtree->traverse([this](BvhNode* node) {
@@ -480,6 +480,8 @@ class GeometryRenderObject : public OpenGLContext {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, surfaces.size() * sizeof(Surface), surfaces.data(), GL_DYNAMIC_DRAW);
     glBindVertexArray(0);
+
+    this->drawSize = surfaces.size() * 3;
   }
 };
 
@@ -543,6 +545,25 @@ struct FramebufferInfo {
   GLuint ebo{0};
 };
 
+
+struct ImguiInfo {
+  bool                               start_record{true};
+  ImVec2                             mouse_pos{0, 0};
+  shared_ptr<GeometryObject>         cur{nullptr};
+  int32_t                            selected_idx = 0;
+  vector<shared_ptr<GeometryObject>> list_items;
+  bool                               changeGeometryListView{true};
+};
+
+struct LSystemInfo {
+  const size_t                 LSYSTEM_MAX_LENGTH{1000};
+  string                       axiom;
+  vector<string>               productions;
+  uint32_t                     iter_n{0};
+  shared_ptr<LSystem::LSystem> config{nullptr};
+  shared_ptr<Skeleton>         skeleton{nullptr};
+};
+
 class Scene {
   private:
   const float  FPS_SHOW_SPAN = 1.0f;   // 大约每过1秒显示一下fps
@@ -557,12 +578,14 @@ class Scene {
 
   GLuint ubo{0};
 
-  // 用于CPU端存储天空盒图片
   PngImage cubemaps[6];
 
   SkyboxInfo      skybox;
   DepthmapInfo    depthmap;
   FramebufferInfo framebuffer;
+
+  ImguiInfo   imgui;
+  LSystemInfo lsystem;
 
   bool isShowGround{true};
   bool isShowAxis{true};
@@ -573,42 +596,14 @@ class Scene {
   bool isShowCursor{false};
   bool isShowBvhFrame{false};
 
-  // imgui的状态变量
-  struct ImguiInfo {
-    bool   start_record{true};
-    ImVec2 mouse_pos{0, 0};
-    // vector<string> items;
-    shared_ptr<GeometryObject> cur{nullptr};
-    // int                              highlighted_idx = 0;
-    int32_t                            selected_idx = 0;
-    vector<shared_ptr<GeometryObject>> list_items;
-    bool                               changeGeometryListView{true};
-    // ranges::filter_view<input_range Vw,
-    // indirect_unary_predicate<iterator_t<Vw>> Pr>
-  } imgui;
-
-  struct {
-    const size_t   LSYSTEM_MAX_LENGTH{1000};
-    string         axiom;
-    vector<string> productions;
-    uint32_t       iter_n{0};
-    // shared_ptr<LSystem::D0L_System> lsys{nullptr};
-    shared_ptr<LSystem::LSystem> config{nullptr};
-    shared_ptr<Skeleton>         skeleton{nullptr};
-  } lsystem;
 
   public:
   map<string, Shader*>               shaders;
   map<string, GLuint>                textures;
   vector<shared_ptr<GeometryObject>> objs;
-  // map<string, shared_ptr<GeometryRenderObject>> aux;
 
   map<string, shared_ptr<LineDrawer>> lines;
   map<string, SkeletonObject>         skeletons;
-
-  // shared_ptr<GeometryRenderObject> axis{nullptr};
-
-  // shared_ptr<LineDrawer> ray_buffer{nullptr};
 
   // 开发阶段暂时忽略渲染逻辑，实现lights中光源模拟辐照度计算
   vector<shared_ptr<Light>>
@@ -643,9 +638,6 @@ class Scene {
     glEnable(GL_CULL_FACE);     // 开启面剔除
     glFrontFace(GL_CW);         // 顺时针索引顺序为正面
     glLineWidth(1.5f);
-    // #ifdef ENBALE_POLYGON_VISUALIZATION
-    //     glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    // #endif
 
     glfwSetFramebufferSizeCallback(this->window, framebufferResizeCallback);
     // glfwSetErrorCallback(errorCallback);
@@ -704,9 +696,6 @@ class Scene {
   }
 
   void init_lsystem() {
-    // this->lsystem.axiom.resize(this->lsystem.LSYSTEM_MAX_LENGTH, 0);
-    // this->lsystem.production.resize(this->lsystem.LSYSTEM_MAX_LENGTH, 0);
-    //
     // 初始化一个示例
     string production = "S(r,h)->C(r,h)[RZ(30)RY(90)S(r,h*0.8)]"
                         "[RZ(-30)RY(90)S(r,h*0.8)]";
@@ -714,20 +703,14 @@ class Scene {
     this->lsystem.axiom += axiom;
     this->lsystem.productions.push_back(production);
 
-    // this->lsystem.lsys =
-    // make_shared<LSystem::D0L_System>(this->lsystem.axiom,
-    // this->lsystem.productions);
     this->lsystem.config = make_shared<LSystem::LSystem>(
       this->lsystem.axiom,
       this->lsystem.productions);
-    // throw runtime_error("Scene::init_lsystem()中初始化this->lsys成员！");
   }
 
   void init_scene_obj() {
     // 光源
-    // shared_ptr<Geometry>             lightBall = make_shared<Sphere>(0.07f,
-    // 36, 72);
-    shared_ptr<Geometry> lightBall = Mesh::Sphere(0.07f, 72, 36);
+    shared_ptr<Geometry> lightBall = Mesh::Sphere(0.07f, 36, 18);
     lightBall->update();
     lightBall->setColor(1.0f, 1.0f, 1.0f);
     shared_ptr<GeometryObject> obj1 =
@@ -735,14 +718,12 @@ class Scene {
     this->addSceneObject(obj1, this->isShowLight, false, false, false);
 
     // 坐标轴
-    shared_ptr<Geometry> axis = make_shared<CoordinateAxis>(0.1, 1.0f);
-    // shared_ptr<Geometry>             axis = nullptr;  // todo 暂时先留空
+    shared_ptr<Geometry>       axis = make_shared<CoordinateAxis>(0.1, 1.0f);
     shared_ptr<GeometryObject> obj2 = make_shared<GeometryObject>("Axis", axis);
     this->addSceneObject(obj2, this->isShowAxis, false, false, false);
 
     // 游标
-    // shared_ptr<Geometry> cursor = make_shared<Sphere>(0.05, 36, 72);
-    shared_ptr<Geometry> cursor = Mesh::Sphere(0.05f, 72, 36);
+    shared_ptr<Geometry> cursor = Mesh::Sphere(0.05f, 36, 18);
     cursor->setColor(1.0f, 1.0f, 0.0f);
     shared_ptr<GeometryObject> cursor_obj = make_shared<GeometryObject>(
       "Cursor",
@@ -1385,46 +1366,37 @@ class Scene {
       // 显示参数
       if (!imgui.list_items.empty() && this->imgui.cur != nullptr &&
           this->imgui.cur->status.listed &&
-          (!this->imgui.cur->getGeometry()->geom_parameters.empty() ||
-           !this->imgui.cur->getGeometry()->topo_parameters.empty())) {
+          !this->imgui.cur->getGeometry()->parameters.empty()) {
         ImGui::Text(TEXT("形体参数"));
-        struct visitor {
-          // uint32_t, int32_t, float, double, bool, char, glm::vec3
-          string pname;
-          Scene* context{nullptr};
-          visitor(string name, Scene* context)
-            : pname(name)
-            , context(context) {}
-          void operator()(float& arg) {
-            if (ImGui::SliderFloat(this->pname.c_str(), &arg, 0.0f, 10.0f)) {
-              // context->imgui.cur->geometry->update();
-              // printf("pname: %s\n", pname.c_str());
-              context->imgui.cur->getGeometry()->geom_parameters[pname]->notifyAll();
-              context->imgui.cur->update();
-              // context->compute_radiosity();
+        for (auto& [name, arg_val] : imgui.cur->getGeometry()->parameters)
+          std::visit([name, this](auto&& arg) {
+            using T = decay_t<decltype(arg)>;
+            if constexpr (is_same_v<T, float>) {
+
+              if (ImGui::SliderFloat(name.c_str(), &arg, 0.0f, 10.0f)) {
+                // context->imgui.cur->geometry->update();
+                // printf("pname: %s\n", pname.c_str());
+                this->imgui.cur->getGeometry()->parameters[name]->notifyAll();
+                this->imgui.cur->update();
+                // context->compute_radiosity();
+              }
             }
-          }
-          void operator()(uint32_t& arg) {
-            if (ImGui::SliderInt(this->pname.c_str(),
-                                 reinterpret_cast<int*>(&arg),
-                                 2,
-                                 50)) {
-              // context->imgui.cur->geometry->update();
-              context->imgui.cur->getGeometry()->topo_parameters[pname]->notifyAll();
-              context->imgui.cur->update();
-              // context->compute_radiosity();
+            else if constexpr (is_same_v<T, uint32_t>) {
+
+              if (ImGui::SliderInt(name.c_str(),
+                                   reinterpret_cast<int*>(&arg),
+                                   2,
+                                   50)) {
+                // context->imgui.cur->geometry->update();
+                this->imgui.cur->getGeometry()->parameters[name]->notifyAll();
+                this->imgui.cur->update();
+                // context->compute_radiosity();
+              }
             }
-          }
-          void operator()(int32_t& arg) {}
-          void operator()(double& arg) {}
-          void operator()(bool& arg) {}
-          void operator()(char& arg) {}
-          void operator()(glm::vec3& arg) {}
-        };
-        for (auto& [name, arg_val] : imgui.cur->getGeometry()->geom_parameters)
-          std::visit(visitor(name, this), arg_val->getProp());
-        for (auto& [name, arg_val] : imgui.cur->getGeometry()->topo_parameters)
-          std::visit(visitor(name, this), arg_val->getProp());
+            else {
+            }
+          },
+                     arg_val->getProp());
       }
       ImGui::TreePop();
     }
