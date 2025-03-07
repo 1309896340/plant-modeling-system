@@ -376,15 +376,15 @@ class GeometryObject {
 
   public:
   unique_ptr<OpenGLContext> context{nullptr};
-  Transform transform;
-  Status    status;
+  Transform                 transform;
+  Status                    status;
 
   RadiosityResult radiosity;   // 由compute_radiosity()更新
 
-  string         getName() const { return this->name; }
-  BvhTree*       getBvhTree() { return this->bvhtree.get(); }
-  BoundingBox*   getBoundingBox() { return this->box.get(); }
-  Geometry*      getGeometry() { return this->geometry.get(); }
+  string       getName() const { return this->name; }
+  BvhTree*     getBvhTree() { return this->bvhtree.get(); }
+  BoundingBox* getBoundingBox() { return this->box.get(); }
+  Geometry*    getGeometry() { return this->geometry.get(); }
 
   GeometryObject(string name, shared_ptr<Geometry> geometry, Transform transform = Transform{}, bool useBvh = false);
 
@@ -1712,7 +1712,7 @@ class Scene {
       stringstream node_geom_name;
       node_geom_name << name << "#" << geo_id;
 
-      this->add(node_geom_name.str(), node->obj, node->getAbsTransform(), true, false, true, true);
+      this->add(node_geom_name.str(), node->obj, node->getAbsTransform(), true, false, true, true, false);
 
       // if (!node->children.empty()) {
       //   // 调试，给每个节点加入一个Axis
@@ -1734,7 +1734,7 @@ class Scene {
     this->add(name, skeleton, Transform{});
   }
 
-  void add(const string& name, const shared_ptr<Geometry>& geometry, Transform transform, bool visible = true, bool listed = true, bool collided = true, bool lighted = true) {
+  void add(const string& name, const shared_ptr<Geometry>& geometry, Transform transform, bool visible = true, bool listed = true, bool collided = true, bool lighted = true, bool useBvh = true) {
 
     shared_ptr<GeometryObject> ptr = findGeometryObjectByName(name);
     if (ptr != nullptr) {
@@ -1743,7 +1743,7 @@ class Scene {
       return;
     }
 
-    ptr                  = make_shared<GeometryObject>(name, geometry, transform, collided);
+    ptr                  = make_shared<GeometryObject>(name, geometry, transform, useBvh);
     ptr->status.visible  = visible;
     ptr->status.listed   = listed;
     ptr->status.collided = collided;

@@ -35,7 +35,7 @@ int main(void) {
 
     // ================================================================================
 
-    Scene scene;
+    Scene::Scene scene;
     scene.hideAxis();
     scene.camera.setPosition({4.0f, 5.0f, 13.0f});
     scene.camera.lookAt({0.0f, 3.0f, 0.0f});

@@ -13,7 +13,7 @@
 using namespace std;
 int main(int argc, char** argv) {
   try {
-    Scene scene;
+    Scene::Scene scene;
 
     //   scene.showAxis();
     scene.camera.lookAt({0.0f, 4.0f, 0.0f});
