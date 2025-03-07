@@ -35,9 +35,11 @@ public:
 
   void setPosition(vec3 new_position) { this->position = new_position; };
   vec3 getPosition() const { return this->position; };
+  vec3 &getPosition() { return this->position; };
 
   void setAttitude(quat attitude) { this->attitude = attitude; }
   quat getAttitude() const { return this->attitude; };
+  quat &getAttitude(){ return this->attitude; };
 
   void translate(vec3 offset) {
     // 绝对空间偏移
