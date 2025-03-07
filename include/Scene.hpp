@@ -723,8 +723,9 @@ class Scene {
     this->addSceneObject(obj2, this->isShowAxis, false, false, false);
 
     // 游标
-    shared_ptr<Geometry> cursor = Mesh::Sphere(0.05f, 36, 18);
-    cursor->setColor(1.0f, 1.0f, 0.0f);
+    shared_ptr<Geometry>       cursor = make_shared<CoordinateAxis>(0.02, 0.5f);
+    // shared_ptr<Geometry> cursor = Mesh::Sphere(0.05f, 36, 18);
+    // cursor->setColor(1.0f, 1.0f, 0.0f);
     shared_ptr<GeometryObject> cursor_obj = make_shared<GeometryObject>(
       "Cursor",
       cursor,
