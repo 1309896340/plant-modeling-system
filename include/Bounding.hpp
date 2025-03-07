@@ -137,7 +137,7 @@ class BoundingBox {
   unique_ptr<OpenGLContext> context{nullptr};
   vec3                      min_bound{0.0f, 0.0f, 0.0f};
   vec3                      max_bound{0.0f, 0.0f, 0.0f};
-  // BoundingBox() = default;
+  BoundingBox() = delete;
   BoundingBox(vec3 min_bound, vec3 max_bound)
     : min_bound(min_bound)
     , max_bound(max_bound) {}
@@ -148,6 +148,10 @@ class BoundingBox {
   BoundingBox(const vector<Vertex>& vertices, const vector<Surface>& surfaces, const vector<uint32_t>& indices) {
     // 传入三角形面元来更新包围盒
     this->update(vertices, surfaces, indices);
+  }
+
+  OpenGLContext *getContext() const {
+    return this->context.get();
   }
 
   void update(const vector<Vertex>& vertices, const vector<Surface>& surfaces, const vector<uint32_t>& indices) {
