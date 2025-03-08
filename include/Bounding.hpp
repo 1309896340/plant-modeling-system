@@ -134,7 +134,7 @@ HitInfo hit_triangle(Ray ray, const vec3& p1, const vec3& p2, const vec3& p3) {
 class BoundingBox {
   private:
   public:
-  unique_ptr<OpenGLContext> context{nullptr};
+  // unique_ptr<OpenGLContext> context{nullptr};
   vec3                      min_bound{0.0f, 0.0f, 0.0f};
   vec3                      max_bound{0.0f, 0.0f, 0.0f};
   BoundingBox() = delete;
@@ -190,25 +190,6 @@ class BoundingBox {
   float getYWidth() const { return max_bound.y - min_bound.y; }
   float getZWidth() const { return max_bound.z - min_bound.z; }
 
-  // tuple<vector<vec3>, vector<uint32_t>>
-  // genOpenGLRenderInfo(Transform trans) const {
-  //   // 用于将包围盒的min_bound,max_bound生成可用GL_LINES绘制的顶点和索引数据
-  //   vec3         max_xyz  = this->max_bound;
-  //   vec3         min_xyz  = this->min_bound;
-  //   vector<vec3> vertices = {min_xyz,
-  //                            {min_xyz.x, min_xyz.y, max_xyz.z},
-  //                            {min_xyz.x, max_xyz.y, min_xyz.z},
-  //                            {min_xyz.x, max_xyz.y, max_xyz.z},
-  //                            {max_xyz.x, min_xyz.y, min_xyz.z},
-  //                            {max_xyz.x, min_xyz.y, max_xyz.z},
-  //                            {max_xyz.x, max_xyz.y, min_xyz.z},
-  //                            max_xyz};
-  //   glm::mat4    transMat = trans.getModel();
-  //   for (uint32_t i = 0; i < vertices.size(); i++)
-  //     vertices[i] = glm::vec3(transMat * glm::vec4(vertices[i], 1.0f));
-  //   vector<uint32_t> indices = {0, 1, 0, 2, 0, 4, 1, 3, 1, 5, 2, 3, 2, 6, 4, 6, 4, 5, 3, 7, 5, 7, 6, 7};
-  //   return make_tuple(vertices, indices);
-  // }
 
   bool hit(Ray ray) {
     vec3 in_bound  = this->min_bound;
@@ -271,6 +252,11 @@ class BvhTree {
   // }
 
   void construct() {
+    if (this->root != nullptr) {
+      cerr << "BvhTree::construct()失败,已经存在构造好的bvh树!" << endl;
+      return;
+    }
+    
     // 先生成根节点
     BvhNode* cur_node = new BvhNode();
     for (int i = 0; i < this->geometry->getSurfaces().size(); i++)
@@ -382,6 +368,12 @@ class BvhTree {
     }
   }
 
+  void update() {
+    // geometry发生了变化需要重新构造
+    this->destruct(); // 如果存在旧的记录，则删除，不存在也不会出错
+    this->construct();  // 重新构造
+  }
+
   // tuple<bool, vec3, float, uint32_t> intersect(const vec3 &origin, const vec3 &dir, vec3 &hit_pos,float &distance, uint32_t &triangle_idx) {
   HitInfo hit(Ray ray, Transform trans) {
     // 参数：ray为世界坐标系下的光线，trans为model变换
@@ -437,7 +429,26 @@ class BvhTree {
     return target_obj;
   }
 
+  void destruct() {
+    if (this->root == nullptr)
+      return;
+    // 广度优先遍历释放
+    deque<BvhNode*> tmp{this->root};
+    while (!tmp.empty()) {
+      BvhNode* cur_node = tmp.front();
+      tmp.pop_front();
+      if (cur_node->left != nullptr)
+        tmp.push_back(cur_node->left);
+      if (cur_node->right != nullptr)
+        tmp.push_back(cur_node->right);
+      delete cur_node;
+    }
+    this->root = nullptr;
+  }
+
   ~BvhTree() {
+    if (this->root == nullptr)
+      return;
     // 广度优先遍历释放
     deque<BvhNode*> tmp{this->root};
     while (!tmp.empty()) {
