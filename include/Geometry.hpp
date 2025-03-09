@@ -16,7 +16,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-namespace {
+// namespace {
 using namespace std;
 using prop = variant<uint32_t, int32_t, float, double, bool, char, glm::vec3>;
 
@@ -176,7 +176,7 @@ struct FixedGeometry {
       : vertices(geo.getVertices()), surfaces(geo.getSurfaces()) {}
 };
 
-FixedGeometry operator+(const FixedGeometry &a, const FixedGeometry &b) {
+inline FixedGeometry operator+(const FixedGeometry &a, const FixedGeometry &b) {
   FixedGeometry res = a;
   // 1. 将两组vertices进行简单拼接
   res.vertices.insert(res.vertices.end(), b.vertices.begin(), b.vertices.end());
@@ -826,4 +826,4 @@ public:
   }
 };
 
-} // namespace
+// } // namespace

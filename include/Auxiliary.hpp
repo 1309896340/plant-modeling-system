@@ -7,11 +7,11 @@
 
 #include "constants.h"
 
-namespace {
-using namespace std;
-using glm::mat3;
-using glm::mat4;
-using glm::vec3;
+// namespace {
+// using namespace std;
+// using glm::mat3;
+// using glm::mat4;
+// using glm::vec3;
 
 class CoordinateAxis : public Geometry {
   shared_ptr<Geometry> axis_x{nullptr};
@@ -72,4 +72,4 @@ public:
 //   }
 // };
 
-} // namespace
+// } // namespace

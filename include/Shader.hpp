@@ -14,8 +14,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-namespace {
-using namespace std;
+// namespace {
+// using namespace std;
 namespace fs = std::filesystem;
 
 class Shader {
@@ -24,18 +24,18 @@ private:
   GLuint program_id{0};
 
   // 缓存uniform变量名与location
-  map<string, GLuint> locations;
+  std::map<std::string, GLuint> locations;
 
-  const string prefix = "assets\\shaders\\";
+  const std::string prefix = "assets\\shaders\\";
 
-  void readFile(string &dst, const string &filename) {
-    stringstream ss;
-    ifstream fp(filename);
+  void readFile(std::string &dst, const std::string &filename) {
+    std::stringstream ss;
+    std::ifstream fp(filename);
     ss << fp.rdbuf();
     dst = ss.str();
   }
 
-  string shaderType2str(GLuint shader_type) {
+  std::string shaderType2str(GLuint shader_type) {
     switch (shader_type) {
     case GL_VERTEX_SHADER:
       return "Vertex Shader";
@@ -54,7 +54,7 @@ private:
     }
   }
 
-  GLuint createShader(GLuint shader_type, const string &source) {
+  GLuint createShader(GLuint shader_type, const std::string &source) {
     // 根据source编译源文件
     GLuint shader = glCreateShader(shader_type);
     assert(shader != 0);
@@ -66,23 +66,23 @@ private:
     GLint success;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
     if (!success) {
-      cout << "failed to compile " << shaderType2str(shader_type) << endl;
+      std::cout << "failed to compile " << shaderType2str(shader_type) << std::endl;
 #ifndef NDEBUG
       char log[200] = {0};
       int log_num = 0;
       glGetShaderInfoLog(shader, 200, &log_num, log);
-      cout << log << endl;
+      std::cout << log << std::endl;
 #endif
       return 0;
     }
     return shader;
   }
 
-  GLuint createShader(const string &shader_source_filename) {
+  GLuint createShader(const std::string &shader_source_filename) {
     // 读取glsl文件源码创建shader，着色器类型由文件名后缀来标识
     fs::path fname = shader_source_filename;
-    string ext = fname.filename().extension().string();
-    string source;
+    std::string ext = fname.filename().extension().string();
+    std::string source;
     readFile(source, shader_source_filename);
     GLuint shader{0};
     if (ext == ".vert") {
@@ -94,16 +94,16 @@ private:
     } else if (ext == ".comp") {
       shader = createShader(GL_COMPUTE_SHADER, source);
     } else {
-      string msg = "unknown glsl extension \"" + ext + "\"";
-      cerr << msg << endl;
-      throw runtime_error(msg);
+      std::string msg = "unknown glsl extension \"" + ext + "\"";
+      std::cerr << msg << std::endl;
+      throw std::runtime_error(msg);
     }
     assert(shader != 0);
     return shader;
   }
 
 public:
-  Shader(const string &compute_filename) {
+  Shader(const std::string &compute_filename) {
     GLuint cshader = createShader(prefix + compute_filename);
 
     this->program_id = glCreateProgram();
@@ -113,19 +113,19 @@ public:
     GLint success;
     glGetProgramiv(this->program_id, GL_LINK_STATUS, &success);
     if (!success) {
-      cout << "failed to link shader program!" << endl;
+      std::cout << "failed to link shader program!" << std::endl;
 #ifndef NDEBUG
       char log[200];
       int log_num;
       glGetProgramInfoLog(this->program_id, 200, &log_num, log);
-      cout << log << endl;
+      std::cout << log << std::endl;
 #endif
     }
     glDeleteShader(cshader);
   }
 
-  Shader(const string &vertex_filename, const string &geometry_filename,
-         const string &fragment_filename) {
+  Shader(const std::string &vertex_filename, const std::string &geometry_filename,
+         const std::string &fragment_filename) {
     GLuint vshader = createShader(prefix + vertex_filename);
     GLuint gshader = createShader(prefix + geometry_filename);
     GLuint fshader = createShader(prefix + fragment_filename);
@@ -139,12 +139,12 @@ public:
     GLint success;
     glGetProgramiv(this->program_id, GL_LINK_STATUS, &success);
     if (!success) {
-      cout << "failed to link shader program!" << endl;
+      std::cout << "failed to link shader program!" << std::endl;
 #ifndef NDEBUG
       char log[200];
       int log_num;
       glGetProgramInfoLog(this->program_id, 200, &log_num, log);
-      cout << log << endl;
+      std::cout << log << std::endl;
 #endif
     }
     glDeleteShader(vshader);
@@ -152,7 +152,7 @@ public:
     glDeleteShader(fshader);
   }
 
-  Shader(const string &vertex_filename, const string &fragment_filename) {
+  Shader(const std::string &vertex_filename, const std::string &fragment_filename) {
     GLuint vshader = createShader(prefix + vertex_filename);
     GLuint fshader = createShader(prefix + fragment_filename);
 
@@ -164,12 +164,12 @@ public:
     GLint success;
     glGetProgramiv(this->program_id, GL_LINK_STATUS, &success);
     if (!success) {
-      cout << "failed to link shader program!" << endl;
+      std::cout << "failed to link shader program!" << std::endl;
 #ifndef NDEBUG
       char log[200];
       int log_num;
       glGetProgramInfoLog(this->program_id, 200, &log_num, log);
-      cout << log << endl;
+      std::cout << log << std::endl;
 #endif
     }
     glDeleteShader(vshader);
@@ -179,57 +179,57 @@ public:
   Shader(const Shader &sd) = delete;
   ~Shader() { glDeleteProgram(this->program_id); }
 
-  bool has_uniform(const string &name) const {
+  bool has_uniform(const std::string &name) const {
     return this->locations.find(name) != this->locations.end();
   }
 
-  void register_location(const string &name) {
+  void register_location(const std::string &name) {
     GLuint loc = glGetUniformLocation(this->program_id, name.c_str());
     if (loc == -1) {
-      string msg = "unknown uniform name: \"" + name + "\"";
-      cerr << msg << endl;
-      throw runtime_error(msg);
+      std::string msg = "unknown uniform name: \"" + name + "\"";
+      std::cerr << msg << std::endl;
+      throw std::runtime_error(msg);
     }
     this->locations[name] = loc;
   }
 
-  void set(const string &name, bool bool_val) {
+  void set(const std::string &name, bool bool_val) {
     if (!this->has_uniform(name))
       register_location(name);
     glUniform1ui(this->locations[name], bool_val);
   }
-  void set(const string &name, unsigned int uint_val) {
+  void set(const std::string &name, unsigned int uint_val) {
     if (!this->has_uniform(name))
       register_location(name);
     glUniform1ui(this->locations[name], uint_val);
   }
-  void set(const string &name, int int_val) {
+  void set(const std::string &name, int int_val) {
     if (!this->has_uniform(name))
       register_location(name);
     glUniform1i(this->locations[name], int_val);
   }
-  void set(const string &name, float float_val) {
+  void set(const std::string &name, float float_val) {
     if (!this->has_uniform(name))
       register_location(name);
     glUniform1f(this->locations[name], float_val);
   }
-  void set(const string &name, const glm::vec3 &vec3_val) {
+  void set(const std::string &name, const glm::vec3 &vec3_val) {
     if (!this->has_uniform(name))
       register_location(name);
     glUniform3fv(this->locations[name], 1, glm::value_ptr(vec3_val));
   }
-  void set(const string &name, const glm::vec4 &vec4_val) {
+  void set(const std::string &name, const glm::vec4 &vec4_val) {
     if (!this->has_uniform(name))
       register_location(name);
     glUniform4fv(this->locations[name], 1, glm::value_ptr(vec4_val));
   }
-  void set(const string &name, const glm::mat3 &mat3_val) {
+  void set(const std::string &name, const glm::mat3 &mat3_val) {
     if (!this->has_uniform(name))
       register_location(name);
     glUniformMatrix3fv(this->locations[name], 1, GL_FALSE,
                        glm::value_ptr(mat3_val));
   }
-  void set(const string &name, const glm::mat4 &mat4_val) {
+  void set(const std::string &name, const glm::mat4 &mat4_val) {
     if (!this->has_uniform(name))
       register_location(name);
     glUniformMatrix4fv(this->locations[name], 1, GL_FALSE,
@@ -240,4 +240,4 @@ public:
 
   GLuint program() const { return this->program_id; }
 };
-} // namespace
+// } // namespace

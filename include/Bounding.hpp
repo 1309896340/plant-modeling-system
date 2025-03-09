@@ -24,21 +24,21 @@
 #include "Transform.hpp"
 
 
-namespace {
-using namespace std;
-using glm::mat3;
-using glm::mat4;
-using glm::vec3;
-using glm::vec4;
+// namespace {
+// using namespace std;
+// using glm::mat3;
+// using glm::mat4;
+// using glm::vec3;
+// using glm::vec4;
 
 struct Ray {
-  vec3 origin{0.0f, 0.0f, 0.0f};
-  vec3 dir{0.0f, 0.0f, 0.0f};
+  glm::vec3 origin{0.0f, 0.0f, 0.0f};
+  glm::vec3 dir{0.0f, 0.0f, 0.0f};
 };
 
 struct HitInfo {
   bool     isHit{false};
-  vec3     hitPos{0.0f, 0.0f, 0.0f};
+  glm::vec3     hitPos{0.0f, 0.0f, 0.0f};
   uint32_t triangleIdx{0};
   string   geometryName;
   float    distance{FLT_MAX};
@@ -97,10 +97,10 @@ int findKPosVal(vector<T> arr, int left, int right, int k) {
   }
 }
 
-HitInfo hit_triangle(Ray ray, const vec3& p1, const vec3& p2, const vec3& p3) {
+inline HitInfo hit_triangle(Ray ray, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3) {
   HitInfo target;
-  vec3    _dir     = glm::normalize(ray.dir);
-  float   det_base = glm::determinant(mat3(-_dir, p1 - p3, p2 - p3));
+  glm::vec3    _dir     = glm::normalize(ray.dir);
+  float   det_base = glm::determinant(glm::mat3(-_dir, p1 - p3, p2 - p3));
   if (glm::abs(det_base) < 1e-6) {
     // 平行视作未击中
     target.isHit    = false;
@@ -108,9 +108,9 @@ HitInfo hit_triangle(Ray ray, const vec3& p1, const vec3& p2, const vec3& p3) {
     target.hitPos   = ray.origin;
   }
   else {
-    float t_det  = glm::determinant(mat3(ray.origin - p3, p1 - p3, p2 - p3));
-    float a1_det = glm::determinant(mat3(-_dir, ray.origin - p3, p2 - p3));
-    float a2_det = glm::determinant(mat3(-_dir, p1 - p3, ray.origin - p3));
+    float t_det  = glm::determinant(glm::mat3(ray.origin - p3, p1 - p3, p2 - p3));
+    float a1_det = glm::determinant(glm::mat3(-_dir, ray.origin - p3, p2 - p3));
+    float a2_det = glm::determinant(glm::mat3(-_dir, p1 - p3, ray.origin - p3));
     float t      = t_det / det_base;
     float a1     = a1_det / det_base;
     float a2     = a2_det / det_base;
@@ -135,10 +135,10 @@ class BoundingBox {
   private:
   public:
   // unique_ptr<OpenGLContext> context{nullptr};
-  vec3                      min_bound{0.0f, 0.0f, 0.0f};
-  vec3                      max_bound{0.0f, 0.0f, 0.0f};
+  glm::vec3                      min_bound{0.0f, 0.0f, 0.0f};
+  glm::vec3                      max_bound{0.0f, 0.0f, 0.0f};
   BoundingBox() = delete;
-  BoundingBox(vec3 min_bound, vec3 max_bound)
+  BoundingBox(glm::vec3 min_bound, glm::vec3 max_bound)
     : min_bound(min_bound)
     , max_bound(max_bound) {}
   BoundingBox(const vector<Vertex>& vertices) {
@@ -151,7 +151,7 @@ class BoundingBox {
   }
 
   void update(const vector<Vertex>& vertices, const vector<Surface>& surfaces, const vector<uint32_t>& indices) {
-    vec3 default_bound = glm::make_vec3(vertices[surfaces[indices[0]].tidx[0]].position);
+    glm::vec3 default_bound = glm::make_vec3(vertices[surfaces[indices[0]].tidx[0]].position);
     this->min_bound    = default_bound;
     this->max_bound    = default_bound;
     for (uint32_t tri_idx : indices) {
@@ -181,15 +181,15 @@ class BoundingBox {
     }
   }
 
-  vec3  getBoxCenter() const { return (min_bound + max_bound) / 2.0f; }
+  glm::vec3  getBoxCenter() const { return (min_bound + max_bound) / 2.0f; }
   float getXWidth() const { return max_bound.x - min_bound.x; }
   float getYWidth() const { return max_bound.y - min_bound.y; }
   float getZWidth() const { return max_bound.z - min_bound.z; }
 
 
   bool hit(Ray ray) {
-    vec3 in_bound  = this->min_bound;
-    vec3 out_bound = this->max_bound;
+    glm::vec3 in_bound  = this->min_bound;
+    glm::vec3 out_bound = this->max_bound;
 
     if (ray.dir.x < 0)
       swap(in_bound.x, out_bound.x);
@@ -199,9 +199,9 @@ class BoundingBox {
       swap(in_bound.z, out_bound.z);
 
     // 判断求交
-    vec3  ndir      = glm::normalize(ray.dir);
-    vec3  t_min_xyz = (in_bound - ray.origin) / ndir;
-    vec3  t_max_xyz = (out_bound - ray.origin) / ndir;
+    glm::vec3  ndir      = glm::normalize(ray.dir);
+    glm::vec3  t_min_xyz = (in_bound - ray.origin) / ndir;
+    glm::vec3  t_max_xyz = (out_bound - ray.origin) / ndir;
     float t_enter   = glm::max(t_min_xyz.x, glm::max(t_min_xyz.y, t_min_xyz.z));
     float t_exit    = glm::min(t_max_xyz.x, glm::min(t_max_xyz.y, t_max_xyz.z));
     if (t_enter <= t_exit && t_exit >= 0)
@@ -392,7 +392,7 @@ class BvhTree {
     for (int i = 0; i < hit_table.size(); i++) {
       BvhNode* cur_node = hit_table[i];
       Surface  triangle = this->geometry->getSurfaces()[cur_node->triangles[0]];
-      vec3     pt[3];
+      glm::vec3     pt[3];
       for (int j = 0; j < 3; j++)
         pt[j] = glm::make_vec3(this->geometry->getVertices()[triangle.tidx[j]].position);
 
@@ -444,4 +444,4 @@ class BvhTree {
   }
 };
 
-}   // namespace
+// }   // namespace
