@@ -18,7 +18,6 @@
 
 namespace {
 using namespace std;
-// using param_variant = variant<uint32_t, int, float, bool, glm::vec3>;
 using prop = variant<uint32_t, int32_t, float, double, bool, char, glm::vec3>;
 
 struct Vertex {
@@ -55,9 +54,6 @@ struct Vertex {
   };
 };
 
-// struct Edge {
-//   uint32_t pidx[2]; // 2个Vertex构成
-// };
 
 struct Surface {
   uint32_t tidx[3]; // 3个Vertex构成
@@ -121,8 +117,6 @@ protected:
   vector<Surface> surfaces;
 
 public:
-  // map<string, shared_ptr<ReflectValue>> parameters;
-  // map<string, shared_ptr<ReflectValue>> parameters;
   map<string, shared_ptr<ReflectValue>> parameters;
 
   Geometry() = default;
@@ -273,7 +267,7 @@ public:
   }
 
   // 由于updater的参数构建比较复杂，且比较抽象，以下的简单赋值并不足以正确完成updater的替换
-  // 下面这种做法是存在问题的，先移除
+  // 下面这种做法是存在问题的，使用时注意lambda内部捕获的变量需要重新绑定到parameters中
   void setUpdater(MeshUpdater updater) { this->updater = updater; }
 
   void resize() {
@@ -285,23 +279,6 @@ public:
   }
 
   virtual void notify(const string &name, const prop &param) {
-    // todo
-    // 需要根据name进行判断
-    // 如果name=="uNum"或name=="vNum"，则要标记更新网格拓扑
-    // 之后统一调用一次this->update更新参数曲面的顶点数据
-    // 注意：暂时无法确定Observer处定义的这个接口是否被正确重写
-
-    // std::visit([name](auto&& arg) {
-    //   using T = std::decay_t<decltype(arg)>;
-    //   if constexpr (std::is_same_v<T, float>) {
-    //     printf("Mesh更新变量\"%s\" 新值：%f\n", name.c_str(), arg);
-    //   }
-    //   else if constexpr (std::is_same_v<T, uint32_t>) {
-    //     printf("Composition更新变量\"%s\" 新值：%u\n", name.c_str(), arg);
-    //   }
-    // },
-    //            param);
-
     if (name == "uNum" || name == "vNum")
       this->topo_flag = true;
     this->update();

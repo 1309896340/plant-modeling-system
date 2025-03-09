@@ -150,10 +150,6 @@ class BoundingBox {
     this->update(vertices, surfaces, indices);
   }
 
-  // OpenGLContext *getContext() const {
-  //   return this->context.get();
-  // }
-
   void update(const vector<Vertex>& vertices, const vector<Surface>& surfaces, const vector<uint32_t>& indices) {
     vec3 default_bound = glm::make_vec3(vertices[surfaces[indices[0]].tidx[0]].position);
     this->min_bound    = default_bound;
@@ -239,18 +235,6 @@ class BvhTree {
   BvhTree(Geometry *geometry)
     : geometry(geometry) {}
 
-  // void loadGeometry(const shared_ptr<Geometry> &geometry, Transform transform) {
-  //   // 深拷贝一份geometry并对其顶点应用transform的变换
-  //   this->vertices.resize(geometry->getVertices().size());
-  //   mat4 model = transform.getModel();
-  //   for (int i = 0; i < geometry->getVertices().size(); i++) {
-  //     vec3 pt = vec3(
-  //         model * vec4(glm::make_vec3(geometry->getVertices()[i].position), 1.0f));
-  //     memcpy(&vertices[i], glm::value_ptr(pt), 3 * sizeof(float));
-  //   }
-  //   this->surfaces = geometry->getSurfaces(); // 拷贝构造
-  // }
-
   void construct() {
     if (this->root != nullptr) {
       cerr << "BvhTree::construct()失败,已经存在构造好的bvh树!" << endl;
@@ -282,8 +266,6 @@ class BvhTree {
         Surface surf = this->geometry->getSurfaces()[cur_node->triangles[k]];
         // 计算三角的质心的第i分量，dimension_idx决定按哪个维度的质心位置进行分割
         float center_pos = 0.0f;
-        // for (int i = 0; i < 3; i++)
-        //   center_pos += glm::value_ptr(vertices[surf.tidx[i]])[dimension_idx];
         for (int i = 0; i < 3; i++)
           center_pos += this->geometry->getVertices()[surf.tidx[i]].position[dimension_idx];
         comp_positions[k] = center_pos / 3.0f;
@@ -378,7 +360,6 @@ class BvhTree {
   HitInfo hit(Ray ray, Transform trans) {
     // 参数：ray为世界坐标系下的光线，trans为model变换
     // 返回(是否击中, 击中位置, 距离, 三角索引)
-
 
     Ray       local_ray = ray;
     glm::mat4 model     = trans.getModel();

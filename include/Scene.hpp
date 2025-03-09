@@ -41,8 +41,6 @@
 #include "Camera.hpp"
 #include "Geometry.hpp"
 #include "GeometryInterpreter.hpp"
-// #include "GeometryGenerator.hpp"
-// #include "LSystem.hpp"
 #include "LSystem.h"
 #include "Light.hpp"
 #include "Shader.hpp"
@@ -302,14 +300,7 @@ class BoundingBoxContext : public OpenGLContext {
     : OpenGLContext()
     , transform(transform)
     , box(box) {
-    // printf("初始化包围盒渲染对象 vao:%d vbo:%d ebo: %d\n", this->vao,
-    // this->vbo, this->ebo);
   }
-  // ~BoundingBoxContext() {
-  //   printf("销毁包围盒渲染对象 vao:%d vbo:%d ebo: %d\n", this->vao,
-  //   this->vbo, this->ebo);
-  // }
-
   tuple<vector<vec3>, vector<uint32_t>> genOpenGLRawData() {
     vec3         max_xyz  = this->box->max_bound;
     vec3         min_xyz  = this->box->min_bound;
@@ -395,29 +386,11 @@ class GeometryObject {
     this->box->update(this->geometry->getVertices());
     // bvhtree更新
     if (this->bvhtree != nullptr) {
-      // this->bvhtree =
-      //   make_unique<BvhTree>(this->geometry.get());   // 自动析构释放资源
-      // this->bvhtree->construct();
       this->bvhtree->update();
     }
-
-    // 以后这Context相关逻辑由Scene管理，而不再是GeometryObject的职责
-
-    // 2. 图形缓冲区更新
-    // // geometry更新
-    // this->context->update();
-
-    // // boundingbox更新
-    // this->box->context->update();
-
-    // // bvhtree更新
-    // (bvhtree->construct()后每个node->box都会重建，需要重新初始化)
-    // this->bvhtree->traverse([this](BvhNode* node) {
-    //   node->box->context = make_unique<BoundingBoxContext>(
-    //     node->box.get(),
-    //     &this->transform);
-    //   node->box->context->init();
-    // });
+  }
+  virtual ~GeometryObject() {
+    printf("销毁GeometryObject: \"%s\" geometry: %p  box: %p  bvhtree: %p\n", this->name.c_str(), this->geometry.get(), this->box.get(), this->bvhtree.get());
   }
 };
 
@@ -434,7 +407,7 @@ class GeometryContext : public OpenGLContext {
     , obj(obj) {
     BoundingBox* bbox = this->obj->getBoundingBox();
     assert(bbox != nullptr);
-    this->box = make_unique<BoundingBoxContext>(bbox, &obj->transform);
+    this->box     = make_unique<BoundingBoxContext>(bbox, &obj->transform);
     this->bvhtree = this->obj->getBvhTree();
   }
 
@@ -476,8 +449,6 @@ class GeometryContext : public OpenGLContext {
 
     this->box->init();
     if (this->bvhtree != nullptr) {
-      // 此处假设bvhtree已经构造好了
-      // this->bvhtree->construct();
       this->bvhtree->traverse([this](BvhNode* node) {
         auto box_context = make_unique<BoundingBoxContext>(
           node->box.get(),
@@ -536,24 +507,7 @@ inline GeometryObject::GeometryObject(string               name,
     this->bvhtree = make_unique<BvhTree>(geometry.get());
     this->bvhtree->construct();
   }
-  // this->box->context =
-  //   make_unique<BoundingBoxContext>(this->box.get(), &this->transform);
-  // this->box->context->init();
-  // // (按需)构造层次包围盒
-  // if (useBvh) {
-  //   this->bvhtree = make_unique<BvhTree>(geometry.get());
-  //   this->bvhtree->construct();
-  //   Transform* trans = &this->transform;
-  //   this->bvhtree->traverse([trans](BvhNode* node) {
-  //     node->box->context =
-  //       make_unique<BoundingBoxContext>(node->box.get(), trans);
-  //     node->box->context->init();
-  //   });
-  // }
-
-  // // 初始化图形上下文
-  // this->context = make_unique<GeometryContext>(this);
-  // this->context->init();
+  printf("创建GeometryObject: \"%s\" geometry: %p  box: %p  bvhtree: %p\n", this->name.c_str(), this->geometry.get(), this->box.get(), this->bvhtree.get());
 }
 
 inline void errorCallback(int code, const char* msg) {
@@ -774,7 +728,6 @@ class Scene {
     this->addSceneObject(cursor_obj, this->isShowCursor, false, false, false);
 
     // 地面
-    // shared_ptr<Geometry> ground = make_shared<Ground>(20.0f, 20.0f);
     shared_ptr<Geometry> ground = Mesh::Plane(20.0f, 20.0f, 10, 10);
     // 为了让光线不在两个重叠面上抖动进而穿透，将Ground下移一个微小距离
     shared_ptr<GeometryObject> obj3 = make_shared<GeometryObject>(
@@ -782,11 +735,9 @@ class Scene {
       ground,
       Transform({0.0f, -0.1f, 0.0f}),
       true);
-    // obj3->context->texture = this->textures["fabric"];
     this->addSceneObject(obj3, true, false, true, true, this->textures["fabric"]);
 
     // 左侧面
-    // shared_ptr<Geometry> side_left = make_shared<Plane>(20.0f, 20.0f);
     shared_ptr<Geometry> side_left = Mesh::Plane(20.0f, 20.0f, 10, 10);
     side_left->setColor(0.0f, 0.0f, 1.0f);
     shared_ptr<GeometryObject> side_left_obj = make_shared<GeometryObject>(
@@ -797,7 +748,6 @@ class Scene {
     this->addSceneObject(side_left_obj, true, false, true, true);
 
     // 后侧面
-    // shared_ptr<Geometry> side_back = make_shared<Plane>(20.0f, 20.0f);
     shared_ptr<Geometry> side_back = Mesh::Plane(20.0f, 20.0f, 10, 10);
     side_back->setColor(0.0f, 1.0f, 0.0f);
     shared_ptr<GeometryObject> side_back_obj = make_shared<GeometryObject>(
@@ -808,7 +758,6 @@ class Scene {
     this->addSceneObject(side_back_obj, true, false, true, true);
 
     // 上侧面
-    // shared_ptr<Geometry> side_top = make_shared<Plane>(20.0f, 20.0f);
     shared_ptr<Geometry> side_top = Mesh::Plane(20.0f, 20.0f, 10, 10);
     side_top->setColor(1.0f, 0.0f, 0.0f);
     shared_ptr<GeometryObject> side_top_obj = make_shared<GeometryObject>(
@@ -938,7 +887,6 @@ class Scene {
                 << std::endl;
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-    // 手动绘制一个矩形框，直接配置顶点缓冲区
     vec4 vertices[4] = {
       {-1.0f, -1.0f, 0.0f, 0.0f},
       {1.0f, -1.0f, 1.0f, 0.0f},
@@ -1086,7 +1034,6 @@ class Scene {
       if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
         if (ImGui::IsKeyDown(ImGuiKey_ModShift)) {
           this->camera.record();
-          // cout << "记录相机环绕的起始位置" << endl;
         }
         else {
           // 鼠标左击选中场景物体，遍历所有物体的包围盒求交
@@ -1144,8 +1091,6 @@ class Scene {
             uint32_t type{0};   // 0为普通包围盒，1为层次包围盒
           };
 
-          // float min_distance = FLT_MAX;
-          // bool isisHit = false;
           HitInfo_imgui target_obj;
           for (auto& [cur_obj, context] : this->objs) {
             if (!cur_obj->status.collided)
@@ -1198,8 +1143,6 @@ class Scene {
             if (imgui.cur != nullptr) {
               for (auto& [obj, context] : this->objs)   // 互斥选中
                 obj->status.selected = false;
-              // if (imgui.cur->listed)
-              //     imgui.cur->selected = true;
               BoundingBox* box = imgui.cur->getBoundingBox();
               assert(box != nullptr &&
                      "Scene::imgui_interact() boundingbox为空!");
@@ -1211,9 +1154,6 @@ class Scene {
                 findGeometryObjectByName("Cursor");
               if (ptr1)
                 ptr1->transform.setPosition(target_obj.hitPos);
-              // printf("选中点位置：(%.2f, %.2f, %.2f)\n",
-              // target_obj.hitPos.x, target_obj.hitPos.y,
-              // target_obj.hitPos.z);
               this->showCursor();
               break;
             }
@@ -1254,7 +1194,7 @@ class Scene {
     //     return obj->status.listed;
     //   });
     vector<shared_ptr<GeometryObject>> tmp_item_view;
-    for (auto &[obj, ctx] : this->objs) {
+    for (auto& [obj, ctx] : this->objs) {
       if (obj->status.listed)
         tmp_item_view.emplace_back(obj);
     }
@@ -1405,8 +1345,6 @@ class Scene {
 
             this->imgui.cur                  = this->imgui.list_items[this->imgui.selected_idx];
             this->imgui.cur->status.selected = true;
-            // printf("选中项为 : %s\n",
-            // imgui.list_items[this->imgui.selected_idx]->name.c_str());
           }
         }
 
@@ -1429,7 +1367,7 @@ class Scene {
           if (box != nullptr) {
             box->update(this->imgui.cur->getGeometry()->getVertices());
             // box->context->update();
-            //this->objs[this->imgui.cur]->box->update();
+            // this->objs[this->imgui.cur]->box->update();
             this->objs[this->imgui.cur]->update();
           }
         }
@@ -1448,8 +1386,6 @@ class Scene {
               if constexpr (is_same_v<T, float>) {
 
                 if (ImGui::SliderFloat(name.c_str(), &arg, 0.0f, 10.0f)) {
-                  // context->imgui.cur->geometry->update();
-                  // printf("pname: %s\n", pname.c_str());
                   this->imgui.cur->getGeometry()
                     ->parameters[name]
                     ->notifyAll();
@@ -1512,7 +1448,6 @@ class Scene {
       if (ImGui::InputText(TEXT("Axiom"), &this->lsystem.axiom, ImGuiInputTextFlags_CallbackEdit)) {
         throw runtime_error(
           "Scene::imgui_menu()中，更新this->lsystem的axiom！");
-        // this->lsystem.lsys->updateAxiom(this->lsystem.axiom);
         this->lsystem.config->updateAxiom(this->lsystem.axiom);
       }
       ImGui::PopItemWidth();
@@ -1567,17 +1502,6 @@ class Scene {
         this->lsystem.skeleton = gs.construct();
         this->add("skeleton", this->lsystem.skeleton, Transform{vec3(0.5f, 0.03f, 0.5f)});
         this->lsystem.iter_n++;
-
-        // auto s_input = lexy::zstring_input(lsys_cmds.c_str());
-        // auto res     =
-        // lexy::parse<GeometryGenerator::grammar::GraphicsStructure>(s_input,
-        // lexy_ext::report_error); if (res.is_success()) {
-        //     const GeometryGenerator::config::GraphicsStructure& gs =
-        //     res.value(); this->lsystem.skeleton = gs.construct();
-        //     // 目前固定了skeleton这个名字，只能创建一个骨架
-        //     this->add("skeleton", this->lsystem.skeleton,
-        //     Transform{vec3(0.5f, 0.03f, 0.5f)}); this->lsystem.iter_n++;
-        // }
       }
       ImGui::SameLine();
       if (ImGui::Button(TEXT("复位"))) {
@@ -1612,14 +1536,10 @@ class Scene {
     io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
 
-    // io->Fonts->AddFontFromFileTTF(
-    //     "C:/Windows/Fonts/simhei.ttf", 24.0f, nullptr,
-    //     io->Fonts->GetGlyphRangesChineseSimplifiedCommon());
     io->Fonts->AddFontFromFileTTF("C:/Windows/Fonts/simhei.ttf", 24.0f, nullptr, io->Fonts->GetGlyphRangesChineseFull());
     io->Fonts->Build();
 
     ImGui::StyleColorsDark();
-    // ImGui::StyleColorsLight();
 
     ImGuiStyle& style = ImGui::GetStyle();
     if (io->ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
@@ -1699,10 +1619,12 @@ class Scene {
     lines["Coord"]->update();
   }
 
-  void addSceneObject(const shared_ptr<GeometryObject> &obj,
-                      bool visible = true, bool listed = false,
-                      bool collided = false, bool lighted = false,
-                      GLuint texture = 0) {
+  void addSceneObject(const shared_ptr<GeometryObject>& obj,
+                      bool                              visible  = true,
+                      bool                              listed   = false,
+                      bool                              collided = false,
+                      bool                              lighted  = false,
+                      GLuint                            texture  = 0) {
 
     shared_ptr<GeometryObject> ptr = findGeometryObjectByName(obj->getName());
     if (ptr != nullptr) {
@@ -1715,7 +1637,7 @@ class Scene {
     obj->status.collided = collided;
     obj->status.lighted  = lighted;
     // this->objs.emplace_back(obj);
-    
+
     // 创建Context
     unique_ptr<GeometryContext> context =
       make_unique<GeometryContext>(obj.get());
@@ -1729,7 +1651,7 @@ class Scene {
 
   void remove(const string& name) {
     // 移除objs中的物体，同时销毁相应的GeometryContext，自动释放OpenGL缓冲区
-    auto obj_ptr = find_if(this->objs.begin(), this->objs.end(), [name](auto &obj) {
+    auto obj_ptr = find_if(this->objs.begin(), this->objs.end(), [name](auto& obj) {
       return obj.first->getName().compare(name) == 0;
     });
     if (obj_ptr != this->objs.end())
@@ -1744,7 +1666,7 @@ class Scene {
            << endl;
       return;
     }
-    erase_if(this->objs, [&](auto &obj) {
+    erase_if(this->objs, [&](auto& obj) {
       return regex_match(obj.first->getName(),
                          this->check_skeleton_node_name_pattern);
     });
@@ -1807,7 +1729,6 @@ class Scene {
     ptr->status.listed   = listed;
     ptr->status.collided = collided;
     ptr->status.lighted  = lighted;
-    // this->objs.emplace_back(ptr);
 
     // 创建Context
     unique_ptr<GeometryContext> context =
@@ -1855,8 +1776,6 @@ class Scene {
     switch (light->type) {
     case Light::LightType::POINT: {
       render_obj =
-        // GeometryContext::getInstance("Light",
-        // make_shared<Sphere>(0.03, 36, 72));
         make_shared<GeometryObject>("Light", Mesh::Sphere(0.03, 72, 36));
       break;
     }
@@ -2386,10 +2305,9 @@ class Scene {
           //   glDrawElements(GL_LINES, node->box->context->getSize(),
           //   GL_UNSIGNED_INT, nullptr);
           // });
-          for (auto &box_context : context->boxes) {
+          for (auto& box_context : context->boxes) {
             glBindVertexArray(box_context->getVAO());
-            glDrawElements(GL_LINES, box_context->getSize(),
-            GL_UNSIGNED_INT, nullptr);
+            glDrawElements(GL_LINES, box_context->getSize(), GL_UNSIGNED_INT, nullptr);
           }
         }
         else {
