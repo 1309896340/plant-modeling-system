@@ -12,7 +12,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "Geometry.h"
-#include "Transform.hpp"
+#include "Transform.h"
 
 namespace {
 using namespace std;

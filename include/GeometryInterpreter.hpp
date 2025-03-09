@@ -9,7 +9,7 @@
 
 #include "Geometry.h"
 #include "Skeleton.hpp"
-#include "Transform.hpp"
+#include "Transform.h"
 
 namespace GeometryInterpreter {
 struct GraphicsContext {

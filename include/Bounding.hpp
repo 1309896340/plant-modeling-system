@@ -20,8 +20,8 @@
 #include <Eigen/Dense>
 
 #include "Geometry.h"
-#include "Renderer.hpp"
-#include "Transform.hpp"
+#include "Renderer.h"
+#include "Transform.h"
 
 
 // namespace {
