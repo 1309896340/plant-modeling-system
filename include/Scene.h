@@ -32,7 +32,7 @@
 
 #include "Auxiliary.hpp"
 #include "Bounding.hpp"
-#include "Camera.hpp"
+#include "Camera.h"
 #include "Geometry.h"
 #include "GeometryInterpreter.hpp"
 #include "LSysConfig.h"
