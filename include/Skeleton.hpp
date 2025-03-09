@@ -11,7 +11,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "Geometry.hpp"
+#include "Geometry.h"
 #include "Transform.hpp"
 
 namespace {

@@ -7,7 +7,7 @@
 
 #include "LSysConfig.h"
 
-#include "Geometry.hpp"
+#include "Geometry.h"
 #include "Skeleton.hpp"
 #include "Transform.hpp"
 

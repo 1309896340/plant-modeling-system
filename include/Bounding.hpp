@@ -19,7 +19,7 @@
 
 #include <Eigen/Dense>
 
-#include "Geometry.hpp"
+#include "Geometry.h"
 #include "Renderer.hpp"
 #include "Transform.hpp"
 
@@ -40,34 +40,34 @@ struct HitInfo {
   bool     isHit{false};
   glm::vec3     hitPos{0.0f, 0.0f, 0.0f};
   uint32_t triangleIdx{0};
-  string   geometryName;
+  std::string   geometryName;
   float    distance{FLT_MAX};
 };
 
 template<typename T>
-int partition(vector<T>& arr, int left, int right) {
+int partition(std::vector<T>& arr, int left, int right) {
   T pivot = arr[left];
   // printf("left: %d right: %d\n", left, right);
   while (left < right) {
     while (left < right && arr[right] >= pivot)
       right--;
     if (left < right)
-      swap(arr[left], arr[right]);
+      std::swap(arr[left], arr[right]);
     while (left < right && arr[left] <= pivot)
       left++;
     if (left < right)
-      swap(arr[left], arr[right]);
+      std::swap(arr[left], arr[right]);
   }
   return left;
 }
 
 template<typename T>
-int findKPosVal(vector<T> arr, int left, int right, int k) {
-  vector<float> arr_cpy(arr);
+int findKPosVal(std::vector<T> arr, int left, int right, int k) {
+  std::vector<float> arr_cpy(arr);
   if (right - left < 0) {
-    string msg = "findKPosVal: left cannot greater than right!";
-    cerr << msg << endl;
-    throw runtime_error(msg);
+    std::string msg = "findKPosVal: left cannot greater than right!";
+    std::cerr << msg << std::endl;
+    throw std::runtime_error(msg);
   }
   else if (right - left < 2) {
     // 若只有1个、2个元素，直接返回第一个元素位置
@@ -141,16 +141,16 @@ class BoundingBox {
   BoundingBox(glm::vec3 min_bound, glm::vec3 max_bound)
     : min_bound(min_bound)
     , max_bound(max_bound) {}
-  BoundingBox(const vector<Vertex>& vertices) {
+  BoundingBox(const std::vector<Vertex>& vertices) {
     // 通过传入所有三角面元来初始化包围盒
     this->update(vertices);
   }
-  BoundingBox(const vector<Vertex>& vertices, const vector<Surface>& surfaces, const vector<uint32_t>& indices) {
+  BoundingBox(const std::vector<Vertex>& vertices, const std::vector<Surface>& surfaces, const std::vector<uint32_t>& indices) {
     // 传入三角形面元来更新包围盒
     this->update(vertices, surfaces, indices);
   }
 
-  void update(const vector<Vertex>& vertices, const vector<Surface>& surfaces, const vector<uint32_t>& indices) {
+  void update(const std::vector<Vertex>& vertices, const std::vector<Surface>& surfaces, const std::vector<uint32_t>& indices) {
     glm::vec3 default_bound = glm::make_vec3(vertices[surfaces[indices[0]].tidx[0]].position);
     this->min_bound    = default_bound;
     this->max_bound    = default_bound;
@@ -168,7 +168,7 @@ class BoundingBox {
     }
   }
 
-  void update(const vector<Vertex>& vertices) {
+  void update(const std::vector<Vertex>& vertices) {
     this->min_bound = glm::make_vec3(vertices[0].position);
     this->max_bound = glm::make_vec3(vertices[0].position);
     for (const Vertex& vert : vertices) {
@@ -192,11 +192,11 @@ class BoundingBox {
     glm::vec3 out_bound = this->max_bound;
 
     if (ray.dir.x < 0)
-      swap(in_bound.x, out_bound.x);
+      std::swap(in_bound.x, out_bound.x);
     if (ray.dir.y < 0)
-      swap(in_bound.y, out_bound.y);
+      std::swap(in_bound.y, out_bound.y);
     if (ray.dir.z < 0)
-      swap(in_bound.z, out_bound.z);
+      std::swap(in_bound.z, out_bound.z);
 
     // 判断求交
     glm::vec3  ndir      = glm::normalize(ray.dir);
@@ -215,8 +215,8 @@ struct BvhNode {
   BvhNode *left{nullptr}, *right{nullptr};
 
   // 记录该节点的包围盒所包含的三角的索引，被索引目标是BvhTree::surfaces
-  vector<uint32_t>        triangles;
-  unique_ptr<BoundingBox> box;
+  std::vector<uint32_t>        triangles;
+  std::unique_ptr<BoundingBox> box;
 };
 
 class BvhTree {
@@ -237,7 +237,7 @@ class BvhTree {
 
   void construct() {
     if (this->root != nullptr) {
-      cerr << "BvhTree::construct()失败,已经存在构造好的bvh树!" << endl;
+      std::cerr << "BvhTree::construct()失败,已经存在构造好的bvh树!" << std::endl;
       return;
     }
     
@@ -250,18 +250,18 @@ class BvhTree {
 
     this->root = cur_node;
     // 开始划分，创建一个队列，以back进front出的顺序，记录待划分节点
-    deque<BvhNode*> node_buf{this->root};
+    std::deque<BvhNode*> node_buf{this->root};
     while (!node_buf.empty()) {
       cur_node = node_buf.front();
       node_buf.pop_front();
       // 对cur_node的划分，选择分割维度
-      vector<float> widths{cur_node->box->getXWidth(),
+      std::vector<float> widths{cur_node->box->getXWidth(),
                            cur_node->box->getYWidth(),
                            cur_node->box->getZWidth()};
       uint32_t      dimension_idx = std::distance(
         widths.begin(),
         std::max_element(widths.begin(), widths.end()));
-      vector<float> comp_positions(cur_node->triangles.size());
+      std::vector<float> comp_positions(cur_node->triangles.size());
       for (int k = 0; k < cur_node->triangles.size(); k++) {   // 计算cur_node->triangles里每个三角面元质心位置
         Surface surf = this->geometry->getSurfaces()[cur_node->triangles[k]];
         // 计算三角的质心的第i分量，dimension_idx决定按哪个维度的质心位置进行分割
@@ -271,7 +271,7 @@ class BvhTree {
         comp_positions[k] = center_pos / 3.0f;
       }
 
-      vector<uint32_t> left_triangles, right_triangles;
+      std::vector<uint32_t> left_triangles, right_triangles;
       assert(comp_positions.size() > 0);
       if (comp_positions.size() == 1) {
         // cur_node为叶子节点，不进行划分
@@ -335,9 +335,9 @@ class BvhTree {
     }
   }
 
-  void traverse(function<void(BvhNode* node)> visit) {
+  void traverse(std::function<void(BvhNode* node)> visit) {
     // 广度优先遍历
-    deque<BvhNode*> buf{this->root};
+    std::deque<BvhNode*> buf{this->root};
     while (!buf.empty()) {
       BvhNode* cur_node = buf.front();
       buf.pop_front();
@@ -367,8 +367,8 @@ class BvhTree {
     local_ray.origin    = glm::vec3(rmodel * glm::vec4(ray.origin, 1.0f));
     local_ray.dir       = glm::normalize(glm::vec3(rmodel * glm::vec4(ray.dir, 0.0f)));
 
-    deque<BvhNode*>  buf{this->root};
-    vector<BvhNode*> hit_table;   // 所有击中包围盒的叶节点
+    std::deque<BvhNode*>  buf{this->root};
+    std::vector<BvhNode*> hit_table;   // 所有击中包围盒的叶节点
     while (!buf.empty()) {
       BvhNode* cur_node = buf.front();
       buf.pop_front();
@@ -414,7 +414,7 @@ class BvhTree {
     if (this->root == nullptr)
       return;
     // 广度优先遍历释放
-    deque<BvhNode*> tmp{this->root};
+    std::deque<BvhNode*> tmp{this->root};
     while (!tmp.empty()) {
       BvhNode* cur_node = tmp.front();
       tmp.pop_front();
@@ -431,7 +431,7 @@ class BvhTree {
     if (this->root == nullptr)
       return;
     // 广度优先遍历释放
-    deque<BvhNode*> tmp{this->root};
+    std::deque<BvhNode*> tmp{this->root};
     while (!tmp.empty()) {
       BvhNode* cur_node = tmp.front();
       tmp.pop_front();

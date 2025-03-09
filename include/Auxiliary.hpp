@@ -3,7 +3,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "Geometry.hpp"
+#include "Geometry.h"
 
 #include "constants.h"
 
@@ -14,9 +14,9 @@
 // using glm::vec3;
 
 class CoordinateAxis : public Geometry {
-  shared_ptr<Geometry> axis_x{nullptr};
-  shared_ptr<Geometry> axis_y{nullptr};
-  shared_ptr<Geometry> axis_z{nullptr};
+  std::shared_ptr<Geometry> axis_x{nullptr};
+  std::shared_ptr<Geometry> axis_y{nullptr};
+  std::shared_ptr<Geometry> axis_z{nullptr};
 public:
   CoordinateAxis(float radius, float length){
     // Arrow a_x(radius, length);
@@ -46,7 +46,7 @@ public:
     // this->vertices = res.vertices;
     // this->surfaces = res.surfaces;
   }
-  virtual void notify(const string& name, const prop& parameter){}
+  virtual void notify(const std::string& name, const prop& parameter){}
 };
 
 class Ground : public Geometry {
@@ -61,7 +61,7 @@ public:
   }
   Ground() : Ground(20.0f, 20.0f) {}
   virtual void update() {}
-  virtual void notify(const string& name, const prop& parameter){}
+  virtual void notify(const std::string& name, const prop& parameter){}
 };
 
 // class Beam : public FixedGeometry{
