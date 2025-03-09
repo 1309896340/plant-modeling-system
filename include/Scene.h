@@ -31,15 +31,14 @@
 #include "proj.h"
 
 #include "Auxiliary.hpp"
-#include "Bounding.hpp"
+#include "Bounding.h"
 #include "Camera.h"
 #include "Geometry.h"
-#include "GeometryInterpreter.hpp"
+#include "GeometryInterpreter.h"
 #include "LSysConfig.h"
 #include "LSystem.h"
-#include "Light.hpp"
-#include "Shader.hpp"
-#include "Skeleton.hpp"
+#include "Shader.h"
+#include "Skeleton.h"
 #include "Transform.h"
 
 extern std::mt19937_64 rdgen;

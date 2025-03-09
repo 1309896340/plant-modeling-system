@@ -41,10 +41,7 @@ public:
   CoordinateAxis():CoordinateAxis(0.06f,1.0f){}
 
   virtual void update() {
-    // // 不会改变，无需更新
-    // FixedGeometry &&res = (*axis_x) + (*axis_y) + (*axis_z);
-    // this->vertices = res.vertices;
-    // this->surfaces = res.surfaces;
+    // 不会改变，无需更新
   }
   virtual void notify(const std::string& name, const prop& parameter){}
 };
@@ -52,9 +49,6 @@ public:
 class Ground : public Geometry {
 public:
   Ground(float width, float height) {
-    // Plane ground(width, height);
-    // this->vertices = ground.vertices;
-    // this->surfaces = ground.surfaces;
     auto ground = Mesh::Plane(width, height, 10, 10);
     this->vertices = ground->getVertices();
     this->surfaces = ground->getSurfaces();
@@ -64,12 +58,35 @@ public:
   virtual void notify(const std::string& name, const prop& parameter){}
 };
 
-// class Beam : public FixedGeometry{
-//   // 用于可视化平行光
-//   public:
-//   Beam(){
 
-//   }
-// };
-
-// } // namespace
+class Light {
+public:
+  glm::vec3 color{1.0f, 1.0f, 1.0f};
+  enum LightType {
+    POINT,
+    PARALLEL,
+    SPOT
+  } type;
+  Light(glm::vec3 color, LightType type) : color(color), type(type) {}
+  virtual const char *toString() const {
+    return "light";
+  }
+};
+class PointLight : public Light {
+public:
+  glm::vec3 position{0.0f, 0.0f, 0.0f};
+  float radiance{1.0f};
+  PointLight(glm::vec3 color, glm::vec3 position, float radiance) : Light(color, POINT), position(position), radiance(radiance) {}
+};
+class ParallelLight : public Light {
+public:
+  glm::vec3 direction{0.0f, 0.0f, 0.0f};
+  float irradiance{1.0f};
+  ParallelLight(glm::vec3 color, glm::vec3 direction, float irradiance) : Light(color, PARALLEL), direction(direction), irradiance(irradiance) {}
+};
+class SpotLight : public Light {
+public:
+  glm::vec3 direction{0.0f, 0.0f, 0.0f};
+  float theta{1.0f}; // 聚光灯最大范围夹角
+  SpotLight(glm::vec3 color, glm::vec3 direction, float theta) : Light(color, SPOT), direction(direction), theta(theta) {}
+};

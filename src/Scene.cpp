@@ -215,7 +215,7 @@ glm::vec3 Scene::TriangleSampler::hemisphereSampleDir() const {
 Scene::BoundingBoxContext::BoundingBoxContext(BoundingBox *box,
                                               Transform *transform)
     : OpenGLContext(), transform(transform), box(box) {}
-tuple<vector<vec3>, vector<uint32_t>>
+tuple<vector<glm::vec3>, vector<uint32_t>>
 Scene::BoundingBoxContext::genOpenGLRawData() {
   vec3 max_xyz = this->box->max_bound;
   vec3 min_xyz = this->box->min_bound;
@@ -813,7 +813,7 @@ Ray Scene::Scene::cast_ray_from_mouse() {
   return {this->camera.getPosition(), dir};
 }
 
-vec3 Scene::Scene::screen2world(vec2 pos) {
+glm::vec3 Scene::Scene::screen2world(vec2 pos) {
   pos = -pos;
   mat4 view = this->camera.getView();
   auto [fov, near, far, aspect] = this->camera.getProperties();
@@ -1822,7 +1822,7 @@ void Scene::Scene::compute_radiosity(uint32_t sample_N) {
 }
 
 // 迭代版本
-vec3 Scene::Scene::trace_ray(Ray ray, const HitInfo &obj, float PR,
+glm::vec3 Scene::Scene::trace_ray(Ray ray, const HitInfo &obj, float PR,
                              vector<vec3> *vert_buffer) {
   // 参数：1. 光线  2. 光线源头三角信息  3. 光线存活率  4.
   // 可视化光线的顶点缓存
