@@ -1,6 +1,8 @@
 ﻿#pragma once
 #include "Bounding.h"
 
+#include <deque>
+
 HitInfo hit_triangle(Ray ray, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3) {
   HitInfo   target;
   glm::vec3 _dir     = glm::normalize(ray.dir);

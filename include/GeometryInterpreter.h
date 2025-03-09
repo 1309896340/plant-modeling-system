@@ -1,13 +1,11 @@
 #pragma once
 
-#include <map>
 #include <memory>
 #include <string>
 #include <vector>
 
 #include "LSysConfig.h"
 
-#include "Geometry.h"
 #include "Skeleton.h"
 #include "Transform.h"
 

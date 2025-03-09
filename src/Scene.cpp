@@ -1,5 +1,9 @@
 ﻿#include "Scene.h"
 
+#include "constants.h"
+#include "GeometryInterpreter.h"
+#include "LSysConfig.h"
+
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image.h>
@@ -9,62 +13,36 @@ using namespace std;
 
 mt19937_64 rdgen;
 
-// using namespace std;
-// using glm::mat4;
-// using glm::quat;
-// using glm::vec2;
-// using glm::vec3;
-// using glm::vec4;
-// namespace fs = filesystem;
-
-// struct Pixel {
-//   // 用于解析stb_load加载的png图片
-//   uint8_t r;
-//   uint8_t g;
-//   uint8_t b;
-//   uint8_t a;
-// };
-
-// struct PngImage {
-//   Pixel* img;
-//   int    width;
-//   int    height;
-//   int    channel;
-// };
-
-// struct SkeletonObject {
-//   string               name;
-//   shared_ptr<Skeleton> skeleton{nullptr};
-// };
+namespace fs = filesystem;
 
 Scene::LineDrawer::LineDrawer() {
   glGenVertexArrays(1, &this->vao);
   glGenBuffers(1, &this->vbo);
 }
 
-void Scene::LineDrawer::addLine(vec3 pt1, vec3 pt2, vec3 color) {
-  vector<vec3> minibuf(2);
+void Scene::LineDrawer::addLine(glm::vec3 pt1, glm::vec3 pt2, glm::vec3 color) {
+  vector<glm::vec3> minibuf(2);
   minibuf[0] = pt1;
   minibuf[1] = pt2;
   this->addPolygon(minibuf, color);
 }
 
-void Scene::LineDrawer::addLine(vec3 pt1, vec3 pt2) {
-  vector<vec3> minibuf(2);
+void Scene::LineDrawer::addLine(glm::vec3 pt1, glm::vec3 pt2) {
+  vector<glm::vec3> minibuf(2);
   minibuf[0] = pt1;
   minibuf[1] = pt2;
   this->addPolygon(minibuf);
 }
 
-void Scene::LineDrawer::addPolygon(const vector<vec3> &vert) {
+void Scene::LineDrawer::addPolygon(const vector<glm::vec3> &vert) {
   this->rays.insert(this->rays.end(), vert.begin(), vert.end());
   this->v_nums.push_back(vert.size());
   uniform_real_distribution<> distr(0.1f, 0.9f);
-  vec3 color = vec3(distr(rdgen), distr(rdgen), distr(rdgen));
+  glm::vec3 color = glm::vec3(distr(rdgen), distr(rdgen), distr(rdgen));
   this->colors.push_back(color);
 }
 
-void Scene::LineDrawer::addPolygon(const vector<vec3> &vert, vec3 color) {
+void Scene::LineDrawer::addPolygon(const vector<glm::vec3> &vert, glm::vec3 color) {
   this->rays.insert(this->rays.end(), vert.begin(), vert.end());
   this->v_nums.push_back(vert.size());
   this->colors.push_back(color);
@@ -78,7 +56,7 @@ void Scene::LineDrawer::clear() {
 void Scene::LineDrawer::update() {
   glBindVertexArray(this->vao);
   glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
-  glBufferData(GL_ARRAY_BUFFER, this->rays.size() * sizeof(vec3),
+  glBufferData(GL_ARRAY_BUFFER, this->rays.size() * sizeof(glm::vec3),
                this->rays.data(), GL_DYNAMIC_DRAW);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
   glEnableVertexAttribArray(0);
@@ -103,7 +81,7 @@ Scene::LineDrawer::~LineDrawer() {
   glDeleteBuffers(1, &this->vbo);
 }
 
-Scene::Pixel Scene::cubemap_sample(PngImage *cubmaps, vec3 dir) {
+Scene::Pixel Scene::cubemap_sample(PngImage *cubmaps, glm::vec3 dir) {
   dir = glm::normalize(dir);
   // cubmaps顺序 px nx py ny pz nz
   uint8_t map_idx{0};
@@ -217,9 +195,9 @@ Scene::BoundingBoxContext::BoundingBoxContext(BoundingBox *box,
     : OpenGLContext(), transform(transform), box(box) {}
 tuple<vector<glm::vec3>, vector<uint32_t>>
 Scene::BoundingBoxContext::genOpenGLRawData() {
-  vec3 max_xyz = this->box->max_bound;
-  vec3 min_xyz = this->box->min_bound;
-  vector<vec3> vertices = {min_xyz,
+  glm::vec3 max_xyz = this->box->max_bound;
+  glm::vec3 min_xyz = this->box->min_bound;
+  vector<glm::vec3> vertices = {min_xyz,
                            {min_xyz.x, min_xyz.y, max_xyz.z},
                            {min_xyz.x, max_xyz.y, min_xyz.z},
                            {min_xyz.x, max_xyz.y, max_xyz.z},
@@ -240,7 +218,7 @@ void Scene::BoundingBoxContext::init() {
   glBindVertexArray(this->vao);
 
   glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
-  glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vec3), vertices.data(),
+  glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), vertices.data(),
                GL_STATIC_DRAW);
   glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, nullptr);
   glEnableVertexAttribArray(0);
@@ -256,7 +234,7 @@ void Scene::BoundingBoxContext::update() {
 
   glBindVertexArray(this->vao);
   glBindBuffer(GL_ARRAY_BUFFER, this->vbo);
-  glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(vec3),
+  glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(glm::vec3),
                   vertices.data());
   glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, this->ebo);
   glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, indices.size() * sizeof(uint32_t),
@@ -475,8 +453,8 @@ void Scene::Scene::init_ubo() {
   glBufferData(GL_UNIFORM_BUFFER, sizeof(glm::mat4) * 2, nullptr,
                GL_STATIC_DRAW);
 
-  mat4 projecion = this->camera.getProject();
-  mat4 view = this->camera.getView();
+  glm::mat4 projecion = this->camera.getProject();
+  glm::mat4 view = this->camera.getView();
   glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4),
                   glm::value_ptr(projecion));
   glBufferSubData(GL_UNIFORM_BUFFER, sizeof(glm::mat4), sizeof(glm::mat4),
@@ -517,7 +495,7 @@ void Scene::Scene::init_scene_obj() {
   // shared_ptr<Geometry> cursor = Mesh::Sphere(0.05f, 36, 18);
   // cursor->setColor(1.0f, 1.0f, 0.0f);
   shared_ptr<GeometryObject> cursor_obj = make_shared<GeometryObject>(
-      "Cursor", cursor, Transform({vec3(0.0f, 2.0f, 0.0f)}));
+      "Cursor", cursor, Transform({glm::vec3(0.0f, 2.0f, 0.0f)}));
   this->addSceneObject(cursor_obj, this->isShowCursor, false, false, false,0);
 
   // 地面
@@ -556,7 +534,7 @@ void Scene::Scene::init_skybox() {
   // 与前面的GL_TEXTURE_2D纹理目标不同，天空盒使用GL_TEXTURE_CUBE_MAP_XXX作为纹理目标
 
   // 1. 加载VBO
-  vector<vec3> vertices = {
+  vector<glm::vec3> vertices = {
       {-1.0, -1.0, -1.0}, {-1.0, -1.0, 1.0}, {-1.0, 1.0, -1.0},
       {-1.0, 1.0, 1.0},   {1.0, -1.0, -1.0}, {1.0, -1.0, 1.0},
       {1.0, 1.0, -1.0},   {1.0, 1.0, 1.0},
@@ -570,7 +548,7 @@ void Scene::Scene::init_skybox() {
 
   glGenBuffers(1, &this->skybox.vbo);
   glBindBuffer(GL_ARRAY_BUFFER, this->skybox.vbo);
-  glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(vec3), vertices.data(),
+  glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(glm::vec3), vertices.data(),
                GL_STATIC_DRAW);
 
   glGenBuffers(1, &this->skybox.ebo);
@@ -678,7 +656,7 @@ void Scene::Scene::init_framebuffer() {
               << std::endl;
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-  vec4 vertices[4] = {
+  glm::vec4 vertices[4] = {
       {-1.0f, -1.0f, 0.0f, 0.0f},
       {1.0f, -1.0f, 1.0f, 0.0f},
       {1.0f, 1.0f, 1.0f, 1.0f},
@@ -733,7 +711,7 @@ void Scene::Scene::init_depthmap() {
 //   // 根据ray_obj.vertices更新vbo
 //   glBindVertexArray(ray_obj.vao);
 //   glBindBuffer(GL_ARRAY_BUFFER, ray_obj.vbo);
-//   glBufferData(GL_ARRAY_BUFFER, ray_obj.vertices.size() * sizeof(vec3),
+//   glBufferData(GL_ARRAY_BUFFER, ray_obj.vertices.size() * sizeof(glm::vec3),
 //   ray_obj.vertices.data(), GL_DYNAMIC_DRAW);
 // }
 
@@ -775,7 +753,7 @@ void Scene::Scene::printRadiosityInfo() {
   for (auto &[cur_obj, context] : this->objs) {
     if (!cur_obj->status.listed)
       continue;
-    vec3 flux_sum{0.0f, 0.0f, 0.0f};
+    glm::vec3 flux_sum{0.0f, 0.0f, 0.0f};
     for (int i = 0; i < cur_obj->radiosity.radiant_flux.size(); i++) {
       flux_sum += cur_obj->radiosity.radiant_flux[i];
     }
@@ -808,21 +786,21 @@ Ray Scene::Scene::cast_ray_from_mouse() {
   xpos = 2.0f * xpos / this->width - 1.0f;
   ypos = 1.0f - 2.0f * ypos / this->height;
 
-  vec3 dir = screen2world({xpos, ypos});
+  glm::vec3 dir = screen2world({xpos, ypos});
 
   return {this->camera.getPosition(), dir};
 }
 
-glm::vec3 Scene::Scene::screen2world(vec2 pos) {
+glm::vec3 Scene::Scene::screen2world(glm::vec2 pos) {
   pos = -pos;
-  mat4 view = this->camera.getView();
+  glm::mat4 view = this->camera.getView();
   auto [fov, near, far, aspect] = this->camera.getProperties();
-  vec4 target_dir =
-      vec4(glm::normalize(vec3(pos.x * near * tanf(fov / 2.0f) * aspect,
+  glm::vec4 target_dir =
+      glm::vec4(glm::normalize(glm::vec3(pos.x * near * tanf(fov / 2.0f) * aspect,
                                pos.y * near * tanf(fov / 2.0f), near)),
            0.0f);
-  vec4 world_dir = glm::transpose(view) * target_dir;
-  return -vec3(world_dir);
+  glm::vec4 world_dir = glm::transpose(view) * target_dir;
+  return -glm::vec3(world_dir);
 }
 
 void Scene::Scene::imgui_interact() {
@@ -880,7 +858,7 @@ void Scene::Scene::imgui_interact() {
 
         struct HitInfo_imgui {
           bool isHit{false};
-          vec3 hitPos{0.0f, 0.0f, 0.0f};
+          glm::vec3 hitPos{0.0f, 0.0f, 0.0f};
           float distance{FLT_MAX};
           int32_t id{0};    // 该物体在Scene::imgui::items中的索引位置
           uint32_t type{0}; // 0为普通包围盒，1为层次包围盒
@@ -1282,7 +1260,7 @@ bool Scene::Scene::imgui_menu() {
       const GeometryInterpreter::GraphicsStructure gs(symSeq);
       this->lsystem.skeleton = gs.construct();
       this->add("skeleton", this->lsystem.skeleton,
-                Transform{vec3(0.5f, 0.03f, 0.5f)});
+                Transform{glm::vec3(0.5f, 0.03f, 0.5f)});
       this->lsystem.iter_n++;
     }
     ImGui::SameLine();
@@ -1386,12 +1364,12 @@ void Scene::Scene::load_all_texture() {
 void Scene::Scene::test_triangle_coord() {
   lines["Coord"]->clear();
   for (auto &[cur_obj, context] : this->objs) {
-    mat4 model = cur_obj->transform.getModel();
+    glm::mat4 model = cur_obj->transform.getModel();
     for (auto &triangle : cur_obj->getGeometry()->getSurfaces()) {
       TriangleSampler tri(cur_obj->getGeometry()->getVertices(), triangle,
                           model);
-      vec3 tri_center = tri.calcCenter();
-      // vec3 tri_norm = tri.calcNorm();
+      glm::vec3 tri_center = tri.calcCenter();
+      // glm::vec3 tri_norm = tri.calcNorm();
       // printf("三角中心： (%.2f,%.2f,%.2f)\n", tri_center.x, tri_center.y,
       // tri_center.z); printf("三角法方向： (%.2f,%.2f,%.2f)\n", tri_norm.x,
       // tri_norm.y, tri_norm.z);
@@ -1554,7 +1532,7 @@ void Scene::Scene::add(const string &name,
 
 // void Scene::Scene::add(const string &name, const shared_ptr<Geometry>
 // &geometry,
-//                        vec3 position) {
+//                        glm::vec3 position) {
 //   this->add(name, geometry, Transform(position),true,true,true,true,true);
 // }
 
@@ -1604,13 +1582,13 @@ void Scene::Scene::addLight(const string &name,
 //     cur_obj->radiosity.radiant_flux.resize(geometry->surfaces.size());
 //     for (int i = 0; i < geometry->surfaces.size(); i++) {
 //       Surface triangle = geometry->surfaces[i];
-//       vector<vec3> pt(3);
-//       vec3 norm{0.0f, 0.0f, 0.0f};
+//       vector<glm::vec3> pt(3);
+//       glm::vec3 norm{0.0f, 0.0f, 0.0f};
 //       float area{0.0f};
 //       for (int j = 0; j < 3; j++)
 //         pt[j] =
 //         glm::make_vec3(geometry->vertices[triangle.tidx[j]].position);
-//       vec3 tri_cross = glm::cross(pt[1] - pt[0], pt[2] - pt[0]);
+//       glm::vec3 tri_cross = glm::cross(pt[1] - pt[0], pt[2] - pt[0]);
 //       norm = glm::normalize(tri_cross);
 //       area = glm::length(tri_cross) / 2.0f;
 //       // 计算辐射通量(每个三角面)
@@ -1625,7 +1603,7 @@ void Scene::Scene::addLight(const string &name,
 //   bool isHit{false};
 //   string obj_name; // 击中物体名称
 //   uint32_t tri_id; // 击中物体所在三角面元的索引
-//   vec3 hit_pos;    // 世界坐标系下的击中位置
+//   glm::vec3 hit_pos;    // 世界坐标系下的击中位置
 // };
 
 HitInfo Scene::Scene::hit(Ray ray) {
@@ -1657,14 +1635,14 @@ HitInfo Scene::Scene::hit(Ray ray) {
 }
 
 // // 递归函数版本
-// vec3 trace_ray(Ray ray, const HitInfo &obj, float PR, uint32_t
-// recursive_depth = 0, shared_ptr<vector<vec3>> vert_buffer = nullptr) {
+// glm::vec3 trace_ray(Ray ray, const HitInfo &obj, float PR, uint32_t
+// recursive_depth = 0, shared_ptr<vector<glm::vec3>> vert_buffer = nullptr) {
 //   //
 //   recursive_depth用以记录该函数的递归深度，同时在可视化光线路径时用于记录顶点数量
 //   // recursive_depth=0表示对该函数的“根调用”，其他为递归调用
 //   assert(PR < 1.0f && PR > 0.0f);
 //   uniform_real_distribution<> distr(0.0, 1.0);
-//   vec3 L_dir{0.0f, 0.0f, 0.0f}, L_indir{0.0f, 0.0f, 0.0f};
+//   glm::vec3 L_dir{0.0f, 0.0f, 0.0f}, L_indir{0.0f, 0.0f, 0.0f};
 //   float PR_D = distr(rdgen);
 //   if (PR > PR_D) { // 俄罗斯赌轮盘
 //     assert(this->objs.find(obj.geometry_name) != this->objs.end() &&
@@ -1675,9 +1653,9 @@ HitInfo Scene::Scene::hit(Ray ray) {
 //     mat4 model = gobj->transform.getModel();
 
 //     TriangleSampler tri(geometry->vertices,
-//     geometry->surfaces[obj.triangle_idx], model); vec3 tri_center =
-//     tri.calcCenter(); vec3 tri_norm = tri.calcNorm(); float tri_area =
-//     tri.calcArea(); vec3 wi = tri.hemisphereSampleDir();
+//     geometry->surfaces[obj.triangle_idx], model); glm::vec3 tri_center =
+//     tri.calcCenter(); glm::vec3 tri_norm = tri.calcNorm(); float tri_area =
+//     tri.calcArea(); glm::vec3 wi = tri.hemisphereSampleDir();
 
 //     if (tri_area == 0.0f)
 //       // cerr << "Warning : zero area triangle exists! return zero vector."
@@ -1695,7 +1673,7 @@ HitInfo Scene::Scene::hit(Ray ray) {
 //       recursive_depth + 1, vert_buffer) * BRDF * cosine / PR;
 //     } else {
 //       Pixel p = cubemap_sample(this->cubemaps, wi);
-//       L_dir += vec3(p.r, p.g, p.b) / 255.0f;
+//       L_dir += glm::vec3(p.r, p.g, p.b) / 255.0f;
 //       if (vert_buffer != nullptr)
 //         vert_buffer->push_back(obj.hitPos + 10.0f * wi);
 //     }
@@ -1722,18 +1700,18 @@ HitInfo Scene::Scene::hit(Ray ray) {
 
 //     for (int i = 0; i < geometry->surfaces.size(); i++) {
 //       TriangleSampler tri(geometry->vertices, geometry->surfaces[i],
-//       model); vec3 tri_center = tri.calcCenter(); vec3 tri_norm =
+//       model); glm::vec3 tri_center = tri.calcCenter(); glm::vec3 tri_norm =
 //       tri.calcNorm();
 
-//       vec3 L_dir{0.0f, 0.0f, 0.0f};
-//       vec3 L_indir{0.0f, 0.0f, 0.0f};
+//       glm::vec3 L_dir{0.0f, 0.0f, 0.0f};
+//       glm::vec3 L_indir{0.0f, 0.0f, 0.0f};
 //       //
 //       这里只计算irradiance，假定这个三角为黑体，吸收全部的辐射。否则，需要结合三角表面材质纹理来计算对irradiance的吸收率
 //       // 调用前初始化this->ray_obj->vertices可视化光线路径
 
-//       vec3 wi = tri.hemisphereSampleDir();
+//       glm::vec3 wi = tri.hemisphereSampleDir();
 
-//       shared_ptr<vector<vec3>> vec_buffer = make_shared<vector<vec3>>();
+//       shared_ptr<vector<glm::vec3>> vec_buffer = make_shared<vector<glm::vec3>>();
 //       vec_buffer->push_back(tri_center + 0.005f * tri_norm);
 
 //       HitInfo new_obj = hit_obj({tri_center + 0.005f * tri_norm, wi});
@@ -1745,12 +1723,12 @@ HitInfo Scene::Scene::hit(Ray ray) {
 //       } else {
 //         vec_buffer->push_back(tri_center + 10.0f * wi);
 //         Pixel p = cubemap_sample(this->cubemaps, wi);
-//         L_dir += vec3(p.r, p.g, p.b) / 255.0f;
+//         L_dir += glm::vec3(p.r, p.g, p.b) / 255.0f;
 //       }
 //       lines["Ray"]->addPolygon(*vec_buffer);
 
 //       // 将计算的irradiance的结果存储
-//       vec3 Lo = L_dir + L_indir;
+//       glm::vec3 Lo = L_dir + L_indir;
 //       cur_obj->radiosity.radiant_flux[i] = Lo;
 //       // printf("物体\"%s\"第(%d/%llu)面元 radiance: %.4f\n", name.c_str(),
 //       i, geometry->surfaces.size(), Lo);
@@ -1771,7 +1749,7 @@ void Scene::Scene::compute_radiosity(uint32_t sample_N) {
     // if (!cur_obj->isSelected) // 暂时只计算被选中目标
     //   continue;
 
-    mat4 model = cur_obj->transform.getModel();
+    glm::mat4 model = cur_obj->transform.getModel();
     Geometry *geometry = cur_obj->getGeometry();
 
     cur_obj->radiosity.radiant_flux.resize(geometry->getSurfaces().size());
@@ -1779,8 +1757,8 @@ void Scene::Scene::compute_radiosity(uint32_t sample_N) {
     for (int i = 0; i < geometry->getSurfaces().size(); i++) {
       TriangleSampler tri(geometry->getVertices(), geometry->getSurfaces()[i],
                           model);
-      vec3 tri_center = tri.calcCenter();
-      vec3 tri_norm = tri.calcNorm();
+      glm::vec3 tri_center = tri.calcCenter();
+      glm::vec3 tri_norm = tri.calcNorm();
       float tri_area = tri.calcArea();
 
       if (tri.calcArea() == 0.0f) // 跳过无面积三角
@@ -1788,15 +1766,15 @@ void Scene::Scene::compute_radiosity(uint32_t sample_N) {
 
       // 可视化光线颜色
       uniform_real_distribution<> distr(0.1f, 0.9f);
-      vec3 color = vec3(distr(rdgen), distr(rdgen), distr(rdgen));
+      glm::vec3 color = glm::vec3(distr(rdgen), distr(rdgen), distr(rdgen));
       // 可视化光线颜色
 
-      vec3 radiance_sum{0.0f, 0.0f,
+      glm::vec3 radiance_sum{0.0f, 0.0f,
                         0.0f}; // 蒙特卡洛积分，累加所有采样点的Radiance
       for (int k = 0; k < sample_N; k++) {
-        vec3 radiance{0.0f, 0.0f, 0.0f};
-        vector<vec3> vec_buffer;
-        vec3 wi = tri.hemisphereSampleDir();
+        glm::vec3 radiance{0.0f, 0.0f, 0.0f};
+        vector<glm::vec3> vec_buffer;
+        glm::vec3 wi = tri.hemisphereSampleDir();
         vec_buffer.push_back(tri_center +
                              SURFACE_NORMAL_OFFSET * tri_norm); // 三角起点
         HitInfo new_obj =
@@ -1808,12 +1786,12 @@ void Scene::Scene::compute_radiosity(uint32_t sample_N) {
           vec_buffer.push_back(tri_center +
                                RAY_LENGTH_TO_CUBEMAP * wi); // 直接射到cubemap
           Pixel p = cubemap_sample(this->cubemaps, wi);
-          radiance = vec3(p.r, p.g, p.b) / 255.0f;
+          radiance = glm::vec3(p.r, p.g, p.b) / 255.0f;
         }
         radiance_sum += radiance * glm::max(0.0f, glm::dot(tri_norm, wi));
         lines["Ray"]->addPolygon(vec_buffer, color);
       }
-      vec3 irradiance = radiance_sum * (2.0f * PI) /
+      glm::vec3 irradiance = radiance_sum * (2.0f * PI) /
                         static_cast<float>(sample_N); // 蒙特卡洛积分
       cur_obj->radiosity.radiant_flux[i] = irradiance * tri_area;
     }
@@ -1823,7 +1801,7 @@ void Scene::Scene::compute_radiosity(uint32_t sample_N) {
 
 // 迭代版本
 glm::vec3 Scene::Scene::trace_ray(Ray ray, const HitInfo &obj, float PR,
-                             vector<vec3> *vert_buffer) {
+                             vector<glm::vec3> *vert_buffer) {
   // 参数：1. 光线  2. 光线源头三角信息  3. 光线存活率  4.
   // 可视化光线的顶点缓存
 
@@ -1831,8 +1809,8 @@ glm::vec3 Scene::Scene::trace_ray(Ray ray, const HitInfo &obj, float PR,
   assert(obj.isHit && "trace_ray() has no target!");
 
   uniform_real_distribution<> distr(0.0, 1.0);
-  // vec3 L_dir{0.0f, 0.0f, 0.0f}, L_indir{0.0f, 0.0f, 0.0f};
-  vec3 L_sample{0.0f, 0.0f, 0.0f};
+  // glm::vec3 L_dir{0.0f, 0.0f, 0.0f}, L_indir{0.0f, 0.0f, 0.0f};
+  glm::vec3 L_sample{0.0f, 0.0f, 0.0f};
 
   Ray cur_ray = ray; // 由cur_obj发出的光线cur_ray
   HitInfo cur_obj = obj;
@@ -1850,12 +1828,12 @@ glm::vec3 Scene::Scene::trace_ray(Ray ray, const HitInfo &obj, float PR,
     assert(gobj != nullptr && "hit geometry not found!");
 
     Geometry *geometry = gobj->getGeometry();
-    mat4 model = gobj->transform.getModel();
+    glm::mat4 model = gobj->transform.getModel();
 
     TriangleSampler tri(geometry->getVertices(),
                         geometry->getSurfaces()[cur_obj.triangleIdx], model);
-    vec3 tri_norm = tri.calcNorm();
-    vec3 wi = tri.hemisphereSampleDir();
+    glm::vec3 tri_norm = tri.calcNorm();
+    glm::vec3 wi = tri.hemisphereSampleDir();
 
     if (vert_buffer)
       vert_buffer->push_back(cur_obj.hitPos + SURFACE_NORMAL_OFFSET *
@@ -1865,7 +1843,7 @@ glm::vec3 Scene::Scene::trace_ray(Ray ray, const HitInfo &obj, float PR,
     // （这里算的不正确，应当对光源进行直接采样）
     // 暂时不考虑该分量
     // Pixel p = cubemap_sample(this->cubemaps, wi);
-    // cur_L_dir += vec3(p.r, p.g, p.b) / 255.0f;
+    // cur_L_dir += glm::vec3(p.r, p.g, p.b) / 255.0f;
 
     // ====================计算间接光照========================
     Ray new_ray{cur_obj.hitPos + SURFACE_NORMAL_OFFSET * tri_norm,
@@ -1876,7 +1854,7 @@ glm::vec3 Scene::Scene::trace_ray(Ray ray, const HitInfo &obj, float PR,
       // 找到光源物体
       // 累加计算间接辐射率
       RayInfo ray_info;
-      ray_info.BRDF = vec3(1.0f, 1.0f, 1.0f) / PI; // 假定理想朗伯体，完全漫反射
+      ray_info.BRDF = glm::vec3(1.0f, 1.0f, 1.0f) / PI; // 假定理想朗伯体，完全漫反射
       ray_info.cosine =
           glm::dot(cur_ray.dir,
                    tri_norm); // 出射余弦量(三角面元法线与出射光夹角)
@@ -1890,7 +1868,7 @@ glm::vec3 Scene::Scene::trace_ray(Ray ray, const HitInfo &obj, float PR,
 
       // 未找到光源物体，说明光线由cubemap发出，直接采样
       Pixel p = cubemap_sample(this->cubemaps, wi);
-      L_sample = vec3(p.r, p.g, p.b) / 255.0f;
+      L_sample = glm::vec3(p.r, p.g, p.b) / 255.0f;
       break; // 找到光源，光线不再弹射
     }
 
@@ -1970,8 +1948,8 @@ void Scene::Scene::imgui_docking_config() {
 }
 
 void Scene::Scene::render() {
-  mat4 view = this->camera.getView();
-  mat4 projection = this->camera.getProject();
+  glm::mat4 view = this->camera.getView();
+  glm::mat4 projection = this->camera.getProject();
 
   // 启用帧缓冲进行预渲染
   glBindFramebuffer(GL_FRAMEBUFFER, this->framebuffer.fbo);
@@ -2033,18 +2011,18 @@ void Scene::Scene::render() {
     } else {
       cur_shader->set("useTexture", false);
     }
-    mat4 model = cur_obj->transform.getModel();
+    glm::mat4 model = cur_obj->transform.getModel();
     if (cur_obj->getName() == "Axis") {
       // 只记录view中的姿态，不记录位置偏移
       // 因此需要关闭view，在这里转为model表示
       cur_shader->set("disable_view", true);
       float phi = this->camera.getPhi() / 180.0f * PI;
       float theta = this->camera.getTheta() / 180.0f * PI;
-      vec3 from = {1.5f * sinf(PI - theta) * cosf(PI - phi),
+      glm::vec3 from = {1.5f * sinf(PI - theta) * cosf(PI - phi),
                    1.5f * cosf(PI - theta),
                    1.5f * sinf(PI - theta) * sinf(PI - phi)};
-      model = glm::lookAt(from, vec3(0.0f, 0.0f, 0.0f), _up);
-      mat4 orth_project = glm::ortho(-1.5f, 1.5f, -1.5f, 1.5f, 0.0f, 10.0f);
+      model = glm::lookAt(from, glm::vec3(0.0f, 0.0f, 0.0f), _up);
+      glm::mat4 orth_project = glm::ortho(-1.5f, 1.5f, -1.5f, 1.5f, 0.0f, 10.0f);
       glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(glm::mat4),
                       glm::value_ptr(orth_project)); // 使用正交投影矩阵
       glViewport(5, this->height - 210, 200, 200);

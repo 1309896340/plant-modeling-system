@@ -1,6 +1,5 @@
 ﻿#pragma once
 
-#include <cmath>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -9,16 +8,11 @@
 #include <variant>
 #include <vector>
 
-#include <iostream>
-
-#include "constants.h"
-
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-// namespace {
-// using namespace std;
+
 using prop = std::variant<uint32_t, int32_t, float, double, bool, char, glm::vec3>;
 
 struct Vertex {

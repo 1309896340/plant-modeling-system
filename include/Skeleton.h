@@ -1,11 +1,8 @@
 ﻿#pragma once
 
-#include <cstdint>
-#include <cstdio>
-#include <deque>
 // #include <iostream>
+#include <cstdint>
 #include <memory>
-#include <stdexcept>
 #include <vector>
 
 #include <glm/glm.hpp>

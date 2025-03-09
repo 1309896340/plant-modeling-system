@@ -5,9 +5,9 @@
 #include <cfloat>
 #include <cstdint>
 
-#include <deque>
+// #include <deque>
+// #include <iterator>
 #include <iostream>
-#include <iterator>
 #include <memory>
 #include <stdexcept>
 
@@ -20,7 +20,7 @@
 #include <Eigen/Dense>
 
 #include "Geometry.h"
-#include "Renderer.h"
+// #include "Renderer.h"
 #include "Transform.h"
 
 

@@ -1,6 +1,9 @@
 ﻿#pragma once
 #include "Skeleton.h"
 
+#include <stdexcept>
+#include <deque>
+
 SkNode::SkNode(glm::vec3 position, float rot_angle, glm::vec3 rot_axis) {
   this->transform.translate(position);
   this->transform.rotate(rot_angle, rot_axis);

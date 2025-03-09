@@ -1,20 +1,12 @@
 #pragma once
 
-#include <algorithm>
 #include <cassert>
-#include <chrono>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <filesystem>
-#include <format>
-#include <iostream>
 #include <map>
 #include <memory>
 #include <random>
-#include <ranges>
 #include <regex>
-#include <stdexcept>
 
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
@@ -27,15 +19,13 @@
 #include <imgui_impl_opengl3.h>
 #include <misc/cpp/imgui_stdlib.h>
 
-#include "constants.h"
 #include "proj.h"
 
 #include "Auxiliary.hpp"
 #include "Bounding.h"
 #include "Camera.h"
+#include "Renderer.h"
 #include "Geometry.h"
-#include "GeometryInterpreter.h"
-#include "LSysConfig.h"
 #include "LSystem.h"
 #include "Shader.h"
 #include "Skeleton.h"
@@ -52,13 +42,6 @@ extern std::mt19937_64 rdgen;
 
 namespace Scene {
 
-using namespace std;
-using glm::mat4;
-using glm::quat;
-using glm::vec2;
-using glm::vec3;
-using glm::vec4;
-namespace fs = filesystem;
 
 void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 
@@ -78,8 +61,8 @@ struct PngImage {
 };
 
 struct SkeletonObject {
-  string name;
-  shared_ptr<Skeleton> skeleton{nullptr};
+  std::string name;
+  std::shared_ptr<Skeleton> skeleton{nullptr};
 };
 
 struct Status {
@@ -120,24 +103,24 @@ struct FramebufferInfo {
 struct RadiosityResult {
   // float radiant_flux{0.0f};
   // 与GeometryContext::geometry::surfaces的元素一一对应
-  vector<vec3> radiant_flux;
+  std::vector<glm::vec3> radiant_flux;
 };
 
 class LineDrawer {
 private:
   GLuint vao{0};
   GLuint vbo{0};
-  vector<vec3> rays;
-  vector<uint32_t> v_nums;
-  vector<vec3> colors;
+  std::vector<glm::vec3> rays;
+  std::vector<uint32_t> v_nums;
+  std::vector<glm::vec3> colors;
 
 public:
   LineDrawer();
-  void addLine(vec3 pt1, vec3 pt2, vec3 color);
-  void addLine(vec3 pt1, vec3 pt2);
-  void addPolygon(const vector<vec3> &vert);
+  void addLine(glm::vec3 pt1, glm::vec3 pt2, glm::vec3 color);
+  void addLine(glm::vec3 pt1, glm::vec3 pt2);
+  void addPolygon(const std::vector<glm::vec3> &vert);
 
-  void addPolygon(const vector<vec3> &vert, vec3 color);
+  void addPolygon(const std::vector<glm::vec3> &vert, glm::vec3 color);
   void clear();
   void update();
   size_t size() const;
@@ -146,21 +129,21 @@ public:
   ~LineDrawer();
 };
 
-Pixel cubemap_sample(PngImage *cubmaps, vec3 dir);
+Pixel cubemap_sample(PngImage *cubmaps, glm::vec3 dir);
 
 class TriangleSampler {
 public:
   glm::vec3 pt[3];
-  TriangleSampler(const vector<Vertex> &vertices, const Surface &surface,
+  TriangleSampler(const std::vector<Vertex> &vertices, const Surface &surface,
                   glm::mat4 model);
-  TriangleSampler(const vector<Vertex> &vertices, const Surface &surface);
+  TriangleSampler(const std::vector<Vertex> &vertices, const Surface &surface);
 
   float calcArea() const;
 
   glm::vec3 calcNorm() const;
   glm::vec3 calcCenter() const;
   // 以法向量为上方向基准，结合pt[2]-pt[1]、pt[1]-pt[0]所成平面构建局部坐标系
-  tuple<glm::vec3, glm::vec3, glm::vec3> calcLocalCoord() const;
+  std::tuple<glm::vec3, glm::vec3, glm::vec3> calcLocalCoord() const;
 
   // 半球均匀分布随机方向采样
   glm::vec3 hemisphereSampleDir() const;
@@ -175,7 +158,7 @@ public:
   BoundingBoxContext() = delete;
 
   BoundingBoxContext(BoundingBox *box, Transform *transform);
-  tuple<vector<vec3>, vector<uint32_t>> genOpenGLRawData();
+  std::tuple<std::vector<glm::vec3>, std::vector<uint32_t>> genOpenGLRawData();
 
   virtual void init();
   virtual void update();
@@ -183,10 +166,10 @@ public:
 
 class GeometryObject {
 private:
-  string name;
-  shared_ptr<Geometry> geometry{nullptr};
-  unique_ptr<BoundingBox> box{nullptr};
-  unique_ptr<BvhTree> bvhtree{nullptr};
+  std::string name;
+  std::shared_ptr<Geometry> geometry{nullptr};
+  std::unique_ptr<BoundingBox> box{nullptr};
+  std::unique_ptr<BvhTree> bvhtree{nullptr};
 
 public:
   Transform transform;
@@ -194,11 +177,11 @@ public:
 
   RadiosityResult radiosity; // 由compute_radiosity()更新
 
-  string getName() const;
+  std::string getName() const;
   BvhTree *getBvhTree();
   BoundingBox *getBoundingBox();
   Geometry *getGeometry();
-  GeometryObject(string name, shared_ptr<Geometry> geometry,
+  GeometryObject(std::string name, std::shared_ptr<Geometry> geometry,
                  Transform transform = Transform{}, bool useBvh = false);
 
   void update();
@@ -211,8 +194,8 @@ private:
   BvhTree *bvhtree{nullptr};
 
 public:
-  unique_ptr<BoundingBoxContext> box{nullptr};
-  vector<unique_ptr<BoundingBoxContext>> boxes;
+  std::unique_ptr<BoundingBoxContext> box{nullptr};
+  std::vector<std::unique_ptr<BoundingBoxContext>> boxes;
   GeometryContext(GeometryObject *obj);
 
   virtual void init();
@@ -224,24 +207,24 @@ void errorCallback(int code, const char *msg);
 struct ImguiInfo {
   bool start_record{true};
   ImVec2 mouse_pos{0, 0};
-  shared_ptr<GeometryObject> cur{nullptr};
+  std::shared_ptr<GeometryObject> cur{nullptr};
   int32_t selected_idx = 0;
-  vector<shared_ptr<GeometryObject>> list_items;
+  std::vector<std::shared_ptr<GeometryObject>> list_items;
   bool changeGeometryListView{true};
 };
 
 struct LSystemInfo {
   const size_t LSYSTEM_MAX_LENGTH{1000};
-  string axiom;
-  vector<string> productions;
+  std::string axiom;
+  std::vector<std::string> productions;
   uint32_t iter_n{0};
-  shared_ptr<LSystem::LSystem> config{nullptr};
-  shared_ptr<Skeleton> skeleton{nullptr};
+  std::shared_ptr<LSystem::LSystem> config{nullptr};
+  std::shared_ptr<Skeleton> skeleton{nullptr};
 };
 
 // 路径上每条光线的信息
 struct RayInfo {
-  vec3 BRDF{1.0f, 1.0f, 1.0f};
+  glm::vec3 BRDF{1.0f, 1.0f, 1.0f};
   float cosine{1.0f};
 };
 
@@ -249,7 +232,7 @@ class Scene {
 private:
   const float FPS_SHOW_SPAN = 1.0f; // 大约每过1秒显示一下fps
   const GLuint PVM_binding_point{0};
-  const regex check_skeleton_node_name_pattern{"[a-zA-Z]\\w*#\\d+"};
+  const std::regex check_skeleton_node_name_pattern{"[a-zA-Z]\\w*#\\d+"};
 
   int width = 1600;
   int height = 1200;
@@ -278,21 +261,21 @@ private:
   bool isShowBvhFrame{false};
 
 public:
-  map<string, Shader *> shaders;
-  map<string, GLuint> textures;
-  map<shared_ptr<GeometryObject>, unique_ptr<GeometryContext>> objs;
+  std::map<std::string, Shader *> shaders;
+  std::map<std::string, GLuint> textures;
+  std::map<std::shared_ptr<GeometryObject>, std::unique_ptr<GeometryContext>> objs;
 
-  map<string, shared_ptr<LineDrawer>> lines;
-  map<string, SkeletonObject> skeletons;
+  std::map<std::string, std::shared_ptr<LineDrawer>> lines;
+  std::map<std::string, SkeletonObject> skeletons;
 
   // 开发阶段暂时忽略渲染逻辑，实现lights中光源模拟辐照度计算
-  vector<shared_ptr<Light>>
+  std::vector<std::shared_ptr<Light>>
       lights; // 只用于计算的光源，为了能在场景中看到光源实际位置，需要将其加入到aux中使用sphere进行渲染可视化
   PointLight light{{1.0f, 1.0f, 1.0f},
                    {-2.0f, 10.0f, 3.0f},
                    1.0f}; // 用于OpenGL可视化渲染的光源
 
-  Camera camera{vec3(4.0f, 11.0f, 27.0f), vec3{15.0f, 2.0f, 0.0f},
+  Camera camera{glm::vec3(4.0f, 11.0f, 27.0f), glm::vec3{15.0f, 2.0f, 0.0f},
                 static_cast<float>(width) / static_cast<float>(height)};
   Scene();
 
@@ -342,7 +325,7 @@ public:
 
   void printRadiosityInfo();
 
-  shared_ptr<GeometryObject> findGeometryObjectByName(const string &name);
+  std::shared_ptr<GeometryObject> findGeometryObjectByName(const std::string &name);
 
   // void setSeed(uint32_t sd) {
   //   this->random_generator.seed(sd);
@@ -350,7 +333,7 @@ public:
 
   Ray cast_ray_from_mouse();
 
-  vec3 screen2world(vec2 pos);
+  glm::vec3 screen2world(glm::vec2 pos);
 
   void imgui_interact();
 
@@ -373,31 +356,31 @@ public:
 
   void test_triangle_coord();
 
-  void addSceneObject(const shared_ptr<GeometryObject> &obj, bool visible,
+  void addSceneObject(const std::shared_ptr<GeometryObject> &obj, bool visible,
                       bool listed, bool collided, bool lighted, GLuint texture);
 
-  void addSceneObject(const shared_ptr<GeometryObject> &obj);
+  void addSceneObject(const std::shared_ptr<GeometryObject> &obj);
 
-  void remove(const string &name);
+  void remove(const std::string &name);
 
-  void removeSkeleton(const string &name);
+  void removeSkeleton(const std::string &name);
 
-  void add(const string &name, shared_ptr<Skeleton> skeleton,
+  void add(const std::string &name, std::shared_ptr<Skeleton> skeleton,
            Transform transform);
 
-  void add(const string &name, shared_ptr<Skeleton> skeleton);
+  void add(const std::string &name, std::shared_ptr<Skeleton> skeleton);
 
-  void add(const string &name, const shared_ptr<Geometry> &geometry,
+  void add(const std::string &name, const std::shared_ptr<Geometry> &geometry,
            Transform transform, bool visible, bool listed, bool collided,
            bool lighted, bool useBvh);
-  void add(const string &name, const shared_ptr<Geometry> &geometry,
+  void add(const std::string &name, const std::shared_ptr<Geometry> &geometry,
            Transform transform);
 
-  void add(const string &name, const shared_ptr<Geometry> &geometry);
+  void add(const std::string &name, const std::shared_ptr<Geometry> &geometry);
   //   void add(const string &name, const shared_ptr<Geometry> &geometry,
   //            vec3 position);
 
-  void addLight(const string &name, const shared_ptr<Light> &light);
+  void addLight(const std::string &name, const std::shared_ptr<Light> &light);
 
   // void compute_radiosity_1() {
   //   // 遍历场景中所有objs并计算每个物体对应接收到的辐射通量
@@ -543,8 +526,8 @@ public:
   void compute_radiosity(uint32_t sample_N = 1);
 
   // 迭代版本
-  vec3 trace_ray(Ray ray, const HitInfo &obj, float PR,
-                 vector<vec3> *vert_buffer = nullptr);
+  glm::vec3 trace_ray(Ray ray, const HitInfo &obj, float PR,
+                 std::vector<glm::vec3> *vert_buffer = nullptr);
 
   void imgui_docking_render(bool *p_open = nullptr);
   void imgui_docking_config();

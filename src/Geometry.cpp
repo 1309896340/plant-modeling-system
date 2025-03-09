@@ -1,4 +1,7 @@
 ﻿#include "Geometry.h"
+
+#include "constants.h"
+
 using namespace std;
 
 ReflectValue::ReflectValue(const string& name, prop init_value)
