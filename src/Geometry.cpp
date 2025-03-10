@@ -12,8 +12,25 @@ ReflectValue::ReflectValue(const string& name, prop init_value, weak_ptr<Observe
   , value(init_value) {
   this->observers.emplace_back(observer);
 }
+
+ReflectValue::ReflectValue(const std::string& name, prop init_value, bool isTopo, std::weak_ptr<Observer> observer)
+  : name(name)
+  , value(init_value)
+  , topoFlag(isTopo) {
+  this->observers.emplace_back(observer);
+}
+
+ReflectValue::ReflectValue(const std::string& name, prop init_value, bool isTopo)
+  : name(name)
+  , value(init_value)
+  , topoFlag(isTopo) {
+}
 prop& ReflectValue::getProp() {
   return this->value;
+}
+
+bool ReflectValue::isTopo() const {
+  return this->topoFlag;
 }
 
 void ReflectValue::notify(const string& name, const prop& param) {
@@ -122,8 +139,8 @@ FixedGeometry operator+(const FixedGeometry& a, const FixedGeometry& b) {
 
 Mesh::Mesh(uint32_t uNum, uint32_t vNum)
   : topo_flag(true) {
-  this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum);
-  this->parameters["vNum"] = make_shared<ReflectValue>("vNum", vNum);
+  this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum, true);
+  this->parameters["vNum"] = make_shared<ReflectValue>("vNum", vNum, true);
 
   // 默认updater生成一个平面
   MeshUpdater updater = [](float u, float v) {
@@ -153,8 +170,8 @@ Mesh::Mesh(uint32_t uNum, uint32_t vNum)
 }
 Mesh::Mesh(uint32_t uNum, uint32_t vNum, MeshUpdater updater)
   : topo_flag(true) {
-  this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum);
-  this->parameters["vNum"] = make_shared<ReflectValue>("vNum", vNum);
+  this->parameters["uNum"] = make_shared<ReflectValue>("uNum", uNum, true);
+  this->parameters["vNum"] = make_shared<ReflectValue>("vNum", vNum, true);
   this->updater            = updater;
 }
 
@@ -454,9 +471,9 @@ shared_ptr<Composition> Composition::Cube(float xWidth, float yWidth, float zWid
   auto xwidth_val = make_shared<ReflectValue>("xWidth", xWidth);
   auto ywidth_val = make_shared<ReflectValue>("yWidth", yWidth);
   auto zwidth_val = make_shared<ReflectValue>("zWidth", zWidth);
-  auto xnum_val   = make_shared<ReflectValue>("XNum", xNum);
-  auto ynum_val   = make_shared<ReflectValue>("YNum", yNum);
-  auto znum_val   = make_shared<ReflectValue>("ZNum", zNum);
+  auto xnum_val   = make_shared<ReflectValue>("XNum", xNum, true);
+  auto ynum_val   = make_shared<ReflectValue>("YNum", yNum, true);
+  auto znum_val   = make_shared<ReflectValue>("ZNum", zNum, true);
 
   auto xy1 = Mesh::Plane(xWidth, yWidth, xNum, yNum);
   auto xy2 = Mesh::Plane(xWidth, yWidth, xNum, yNum);
@@ -581,9 +598,9 @@ shared_ptr<Composition> Composition::Cylinder(float radius, float height, uint32
   auto radius_val = make_shared<ReflectValue>("radius", radius);
   auto height_val = make_shared<ReflectValue>("height", height);
 
-  auto pnum_val = make_shared<ReflectValue>("PNum", PNum);
-  auto rnum_val = make_shared<ReflectValue>("RNum", RNum);
-  auto hnum_val = make_shared<ReflectValue>("HNum", HNum);
+  auto pnum_val = make_shared<ReflectValue>("PNum", PNum, true);
+  auto rnum_val = make_shared<ReflectValue>("RNum", RNum, true);
+  auto hnum_val = make_shared<ReflectValue>("HNum", HNum, true);
   // 定义构成曲面
   auto bottom = Mesh::Disk(radius, PNum, RNum);
   auto top    = Mesh::Disk(radius, PNum, RNum);
@@ -652,9 +669,9 @@ shared_ptr<Composition> Composition::Cone(float radius, float height, uint32_t P
   auto radius_val = make_shared<ReflectValue>("radius", radius);
   auto height_val = make_shared<ReflectValue>("height", height);
 
-  auto pnum_val = make_shared<ReflectValue>("PNum", PNum);
-  auto rnum_val = make_shared<ReflectValue>("RNum", RNum);
-  auto hnum_val = make_shared<ReflectValue>("HNum", HNum);
+  auto pnum_val = make_shared<ReflectValue>("PNum", PNum, true);
+  auto rnum_val = make_shared<ReflectValue>("RNum", RNum, true);
+  auto hnum_val = make_shared<ReflectValue>("HNum", HNum, true);
 
   auto bottom = Mesh::Disk(radius, PNum, RNum);
   auto side   = Mesh::ConeSide(radius, height, PNum, HNum);

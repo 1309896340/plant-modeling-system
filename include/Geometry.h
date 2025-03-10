@@ -51,79 +51,83 @@ struct Vertex {
 
 
 struct Surface {
-  uint32_t tidx[3]; // 3个Vertex构成
+  uint32_t tidx[3];   // 3个Vertex构成
 };
 
 class Observer : public std::enable_shared_from_this<Observer> {
-public:
-  virtual void notify(const std::string &name, const prop &parameter) = 0;
+  public:
+  virtual void notify(const std::string& name, const prop& parameter) = 0;
 };
 
-// class Geometry;
 class ReflectValue : public Observer {
-private:
-  std::string name;
-  prop value;
+  private:
+  std::string                          name;
+  prop                                 value;
   std::vector<std::weak_ptr<Observer>> observers;
-  std::function<float(prop)> func{nullptr}; // 可能存在函数关系的映射
+  std::function<float(prop)>           func{nullptr};   // 可能存在函数关系的映射
 
-public:
-  ReflectValue(const std::string &name, prop init_value);
-  ReflectValue(const std::string &name, prop init_value, std::weak_ptr<Observer> observer);
-  prop &getProp();
+  bool topoFlag{false};
 
-  virtual void notify(const std::string &name, const prop &param);
+  public:
+  ReflectValue(const std::string& name, prop init_value);
+  ReflectValue(const std::string& name, prop init_value, std::weak_ptr<Observer> observer);
+  ReflectValue(const std::string& name, prop init_value, bool isTopo);
+  ReflectValue(const std::string& name, prop init_value, bool isTopo, std::weak_ptr<Observer> observer);
+  prop& getProp();
+  bool  isTopo() const;
 
-  void notifyAll() ;
-  std::string getName() const ;
-  void addObserver(std::weak_ptr<Observer> observer);
+  virtual void notify(const std::string& name, const prop& param);
+
+  void        notifyAll();
+  std::string getName() const;
+  void        addObserver(std::weak_ptr<Observer> observer);
 };
 
 class Geometry : public Observer {
-protected:
-  std::vector<Vertex> vertices;
+  protected:
+  std::vector<Vertex>  vertices;
   std::vector<Surface> surfaces;
 
-public:
+  public:
   std::map<std::string, std::shared_ptr<ReflectValue>> parameters;
 
-  Geometry() = default;
-  Geometry(const Geometry &) = default;
-  ~Geometry() = default;
+  Geometry()                = default;
+  Geometry(const Geometry&) = default;
+  ~Geometry()               = default;
 
-  std::vector<Vertex> &getVertices();
-  std::vector<Surface> &getSurfaces();
-  const std::vector<Vertex> &getVertices() const ;
-  const std::vector<Surface> &getSurfaces() const ;
+  std::vector<Vertex>&        getVertices();
+  std::vector<Surface>&       getSurfaces();
+  const std::vector<Vertex>&  getVertices() const;
+  const std::vector<Surface>& getSurfaces() const;
 
-  void translate(float x_offset, float y_offset, float z_offset) ;
+  void translate(float x_offset, float y_offset, float z_offset);
 
   void rotate(float angle, glm::vec3 axis);
 
-  void setColor(float r, float g, float b) ;
+  void setColor(float r, float g, float b);
 
   virtual void update() = 0;
-  virtual void reset() ;
+  virtual void reset();
 };
 
 struct FixedGeometry {
-  std::vector<Vertex> vertices;
+  std::vector<Vertex>  vertices;
   std::vector<Surface> surfaces;
   FixedGeometry() = default;
-  FixedGeometry(const std::vector<Vertex> &vertices, const std::vector<Surface> &surfaces);
-  FixedGeometry(const Geometry &geo);
+  FixedGeometry(const std::vector<Vertex>& vertices, const std::vector<Surface>& surfaces);
+  FixedGeometry(const Geometry& geo);
 };
 
- FixedGeometry operator+(const FixedGeometry &a, const FixedGeometry &b);
+FixedGeometry operator+(const FixedGeometry& a, const FixedGeometry& b);
 
 class Mesh : public Geometry {
   using MeshUpdater = std::function<Vertex(float, float)>;
 
-private:
+  private:
   MeshUpdater updater;
-  bool topo_flag{true};
+  bool        topo_flag{true};
 
-public:
+  public:
   Mesh(uint32_t uNum, uint32_t vNum);
   Mesh(uint32_t uNum, uint32_t vNum, MeshUpdater updater);
 
@@ -135,47 +139,39 @@ public:
 
   void resize();
 
-  virtual void notify(const std::string &name, const prop &param);
+  virtual void notify(const std::string& name, const prop& param);
 
   static std::shared_ptr<Mesh> Sphere(float radius, uint32_t PNum, uint32_t VNum);
 
   static std::shared_ptr<Mesh> Disk(float radius, uint32_t PNum, uint32_t RNum);
-  static std::shared_ptr<Mesh> ConeSide(float radius, float height, uint32_t PNum,
-                                   uint32_t HNum) ;
+  static std::shared_ptr<Mesh> ConeSide(float radius, float height, uint32_t PNum, uint32_t HNum);
 
-  static std::shared_ptr<Mesh> CylinderSide(float radius, float height,
-                                       uint32_t PNum, uint32_t HNum) ;
+  static std::shared_ptr<Mesh> CylinderSide(float radius, float height, uint32_t PNum, uint32_t HNum);
 
-  static std::shared_ptr<Mesh> Plane(float width, float height, uint32_t VNum,
-                                uint32_t HNum) ;
+  static std::shared_ptr<Mesh> Plane(float width, float height, uint32_t VNum, uint32_t HNum);
 };
 
 using TransformUpdater = std::function<glm::mat4()>;
 
 class Composition : public Geometry {
-private:
+  private:
   std::vector<std::shared_ptr<Geometry>> goemetries;
-  std::vector<TransformUpdater> transforms;
+  std::vector<TransformUpdater>          transforms;
 
-public:
+  public:
   Composition() = default;
 
   void pushGeometry(std::shared_ptr<Geometry> mesh,
-                    const TransformUpdater &transform) ;
+                    const TransformUpdater&   transform);
 
-  void popMesh() ;
+  void popMesh();
 
-  virtual void notify(const std::string &name, const prop &param) ;
-  virtual void update();
-  static std::shared_ptr<Composition> Cube(float xWidth, float yWidth, float zWidth,
-                                      uint32_t xNum, uint32_t yNum,
-                                      uint32_t zNum) ;
-  static std::shared_ptr<Composition> Cylinder(float radius, float height,
-                                          uint32_t PNum, uint32_t RNum,
-                                          uint32_t HNum) ;
+  virtual void                        notify(const std::string& name, const prop& param);
+  virtual void                        update();
+  static std::shared_ptr<Composition> Cube(float xWidth, float yWidth, float zWidth, uint32_t xNum, uint32_t yNum, uint32_t zNum);
+  static std::shared_ptr<Composition> Cylinder(float radius, float height, uint32_t PNum, uint32_t RNum, uint32_t HNum);
 
-  static std::shared_ptr<Composition> Cone(float radius, float height, uint32_t PNum,
-                                      uint32_t RNum, uint32_t HNum) ;
+  static std::shared_ptr<Composition> Cone(float radius, float height, uint32_t PNum, uint32_t RNum, uint32_t HNum);
 
   static std::shared_ptr<Composition> Arrow(float radius, float length);
 };
