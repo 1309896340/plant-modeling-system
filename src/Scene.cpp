@@ -899,7 +899,7 @@ void Scene::Scene::imgui_interact() {
             assert(cur_obj->getBoundingBox() != nullptr &&
                    "Scene::imgui_interact() hit测试中, 包围盒为空!");
             BoundingBox* box = cur_obj->getBoundingBox();
-            if (box->hit(ray)) {
+            if (box->hit(ray, cur_obj->transform)) {
               tmp_obj.isHit    = true;
               tmp_obj.hitPos   = box->getBoxCenter();
               tmp_obj.distance = glm::distance(ray.origin, tmp_obj.hitPos);
@@ -1324,7 +1324,7 @@ bool Scene::Scene::imgui_menu() {
 void Scene::Scene::loadIcon() {
   GLFWimage image;
   image.pixels =
-    stbi_load("favicon.png", &image.width, &image.height, nullptr, 4);
+    stbi_load("assets/favicon/favicon1.png", &image.width, &image.height, nullptr, 4);
   glfwSetWindowIcon(this->window, 1, &image);
   stbi_image_free(image.pixels);
 }
@@ -1495,7 +1495,7 @@ void Scene::Scene::add(const string& name, shared_ptr<Skeleton> skeleton, Transf
     stringstream node_geom_name;
     node_geom_name << name << "#" << geo_id;
 
-    this->add(node_geom_name.str(), node->obj, node->getAbsTransform(), true, false, true, true, false);
+    this->add(node_geom_name.str(), node->obj, node->getAbsTransform(), true, true, true, true, false);
 
     // if (!node->children.empty()) {
     //   // 调试，给每个节点加入一个Axis

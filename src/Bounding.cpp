@@ -116,6 +116,15 @@ bool BoundingBox::hit(Ray ray) {
   return false;
 }
 
+bool BoundingBox::hit(Ray ray, Transform trans) {
+  Ray local_ray = ray;
+  glm::mat4 model = trans.getModel();
+  glm::mat4 rmodel = glm::inverse(model);
+  local_ray.origin = glm::vec3(rmodel * glm::vec4(ray.origin, 1.0f));
+  local_ray.dir = glm::normalize(glm::vec3(rmodel * glm::vec4(ray.dir, 0.0f)));
+  return this->hit(local_ray);
+}
+
 
 BvhTree::BvhTree(Geometry* geometry)
   : geometry(geometry) {}

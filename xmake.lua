@@ -61,10 +61,9 @@ target("lsystem_demonstration")
     after_build(
         function (target)
             os.cp("assets", path.join(target:targetdir(), "./"))
-            os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
-    set_enabled(false)
+    set_enabled(true)
 
 
 -- 测试imgui使用
@@ -77,7 +76,6 @@ target("imgui_test")
     after_build(
         function (target)
             os.cp("assets", path.join(target:targetdir(), "./"))
-            os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
     set_enabled(false)
@@ -92,10 +90,9 @@ target("geometry_test")
     after_build(
         function (target)
             os.cp("assets", path.join(target:targetdir(), "./"))
-            os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
-    set_enabled(true)
+    set_enabled(false)
 
 -- 测试骨架
 target("skeleton_test")
@@ -107,7 +104,6 @@ target("skeleton_test")
     after_build(
         function (target)
             os.cp("assets", path.join(target:targetdir(), "./"))
-            os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
     set_enabled(false)
@@ -122,7 +118,6 @@ target("compute_shader_demo")
     after_build(
         function (target)
             os.cp("assets", path.join(target:targetdir(), "./"))
-            os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
     set_enabled(false)
@@ -137,7 +132,6 @@ target("raytracing_image")
     after_build(
         function (target)
             os.cp("assets", path.join(target:targetdir(), "./"))
-            os.cp("favicon.png", path.join(target:targetdir(), "./"))
         end
     )
     set_enabled(false)

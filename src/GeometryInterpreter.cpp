@@ -54,7 +54,7 @@ void GeometryGenerater::exec(std::shared_ptr<GraphicsContext> context) {
     context->cur_node->addChild(node);
     context->cur_node = node;
     // 创建几何体
-    auto geometry = Mesh::Sphere(args[0], 36, 18);
+    auto geometry = Mesh::Sphere(args[0], 18, 9);
     // std::shared_ptr<Sphere> geometry = std::make_shared<Sphere>(args[0]);
     context->cur_node->obj = static_pointer_cast<Geometry>(geometry);
     // 更新偏移量（球没有位置偏移）
@@ -70,7 +70,7 @@ void GeometryGenerater::exec(std::shared_ptr<GraphicsContext> context) {
     context->cur_node->addChild(node);
     context->cur_node = node;
     // 创建几何体
-    auto geometry = Composition::Cylinder(args[0], args[1], 36, 36, 20);
+    auto geometry = Composition::Cylinder(args[0], args[1], 18, 18, 4);
     // std::shared_ptr<Cylinder> geometry = std::make_shared<Cylinder>(args[0], args[1]);
     context->cur_node->obj = static_pointer_cast<Geometry>(geometry);
     // 更新偏移量

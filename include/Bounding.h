@@ -114,6 +114,7 @@ class BoundingBox {
 
 
   bool hit(Ray ray);
+  bool hit(Ray ray, Transform transform);
 };
 
 struct BvhNode {
