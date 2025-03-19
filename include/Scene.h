@@ -31,6 +31,7 @@
 #include "Shader.h"
 #include "Skeleton.h"
 #include "Transform.h"
+#include "Component.h"
 
 
 extern std::mt19937_64 rdgen;
@@ -66,14 +67,6 @@ struct SkeletonObject {
   std::shared_ptr<Skeleton> skeleton{nullptr};
 };
 
-struct Status {
-  bool selected{false};
-  bool visible{true};
-  bool collided{false};
-  bool listed{true};
-  bool lighted{true};
-};
-
 struct SkyboxInfo {
   GLuint vao{0};
   GLuint vbo{0};
@@ -99,12 +92,6 @@ struct FramebufferInfo {
   GLuint vbo{0};
   GLuint vao{0};
   GLuint ebo{0};
-};
-
-struct RadiosityResult {
-  // float radiant_flux{0.0f};
-  // 与GeometryContext::geometry::surfaces的元素一一对应
-  std::vector<glm::vec3> radiant_flux;
 };
 
 class LineDrawer {
@@ -165,39 +152,15 @@ public:
   virtual void update();
 };
 
-class GeometryObject {
-private:
-  std::string name;
-  std::shared_ptr<Geometry> geometry{nullptr};
-  std::unique_ptr<BoundingBox> box{nullptr};
-  std::unique_ptr<BvhTree> bvhtree{nullptr};
-
-public:
-  Transform transform;
-  Status status;
-
-  RadiosityResult radiosity; // 由compute_radiosity()更新
-
-  std::string getName() const;
-  BvhTree *getBvhTree();
-  BoundingBox *getBoundingBox();
-  Geometry *getGeometry();
-  GeometryObject(std::string name, std::shared_ptr<Geometry> geometry,
-                 Transform transform = Transform{}, bool useBvh = false);
-
-  void update();
-  virtual ~GeometryObject();
-};
-
 class GeometryContext : public OpenGLContext {
 private:
-  GeometryObject *obj{nullptr};
+Component::GeometryObject *obj{nullptr};
   BvhTree *bvhtree{nullptr};
 
 public:
   std::unique_ptr<BoundingBoxContext> box{nullptr};
   std::vector<std::unique_ptr<BoundingBoxContext>> boxes;
-  GeometryContext(GeometryObject *obj);
+  GeometryContext(Component::GeometryObject *obj);
 
   virtual void init();
   virtual void update();
@@ -208,9 +171,9 @@ void errorCallback(int code, const char *msg);
 struct ImguiInfo {
   bool start_record{true};
   ImVec2 mouse_pos{0, 0};
-  std::shared_ptr<GeometryObject> cur{nullptr};
+  std::shared_ptr<Component::GeometryObject> cur{nullptr};
   int32_t selected_idx = 0;
-  std::vector<std::shared_ptr<GeometryObject>> list_items;
+  std::vector<std::shared_ptr<Component::GeometryObject>> list_items;
   bool changeGeometryListView{true};
 };
 
@@ -264,11 +227,11 @@ private:
 public:
   std::map<std::string, Shader *> shaders;
   std::map<std::string, GLuint> textures;
-  std::map<std::shared_ptr<GeometryObject>, std::unique_ptr<GeometryContext>>
+  std::map<std::shared_ptr<Component::GeometryObject>, std::unique_ptr<GeometryContext>>
       objs;
 
   std::map<std::string, std::shared_ptr<LineDrawer>> lines;
-  std::map<std::string, SkeletonObject> skeletons;
+  // std::map<std::string, SkeletonObject> skeletons;
 
   // 开发阶段暂时忽略渲染逻辑，实现lights中光源模拟辐照度计算
   std::vector<std::shared_ptr<Light>>
@@ -327,7 +290,7 @@ public:
 
   void printRadiosityInfo();
 
-  std::shared_ptr<GeometryObject>
+  std::shared_ptr<Component::GeometryObject>
   findGeometryObjectByName(const std::string &name);
 
   // void setSeed(uint32_t sd) {
@@ -359,19 +322,19 @@ public:
 
   void test_triangle_coord();
 
-  void addSceneObject(const std::shared_ptr<GeometryObject> &obj, bool visible,
+  void addSceneObject(const std::shared_ptr<Component::GeometryObject> &obj, bool visible,
                       bool listed, bool collided, bool lighted, GLuint texture);
 
-  void addSceneObject(const std::shared_ptr<GeometryObject> &obj);
+  void addSceneObject(const std::shared_ptr<Component::GeometryObject> &obj);
 
   void remove(const std::string &name);
 
-  void removeSkeleton(const std::string &name);
+  // void removeSkeleton(const std::string &name);
 
-  void add(const std::string &name, std::shared_ptr<Skeleton> skeleton,
-           Transform transform);
+  // void add(const std::string &name, std::shared_ptr<Skeleton> skeleton,
+  //          Transform transform);
 
-  void add(const std::string &name, std::shared_ptr<Skeleton> skeleton);
+  // void add(const std::string &name, std::shared_ptr<Skeleton> skeleton);
 
   void add(const std::string &name, const std::shared_ptr<Geometry> &geometry,
            Transform transform, bool visible, bool listed, bool collided,

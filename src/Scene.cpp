@@ -245,16 +245,16 @@ void Scene::BoundingBoxContext::update() {
   glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, indices.size() * sizeof(uint32_t), indices.data());
 }
 
-string Scene::GeometryObject::getName() const {
+string Component::GeometryObject::getName() const {
   return this->name;
 }
-BvhTree* Scene::GeometryObject::getBvhTree() {
+BvhTree* Component::GeometryObject::getBvhTree() {
   return this->bvhtree.get();
 }
-BoundingBox* Scene::GeometryObject::getBoundingBox() {
+BoundingBox* Component::GeometryObject::getBoundingBox() {
   return this->box.get();
 }
-Geometry* Scene::GeometryObject::getGeometry() {
+Geometry* Component::GeometryObject::getGeometry() {
   return this->geometry.get();
 }
 
@@ -263,7 +263,7 @@ Geometry* Scene::GeometryObject::getGeometry() {
 //                                       Transform transform = Transform{},
 //                                       bool useBvh = false);
 
-void Scene::GeometryObject::update() {
+void Component::GeometryObject::update() {
   // 1. 组件更新
   // geometry更新(由imgui激活对应参数的观察者实现)
 
@@ -274,7 +274,7 @@ void Scene::GeometryObject::update() {
     this->bvhtree->update();
   }
 }
-Scene::GeometryObject::~GeometryObject() {
+Component::GeometryObject::~GeometryObject() {
   printf("销毁GeometryObject: \"%s\" geometry: %p  box: %p  bvhtree: %p\n",
          this->name.c_str(),
          this->geometry.get(),
@@ -282,7 +282,7 @@ Scene::GeometryObject::~GeometryObject() {
          this->bvhtree.get());
 }
 
-Scene::GeometryObject::GeometryObject(string               name,
+Component::GeometryObject::GeometryObject(string               name,
                                       shared_ptr<Geometry> geometry,
                                       Transform            transform,
                                       bool                 useBvh)
@@ -302,7 +302,7 @@ Scene::GeometryObject::GeometryObject(string               name,
          this->bvhtree.get());
 }
 
-Scene::GeometryContext::GeometryContext(GeometryObject* obj)
+Scene::GeometryContext::GeometryContext(Component::GeometryObject* obj)
   : OpenGLContext()
   , obj(obj) {
   BoundingBox* bbox = this->obj->getBoundingBox();
@@ -495,20 +495,20 @@ void Scene::Scene::init_scene_obj() {
   shared_ptr<Geometry> lightBall = Mesh::Sphere(0.07f, 36, 18);
   lightBall->update();
   lightBall->setColor(1.0f, 1.0f, 1.0f);
-  shared_ptr<GeometryObject> obj1 =
-    make_shared<GeometryObject>("Light", lightBall);
+  shared_ptr<Component::GeometryObject> obj1 =
+    make_shared<Component::GeometryObject>("Light", lightBall);
   this->addSceneObject(obj1, this->isShowLight, false, false, false, 0);
 
   // 坐标轴
   shared_ptr<Geometry>       axis = make_shared<CoordinateAxis>(0.1, 1.0f);
-  shared_ptr<GeometryObject> obj2 = make_shared<GeometryObject>("Axis", axis);
+  shared_ptr<Component::GeometryObject> obj2 = make_shared<Component::GeometryObject>("Axis", axis);
   this->addSceneObject(obj2, this->isShowAxis, false, false, false, 0);
 
   // 游标
   shared_ptr<Geometry> cursor = make_shared<CoordinateAxis>(0.02, 0.5f);
   // shared_ptr<Geometry> cursor = Mesh::Sphere(0.05f, 36, 18);
   // cursor->setColor(1.0f, 1.0f, 0.0f);
-  shared_ptr<GeometryObject> cursor_obj = make_shared<GeometryObject>(
+  shared_ptr<Component::GeometryObject> cursor_obj = make_shared<Component::GeometryObject>(
     "Cursor",
     cursor,
     Transform({glm::vec3(0.0f, 2.0f, 0.0f)}));
@@ -517,7 +517,7 @@ void Scene::Scene::init_scene_obj() {
   // 地面
   shared_ptr<Geometry> ground = Mesh::Plane(20.0f, 20.0f, 10, 10);
   // 为了让光线不在两个重叠面上抖动进而穿透，将Ground下移一个微小距离
-  shared_ptr<GeometryObject> obj3 = make_shared<GeometryObject>(
+  shared_ptr<Component::GeometryObject> obj3 = make_shared<Component::GeometryObject>(
     "Ground",
     ground,
     Transform({0.0f, -0.1f, 0.0f}),
@@ -527,7 +527,7 @@ void Scene::Scene::init_scene_obj() {
   // 左侧面
   shared_ptr<Geometry> side_left = Mesh::Plane(20.0f, 20.0f, 10, 10);
   side_left->setColor(0.0f, 0.0f, 1.0f);
-  shared_ptr<GeometryObject> side_left_obj = make_shared<GeometryObject>(
+  shared_ptr<Component::GeometryObject> side_left_obj = make_shared<Component::GeometryObject>(
     "Side_left",
     side_left,
     Transform({-10.0f, 9.9f, 0.0f}, _front, glm::radians(90.0f)),
@@ -537,7 +537,7 @@ void Scene::Scene::init_scene_obj() {
   // 后侧面
   shared_ptr<Geometry> side_back = Mesh::Plane(20.0f, 20.0f, 10, 10);
   side_back->setColor(0.0f, 1.0f, 0.0f);
-  shared_ptr<GeometryObject> side_back_obj = make_shared<GeometryObject>(
+  shared_ptr<Component::GeometryObject> side_back_obj = make_shared<Component::GeometryObject>(
     "Side_back",
     side_back,
     Transform({0.0f, 9.9f, -10.0f}, _right, glm::radians(90.0f)),
@@ -547,7 +547,7 @@ void Scene::Scene::init_scene_obj() {
   // 上侧面
   shared_ptr<Geometry> side_top = Mesh::Plane(20.0f, 20.0f, 10, 10);
   side_top->setColor(1.0f, 0.0f, 0.0f);
-  shared_ptr<GeometryObject> side_top_obj = make_shared<GeometryObject>(
+  shared_ptr<Component::GeometryObject> side_top_obj = make_shared<Component::GeometryObject>(
     "Side_top",
     side_top,
     Transform({0.0f, 19.9f, 0.0f}, _right, glm::radians(180.0f)),
@@ -729,28 +729,28 @@ void Scene::Scene::init_depthmap() {
 // }
 
 void Scene::Scene::showAxis() {
-  shared_ptr<GeometryObject> ptr = findGeometryObjectByName("Axis");
+  shared_ptr<Component::GeometryObject> ptr = findGeometryObjectByName("Axis");
   if (ptr)
     ptr->status.visible = true;
 }
 void Scene::Scene::hideAxis() {
-  shared_ptr<GeometryObject> ptr = findGeometryObjectByName("Axis");
+  shared_ptr<Component::GeometryObject> ptr = findGeometryObjectByName("Axis");
   ptr->status.visible            = false;
 }
 void Scene::Scene::showGround() {
-  shared_ptr<GeometryObject> ptr = findGeometryObjectByName("Ground");
+  shared_ptr<Component::GeometryObject> ptr = findGeometryObjectByName("Ground");
   ptr->status.visible            = true;
 }
 void Scene::Scene::hideGround() {
-  shared_ptr<GeometryObject> ptr = findGeometryObjectByName("Ground");
+  shared_ptr<Component::GeometryObject> ptr = findGeometryObjectByName("Ground");
   ptr->status.visible            = false;
 }
 void Scene::Scene::showCursor() {
-  shared_ptr<GeometryObject> ptr = findGeometryObjectByName("Cursor");
+  shared_ptr<Component::GeometryObject> ptr = findGeometryObjectByName("Cursor");
   ptr->status.visible            = true;
 };
 void Scene::Scene::hideCursor() {
-  shared_ptr<GeometryObject> ptr = findGeometryObjectByName("Cursor");
+  shared_ptr<Component::GeometryObject> ptr = findGeometryObjectByName("Cursor");
   ptr->status.visible            = false;
 };
 
@@ -774,9 +774,9 @@ void Scene::Scene::printRadiosityInfo() {
   }
 }
 
-shared_ptr<Scene::GeometryObject>
+shared_ptr<Component::GeometryObject>
 Scene::Scene::findGeometryObjectByName(const string& name) {
-  auto iter = find_if(this->objs.begin(), this->objs.end(), [&](pair<const shared_ptr<GeometryObject>, unique_ptr<GeometryContext>>& obj_pair) {
+  auto iter = find_if(this->objs.begin(), this->objs.end(), [&](pair<const shared_ptr<Component::GeometryObject>, unique_ptr<GeometryContext>>& obj_pair) {
     return obj_pair.first->getName().compare(name) == 0;
   });
   if (iter == this->objs.end())
@@ -937,7 +937,7 @@ void Scene::Scene::imgui_interact() {
           }
           switch (target_obj.type) {
           case 1: {
-            shared_ptr<GeometryObject> ptr1 =
+            shared_ptr<Component::GeometryObject> ptr1 =
               findGeometryObjectByName("Cursor");
             if (ptr1)
               ptr1->transform.setPosition(target_obj.hitPos);
@@ -980,7 +980,7 @@ void Scene::Scene::updateGeometryListView() {
   //   this->objs | ranges::views::filter([](shared_ptr<GeometryObject> obj) {
   //     return obj->status.listed;
   //   });
-  vector<shared_ptr<GeometryObject>> tmp_item_view;
+  vector<shared_ptr<Component::GeometryObject>> tmp_item_view;
   for (auto& [obj, ctx] : this->objs) {
     if (obj->status.listed)
       tmp_item_view.emplace_back(obj);
@@ -1095,7 +1095,7 @@ bool Scene::Scene::imgui_menu() {
     // -20.0f, 20.f);
     ImGui::DragFloat3(TEXT("位置"), glm::value_ptr(this->light.position), 0.05f, -FLT_MAX, FLT_MAX);
     // 暂时这么写
-    shared_ptr<GeometryObject> ptr = findGeometryObjectByName("Light");
+    shared_ptr<Component::GeometryObject> ptr = findGeometryObjectByName("Light");
     if (ptr)
       ptr->transform.setPosition(light.position);
     ImGui::TreePop();
@@ -1248,79 +1248,80 @@ bool Scene::Scene::imgui_menu() {
   }
   ImGui::End();
 
-  // 用于生成L-System的操作窗口
-  ImGui::Begin(TEXT("L-System"), NULL, ImGuiWindowFlags_AlwaysAutoResize);
-  if (ImGui::TreeNodeEx(TEXT("生成"), ImGuiTreeNodeFlags_DefaultOpen)) {
-    ImGui::PushItemWidth(300.0f);
-    if (ImGui::InputText(TEXT("Axiom"), &this->lsystem.axiom, ImGuiInputTextFlags_CallbackEdit)) {
-      throw runtime_error("Scene::imgui_menu()中，更新this->lsystem的axiom！");
-      this->lsystem.config->updateAxiom(this->lsystem.axiom);
-    }
-    ImGui::PopItemWidth();
+  // // 用于生成L-System的操作窗口
+  // ImGui::Begin(TEXT("L-System"), NULL, ImGuiWindowFlags_AlwaysAutoResize);
+  // if (ImGui::TreeNodeEx(TEXT("生成"), ImGuiTreeNodeFlags_DefaultOpen)) {
+  //   ImGui::PushItemWidth(300.0f);
+  //   if (ImGui::InputText(TEXT("Axiom"), &this->lsystem.axiom, ImGuiInputTextFlags_CallbackEdit)) {
+  //     throw runtime_error("Scene::imgui_menu()中，更新this->lsystem的axiom！");
+  //     this->lsystem.config->updateAxiom(this->lsystem.axiom);
+  //   }
+  //   ImGui::PopItemWidth();
 
-    for (uint32_t i = 0; i < this->lsystem.productions.size(); i++) {
-      ImGui::PushItemWidth(900.0f);
-      if (ImGui::InputText(format("production {}", i + 1).c_str(),
-                           &this->lsystem.productions[i])) {
-        // 需要更新lsystem
+  //   for (uint32_t i = 0; i < this->lsystem.productions.size(); i++) {
+  //     ImGui::PushItemWidth(900.0f);
+  //     if (ImGui::InputText(format("production {}", i + 1).c_str(),
+  //                          &this->lsystem.productions[i])) {
+  //       // 需要更新lsystem
 
-        // throw
-        // runtime_error("Scene::imgui_menu()中，更新this->lsystem的production！");
-        if (!this->lsystem.config->updateProduction(
-              this->lsystem.productions)) {
-          cout << "产生式规则含可能含有未知错误" << endl;
-        }
-      }
-      ImGui::PopItemWidth();
-      ImGui::SameLine();
-      ImGui::PushID(i);
-      if (ImGui::Button(TEXT("移除"))) {
-        this->lsystem.productions.erase(this->lsystem.productions.begin() + i);
-        // 需要更新lsystem
-        // throw
-        // runtime_error("Scene::imgui_menu()中，更新this->lsystem的production！");
-        this->lsystem.config->updateProduction(this->lsystem.productions);
-      }
-      ImGui::PopID();
-    }
-    if (ImGui::Button(TEXT("增加")))
-      this->lsystem.productions.push_back("");
+  //       // throw
+  //       // runtime_error("Scene::imgui_menu()中，更新this->lsystem的production！");
+  //       if (!this->lsystem.config->updateProduction(
+  //             this->lsystem.productions)) {
+  //         cout << "产生式规则含可能含有未知错误" << endl;
+  //       }
+  //     }
+  //     ImGui::PopItemWidth();
+  //     ImGui::SameLine();
+  //     ImGui::PushID(i);
+  //     if (ImGui::Button(TEXT("移除"))) {
+  //       this->lsystem.productions.erase(this->lsystem.productions.begin() + i);
+  //       // 需要更新lsystem
+  //       // throw
+  //       // runtime_error("Scene::imgui_menu()中，更新this->lsystem的production！");
+  //       this->lsystem.config->updateProduction(this->lsystem.productions);
+  //     }
+  //     ImGui::PopID();
+  //   }
+  //   if (ImGui::Button(TEXT("增加")))
+  //     this->lsystem.productions.push_back("");
 
-    ImGui::Text(TEXT("iter: %u"), this->lsystem.iter_n);
-    if (ImGui::Button(TEXT("迭代"))) {
-      // throw runtime_error("Scene::imgui_menu()中，更新迭代符号串！");
-      string lsys_cmds = this->lsystem.config->iterate();
-      cout << "调试迭代字符串：" << endl;
-      cout << lsys_cmds << endl;
+  //   ImGui::Text(TEXT("iter: %u"), this->lsystem.iter_n);
+  //   if (ImGui::Button(TEXT("迭代"))) {
+  //     // throw runtime_error("Scene::imgui_menu()中，更新迭代符号串！");
+  //     string lsys_cmds = this->lsystem.config->iterate();
+  //     cout << "调试迭代字符串：" << endl;
+  //     cout << lsys_cmds << endl;
 
-      // 更新目标骨骼系统
-      if (this->skeletons.find("skeleton") != this->skeletons.end())
-        this->removeSkeleton("skeleton");
+  //     // 更新目标骨骼系统
+  //     if (this->skeletons.find("skeleton") != this->skeletons.end())
+  //       this->removeSkeleton("skeleton");
 
-      // throw
-      // runtime_error("Scene::imgui_menu()中，解析新字符串，更新骨架！");
-      shared_ptr<LSysConfig::SymSeq> symSeq =
-        this->lsystem.config->parseInput(lsys_cmds);
-      assert(symSeq && "praseInput() return nullptr!");
+  //     // throw
+  //     // runtime_error("Scene::imgui_menu()中，解析新字符串，更新骨架！");
+  //     shared_ptr<LSysConfig::SymSeq> symSeq =
+  //       this->lsystem.config->parseInput(lsys_cmds);
+  //     assert(symSeq && "praseInput() return nullptr!");
 
-      const GeometryInterpreter::GraphicsStructure gs(symSeq);
-      this->lsystem.skeleton = gs.construct();
-      this->add("skeleton", this->lsystem.skeleton, Transform{glm::vec3(0.5f, 0.03f, 0.5f)});
-      this->lsystem.iter_n++;
-    }
-    ImGui::SameLine();
-    if (ImGui::Button(TEXT("复位"))) {
-      // 删除目标骨骼系统
-      if (this->skeletons.find("skeleton") != this->skeletons.end())
-        this->removeSkeleton("skeleton");
-      // throw
-      // runtime_error("Scene::imgui_menu()中删除骨骼系统时，重置this->lsystem.lsys");
-      this->lsystem.config->reset();
-      this->lsystem.iter_n = 0;
-    }
-    ImGui::TreePop();
-  }
-  ImGui::End();
+  //     const GeometryInterpreter::GraphicsStructure gs(symSeq);
+  //     this->lsystem.skeleton = gs.construct();
+  //     this->add("skeleton", this->lsystem.skeleton, Transform{glm::vec3(0.5f, 0.03f, 0.5f)});
+  //     this->lsystem.iter_n++;
+  //   }
+  //   ImGui::SameLine();
+  //   if (ImGui::Button(TEXT("复位"))) {
+  //     // 删除目标骨骼系统
+  //     if (this->skeletons.find("skeleton") != this->skeletons.end())
+  //       this->removeSkeleton("skeleton");
+  //     // throw
+  //     // runtime_error("Scene::imgui_menu()中删除骨骼系统时，重置this->lsystem.lsys");
+  //     this->lsystem.config->reset();
+  //     this->lsystem.iter_n = 0;
+  //   }
+  //   ImGui::TreePop();
+  // }
+  // ImGui::End();
+
   return false;
 }
 
@@ -1424,14 +1425,14 @@ void Scene::Scene::test_triangle_coord() {
   lines["Coord"]->update();
 }
 
-void Scene::Scene::addSceneObject(const shared_ptr<GeometryObject>& obj,
+void Scene::Scene::addSceneObject(const shared_ptr<Component::GeometryObject>& obj,
                                   bool                              visible,
                                   bool                              listed,
                                   bool                              collided,
                                   bool                              lighted,
                                   GLuint                            texture) {
 
-  shared_ptr<GeometryObject> ptr = findGeometryObjectByName(obj->getName());
+  shared_ptr<Component::GeometryObject> ptr = findGeometryObjectByName(obj->getName());
   if (ptr != nullptr) {
     cout << "scene cannot add \"SceneObject aux\" with an existed name \""
          << obj->getName() << "\"" << endl;
@@ -1463,73 +1464,73 @@ void Scene::Scene::remove(const string& name) {
     this->objs.erase(obj_ptr);
 }
 
-void Scene::Scene::removeSkeleton(const string& name) {
-  auto skptr = this->skeletons.find(name);
-  if (skptr == this->skeletons.end()) {
-    cout << format("warnning: skeleton \"{}\" not found in removeSkeleton()",
-                   name)
-         << endl;
-    return;
-  }
-  erase_if(this->objs, [&](auto& obj) {
-    return regex_match(obj.first->getName(),
-                       this->check_skeleton_node_name_pattern);
-  });
-  this->skeletons.erase(skptr);
-}
+// void Scene::Scene::removeSkeleton(const string& name) {
+//   auto skptr = this->skeletons.find(name);
+//   if (skptr == this->skeletons.end()) {
+//     cout << format("warnning: skeleton \"{}\" not found in removeSkeleton()",
+//                    name)
+//          << endl;
+//     return;
+//   }
+//   erase_if(this->objs, [&](auto& obj) {
+//     return regex_match(obj.first->getName(),
+//                        this->check_skeleton_node_name_pattern);
+//   });
+//   this->skeletons.erase(skptr);
+// }
 
-void Scene::Scene::add(const string& name, shared_ptr<Skeleton> skeleton, Transform transform) {
-  // 加入骨架对象，考虑遍历Skeleton的所有节点并将其中的Geometry加入到this->objs中
-  if (this->skeletons.find(name) != this->skeletons.end()) {
-    cout << "warnning: scene cannot add \"Skeleton\" with an existed name \""
-         << name << "\"" << endl;
-    return;
-  }
-  // 将transform的影响加入到skeleton->root节点的transform中，然后更新整个skeleton
+// void Scene::Scene::add(const string& name, shared_ptr<Skeleton> skeleton, Transform transform) {
+//   // 加入骨架对象，考虑遍历Skeleton的所有节点并将其中的Geometry加入到this->objs中
+//   if (this->skeletons.find(name) != this->skeletons.end()) {
+//     cout << "warnning: scene cannot add \"Skeleton\" with an existed name \""
+//          << name << "\"" << endl;
+//     return;
+//   }
+//   // 将transform的影响加入到skeleton->root节点的transform中，然后更新整个skeleton
 
-  skeleton->root->setTransform(skeleton->root->getTransform() * transform);
-  skeleton->update();
+//   skeleton->root->setTransform(skeleton->root->getTransform() * transform);
+//   skeleton->update();
 
-  SkeletonObject sk{name, skeleton};
+//   SkeletonObject sk{name, skeleton};
 
-  uint32_t geo_id = 1;
-  // 遍历skeleton的所有节点并加入到this->objs中
-  sk.skeleton->traverse([=, this, &geo_id](SkNode* node) {
-    stringstream node_geom_name;
-    node_geom_name << name << "#" << geo_id;
+//   uint32_t geo_id = 1;
+//   // 遍历skeleton的所有节点并加入到this->objs中
+//   sk.skeleton->traverse([=, this, &geo_id](SkNode* node) {
+//     stringstream node_geom_name;
+//     node_geom_name << name << "#" << geo_id;
 
-    this->add(node_geom_name.str(), node->obj, node->getAbsTransform(), true, true, true, true, false);
+//     this->add(node_geom_name.str(), node->obj, node->getAbsTransform(), true, true, true, true, false);
 
-    // if (!node->children.empty()) {
-    //   // 调试，给每个节点加入一个Axis
-    //   stringstream ass;
-    //   ass << name << "_Axis_" << geo_id;
-    //   shared_ptr<GeometryContext> robj =
-    //   GeometryContext::getInstance(make_shared<CoordinateAxis>(0.067,
-    //   0.6), node->getAbsTransform()); this->addSceneObject(ass.str(),
-    //   robj);
-    // }
+//     // if (!node->children.empty()) {
+//     //   // 调试，给每个节点加入一个Axis
+//     //   stringstream ass;
+//     //   ass << name << "_Axis_" << geo_id;
+//     //   shared_ptr<GeometryContext> robj =
+//     //   GeometryContext::getInstance(make_shared<CoordinateAxis>(0.067,
+//     //   0.6), node->getAbsTransform()); this->addSceneObject(ass.str(),
+//     //   robj);
+//     // }
 
-    geo_id++;
-  });
-  this->skeletons[name] = sk;
-  updateGeometryListView();
-}
+//     geo_id++;
+//   });
+//   this->skeletons[name] = sk;
+//   updateGeometryListView();
+// }
 
-void Scene::Scene::add(const string& name, shared_ptr<Skeleton> skeleton) {
-  this->add(name, skeleton, Transform{});
-}
+// void Scene::Scene::add(const string& name, shared_ptr<Skeleton> skeleton) {
+//   this->add(name, skeleton, Transform{});
+// }
 
 void Scene::Scene::add(const string& name, const shared_ptr<Geometry>& geometry, Transform transform, bool visible, bool listed, bool collided, bool lighted, bool useBvh) {
 
-  shared_ptr<GeometryObject> ptr = findGeometryObjectByName(name);
+  shared_ptr<Component::GeometryObject> ptr = findGeometryObjectByName(name);
   if (ptr != nullptr) {
     cout << "scene cannot add \"SceneObject aux\" with an existed name \""
          << name << "\"" << endl;
     return;
   }
 
-  ptr                  = make_shared<GeometryObject>(name, geometry, transform, useBvh);
+  ptr                  = make_shared<Component::GeometryObject>(name, geometry, transform, useBvh);
   ptr->status.visible  = visible;
   ptr->status.listed   = listed;
   ptr->status.collided = collided;
@@ -1551,7 +1552,7 @@ void Scene::Scene::add(const string& name, const shared_ptr<Geometry>& geometry,
   auto fptr = find_if(
     this->imgui.list_items.begin(),
     this->imgui.list_items.end(),
-    [](shared_ptr<GeometryObject> obj) { return obj->status.selected; });
+    [](shared_ptr<Component::GeometryObject> obj) { return obj->status.selected; });
   if (fptr != this->imgui.list_items.end())
     this->imgui.selected_idx =
       std::distance(this->imgui.list_items.begin(), fptr);
@@ -1576,7 +1577,7 @@ void Scene::Scene::add(const string&               name,
 
 void Scene::Scene::addLight(const string&            name,
                             const shared_ptr<Light>& light) {
-  shared_ptr<GeometryObject> ptr = findGeometryObjectByName(name);
+  shared_ptr<Component::GeometryObject> ptr = findGeometryObjectByName(name);
   if (ptr != nullptr) {
     cerr << "scene cannot add object with an existed name!" << endl;
     return;
@@ -1584,11 +1585,11 @@ void Scene::Scene::addLight(const string&            name,
   this->lights.emplace_back(light);
 
   // 建立渲染对象，加入到aux中，不同子类建立的可视化对象不一样
-  shared_ptr<GeometryObject> render_obj = nullptr;
+  shared_ptr<Component::GeometryObject> render_obj = nullptr;
   switch (light->type) {
   case Light::LightType::POINT: {
     render_obj =
-      make_shared<GeometryObject>("Light", Mesh::Sphere(0.03, 72, 36));
+      make_shared<Component::GeometryObject>("Light", Mesh::Sphere(0.03, 72, 36));
     break;
   }
   case Light::LightType::PARALLEL: {
@@ -1860,7 +1861,7 @@ glm::vec3 Scene::Scene::trace_ray(Ray ray, const HitInfo& obj, float PR, vector<
     if (PR_D >= PR)
       break;   // 光线死亡，不再弹射
 
-    shared_ptr<GeometryObject> gobj =
+    shared_ptr<Component::GeometryObject> gobj =
       findGeometryObjectByName(cur_obj.geometryName);
     assert(gobj != nullptr && "hit geometry not found!");
 

@@ -21,3 +21,4 @@ class OpenGLContext {
 
   virtual ~OpenGLContext();
 };
+
