@@ -39,25 +39,23 @@ target("lsystem")
   add_includedirs("lsystem/antlr4/LSystemParser/include")
   add_includedirs("lsystem/antlr4/LSystemInput/include")
 
-  add_packages("glm","eigen","imgui","stb","glfw","glad")
-  add_packages("antlr4-runtime",{public=true})
+  add_packages("antlr4-runtime","glm","eigen","imgui","stb","glfw","glad")
+--   add_packages("antlr4-runtime",{public=true})
 
 target("scene")
     set_kind("static")
     add_files("src/*.cpp")
     add_includedirs("include")
     add_deps("lsystem")
-    add_packages("glm","glfw","glad","glm","imgui","stb","eigen")
+    add_packages("glm","glfw","glad","imgui","stb","eigen")
     
-
-
 
 target("lsystem_demonstration")
     set_kind("binary")
     add_files("demo/lsystem_demonstration.cpp")
     add_includedirs("include")
-    add_packages("glm","glfw","glad","glm","imgui","stb","eigen")
-    add_deps("lsystem","scene")
+    add_packages("glm","imgui","glad","eigen")
+    add_deps("scene")
     after_build(
         function (target)
             os.cp("assets", path.join(target:targetdir(), "./"))

@@ -1,7 +1,8 @@
 ﻿// 计算着色器初步使用
 
-#include "Scene.hpp"
-#include "Shader.hpp"
+#include "Scene.h"
+#include "Shader.h"
+
 
 using namespace std;
 
@@ -18,7 +19,7 @@ void init_ubo() {
 
 int main(void) {
 
-  Scene scene;
+  Scene::Scene scene;
 
   init_ubo();
 

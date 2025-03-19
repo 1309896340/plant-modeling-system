@@ -1,6 +1,7 @@
 ﻿// #define ENABLE_NORMAL_VISUALIZATION
 // #define ENBALE_POLYGON_VISUALIZATION
 #include "Scene.h"
+#include <iostream>
 
 // 此处演示的示例为
 // string production = "S(r, h) -> C(r,h) [RZ(30)RY(90)S(r, h*0.8)] "

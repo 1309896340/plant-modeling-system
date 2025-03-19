@@ -5,8 +5,8 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-#include "constants.h"
-#include "utils.hpp"
+// #include "constants.h"
+// #include "utils.hpp"
 
 class Camera {
   private:

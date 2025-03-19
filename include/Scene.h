@@ -8,6 +8,9 @@
 #include <random>
 #include <regex>
 
+#include <glad/glad.h>
+#include <GLFW/glfw3.h>
+
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -19,17 +22,16 @@
 #include <imgui_impl_opengl3.h>
 #include <misc/cpp/imgui_stdlib.h>
 
-#include "proj.h"
-
 #include "Auxiliary.hpp"
 #include "Bounding.h"
 #include "Camera.h"
-#include "Renderer.h"
 #include "Geometry.h"
 #include "LSystem.h"
+#include "Renderer.h"
 #include "Shader.h"
 #include "Skeleton.h"
 #include "Transform.h"
+
 
 extern std::mt19937_64 rdgen;
 
@@ -41,7 +43,6 @@ extern std::mt19937_64 rdgen;
 #define TEXT(txt) reinterpret_cast<const char *>(u8##txt)
 
 namespace Scene {
-
 
 void framebufferResizeCallback(GLFWwindow *window, int width, int height);
 
@@ -263,7 +264,8 @@ private:
 public:
   std::map<std::string, Shader *> shaders;
   std::map<std::string, GLuint> textures;
-  std::map<std::shared_ptr<GeometryObject>, std::unique_ptr<GeometryContext>> objs;
+  std::map<std::shared_ptr<GeometryObject>, std::unique_ptr<GeometryContext>>
+      objs;
 
   std::map<std::string, std::shared_ptr<LineDrawer>> lines;
   std::map<std::string, SkeletonObject> skeletons;
@@ -325,7 +327,8 @@ public:
 
   void printRadiosityInfo();
 
-  std::shared_ptr<GeometryObject> findGeometryObjectByName(const std::string &name);
+  std::shared_ptr<GeometryObject>
+  findGeometryObjectByName(const std::string &name);
 
   // void setSeed(uint32_t sd) {
   //   this->random_generator.seed(sd);
@@ -527,7 +530,7 @@ public:
 
   // 迭代版本
   glm::vec3 trace_ray(Ray ray, const HitInfo &obj, float PR,
-                 std::vector<glm::vec3> *vert_buffer = nullptr);
+                      std::vector<glm::vec3> *vert_buffer = nullptr);
 
   void imgui_docking_render(bool *p_open = nullptr);
   void imgui_docking_config();
