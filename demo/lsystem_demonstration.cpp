@@ -16,6 +16,9 @@ int main(int argc, char** argv) {
     scene.camera.lookAt({0.0f, 4.0f, 0.0f});
     scene.light.color = {0.6f, 0.6f, 0.6f};
 
+
+    
+
     scene.mainloop();
   }
   catch (const exception& e) {
