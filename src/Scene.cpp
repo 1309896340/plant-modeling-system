@@ -4,6 +4,9 @@
 #include "LSysConfig.h"
 #include "constants.h"
 
+#include <filesystem>
+#include <chrono>
+
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include <stb_image.h>

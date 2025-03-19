@@ -2,6 +2,12 @@
 
 #include "Shader.h"
 
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+#include <stdexcept>
+
 namespace fs = std::filesystem;
 
 void Shader::readFile(std::string& dst, const std::string& filename) {

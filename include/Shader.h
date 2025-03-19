@@ -1,12 +1,12 @@
 ﻿#pragma once
 
 #include <cassert>
-#include <filesystem>
-#include <fstream>
-#include <iostream>
 #include <map>
-#include <sstream>
-#include <stdexcept>
+// #include <filesystem>
+// #include <fstream>
+// #include <iostream>
+// #include <sstream>
+// #include <stdexcept>
 #include <string>
 
 #include <glad/glad.h>
