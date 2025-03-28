@@ -402,6 +402,13 @@ shared_ptr<Mesh> Mesh::Plane(float width, float height, uint32_t VNum, uint32_t 
   return mesh;
 }
 
+
+std::shared_ptr<Mesh> Mesh::Leaf(LeafParameters params, uint32_t VNum, uint32_t HNum){
+  // 参考LeafMesh_H.m实现
+  
+}
+
+
 using TransformUpdater = function<glm::mat4()>;
 
 void Composition::pushGeometry(shared_ptr<Geometry>    mesh,
@@ -742,5 +749,6 @@ shared_ptr<Composition> Composition::Arrow(float radius, float length) {
   comp->update();
   return comp;
 }
+
 
 // } // namespace

@@ -120,6 +120,16 @@ struct FixedGeometry {
 
 FixedGeometry operator+(const FixedGeometry& a, const FixedGeometry& b);
 
+struct LeafParameters{
+  float W;
+  float H;
+  float phi;
+  float a;
+  float rho;
+  float theta;
+  float theta0;
+};
+
 class Mesh : public Geometry {
   using MeshUpdater = std::function<Vertex(float, float)>;
 
@@ -149,6 +159,7 @@ class Mesh : public Geometry {
   static std::shared_ptr<Mesh> CylinderSide(float radius, float height, uint32_t PNum, uint32_t HNum);
 
   static std::shared_ptr<Mesh> Plane(float width, float height, uint32_t VNum, uint32_t HNum);
+  static std::shared_ptr<Mesh> Leaf(LeafParameters params, uint32_t VNum, uint32_t HNum);
 };
 
 using TransformUpdater = std::function<glm::mat4()>;
