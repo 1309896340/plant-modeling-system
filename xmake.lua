@@ -61,7 +61,7 @@ target("lsystem_demonstration")
             os.cp("assets", path.join(target:targetdir(), "./"))
         end
     )
-    set_enabled(true)
+    set_enabled(false)
 
 
 -- 测试imgui使用
@@ -90,7 +90,7 @@ target("geometry_test")
             os.cp("assets", path.join(target:targetdir(), "./"))
         end
     )
-    set_enabled(false)
+    set_enabled(true)
 
 -- 测试骨架
 target("skeleton_test")

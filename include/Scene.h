@@ -220,6 +220,7 @@ private:
   bool isShowLight{true};
   bool isShowRay{false};
   bool isShowCoord{false};
+  bool isShowNormal{true};
   bool isShowWireFrame{false};
   bool isShowCursor{false};
   bool isShowBvhFrame{false};

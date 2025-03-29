@@ -159,7 +159,7 @@ class Mesh : public Geometry {
   static std::shared_ptr<Mesh> CylinderSide(float radius, float height, uint32_t PNum, uint32_t HNum);
 
   static std::shared_ptr<Mesh> Plane(float width, float height, uint32_t VNum, uint32_t HNum);
-  static std::shared_ptr<Mesh> Leaf(LeafParameters params, uint32_t VNum, uint32_t HNum);
+  static std::shared_ptr<Mesh> Leaf(LeafParameters params, uint32_t UNum, uint32_t VNum);
 };
 
 using TransformUpdater = std::function<glm::mat4()>;

@@ -23,7 +23,9 @@ int main(int argc, char** argv) {
     scene.add("Sphere", Mesh::Sphere(2.0f, 72, 36), Transform({-4.0f, 2.05f, 6.0f}));
     scene.add("Cube", Composition::Cube(10.0f, 7.0f, 4.0f, 10, 7, 4), Transform({4.0f, 0.05f, -6.0f}));
     scene.add("Cylinder", Composition::Cylinder(2.5f, 5.0f, 72, 10, 20), Transform({5.0f, 0.05f, 0.0f}));
-    scene.add("Cone", Composition::Cone(2.0f, 3.0f, 72, 10, 20), Transform({0.0f, 0.05f, 6.0f}));
+    scene.add("Cone", Composition::Cone(2.0f, 3.0f, 72, 10, 20),
+              Transform({0.0f, 0.05f, 6.0f}));
+    scene.add("Leaf1", Mesh::Leaf(LeafParameters{4, 80, 0.37, -0.2, 0.4, 0, 0}, 12, 60));
 
     // for(auto &obj: scene.objs)
     //   if (obj->status.collided)

@@ -417,7 +417,7 @@ Scene::Scene::Scene() {
   }
   glEnable(GL_MULTISAMPLE);   // 开启MSAA抗锯齿
   glEnable(GL_DEPTH_TEST);    // 开启深度测试
-  glEnable(GL_CULL_FACE);     // 开启面剔除
+  //glEnable(GL_CULL_FACE);     // 开启面剔除
   glFrontFace(GL_CW);         // 顺时针索引顺序为正面
   glLineWidth(1.5f);
 
@@ -1240,6 +1240,8 @@ bool Scene::Scene::imgui_menu() {
     if (ImGui::Button(TEXT("更新")))
       this->test_triangle_coord();
     ImGui::PopID();
+
+    ImGui::Checkbox(TEXT("顶点法向量可视化"), &this->isShowNormal);
 
     ImGui::Checkbox(TEXT("线框模式"), &this->isShowWireFrame);
     ImGui::Checkbox(TEXT("显示BVH线框"), &this->isShowBvhFrame);
@@ -2081,19 +2083,17 @@ void Scene::Scene::render() {
     }
   }
 
-#ifdef ENABLE_NORMAL_VISUALIZATION
   // 2. 渲染法向量
-  for (auto& [name, cur_obj] : this->objs) {
-    if (cur_obj->isSelected) {
+  for (auto &[cur_obj, ctx] : this->objs) {
+    if (cur_obj->status.selected && this->isShowNormal) {
       cur_shader = this->shaders["normal"];
       cur_shader->use();
       cur_shader->set("model", cur_obj->transform.getModel());
 
-      glBindVertexArray(cur_obj->vao);
-      glDrawArrays(GL_POINTS, 0, cur_obj->geometry->getVertices().size());
+      glBindVertexArray(ctx->getVAO());
+      glDrawArrays(GL_POINTS, 0, ctx->getSize());
     }
   }
-#endif
 
   // 3. 渲染包围盒边框
   cur_shader = this->shaders["line"];
