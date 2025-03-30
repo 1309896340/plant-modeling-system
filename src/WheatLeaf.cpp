@@ -23,9 +23,9 @@ Vertex LeafMesh(float u, float v, LeafParameters params) {
       y0 = y0 - (G(2 * params.a * y0 + b) - G(b) - 4 * params.a * params.H) /
                     (4 * params.a * sqrt(1 + pow(2 * params.a * y0 + b, 2.0)));
     double y = y0 * v;
-    double tmp = 2 * params.a * y + b;
-    double tmp2 = tmp * tmp;
-    double s = (G(tmp) - G(b)) / 4.0 / params.a / params.H;
+    double tan_beta = 2 * params.a * y + b;
+    double tan_beta_2 = tan_beta * tan_beta;
+    double s = (G(tan_beta) - G(b)) / 4.0 / params.a / params.H;
     double w = 1 - pow((s - params.phi) / (1 - params.phi), 2.0);
 
     double Hx = (u - 0.5) * params.W * w;
@@ -33,34 +33,35 @@ Vertex LeafMesh(float u, float v, LeafParameters params) {
     double Hz = params.a * pow(y, 2.0) + b * y;
 
     double sTheta = params.theta0 + params.theta * s;
-    double sqr = sqrt(1 + tmp2);
+    // double sqr = sqrt(1 + tan_beta_2);
+    double beta = atan(tan_beta);
+    double cos_beta = cos(beta);
+    double sin_beta = sin(beta);
+    double sec_beta = 1.0 / cos_beta;
 
-    rPos = glm::vec3(Hx * cos(sTheta), Hy + tmp / sqr * Hx * sin(sTheta),
-                     Hz - 1.0 / sqr * Hx * sin(sTheta));
+    rPos = glm::vec3(Hx * cos(sTheta), Hy + sin_beta * Hx * sin(sTheta),
+                     Hz - cos_beta * Hx * sin(sTheta));
     // 顶点法方向
-    double vRho = atan(tmp);
-    double sTheta_v = y0 * params.theta / params.H * sqr;
-    double dSinRhov_dv = 2 * params.a * y0 / pow(sqr, 3.0);
-    double dCosRhov_dv = -tmp * dSinRhov_dv;
+    double sTheta_v = y0 * params.theta / params.H * sec_beta;
+    double dSinRhov_dv = 2 * params.a * y0 * pow(cos_beta, 3.0);
+    double dCosRhov_dv = -2 * params.a * y0 * pow(cos_beta, 2.0)*sin_beta;
     double Hx_v = params.W * (1 - 2 * u) * (s - params.phi) * y0 /
-                  (params.H * pow(1 - params.phi, 2.0)) * sqr;
+                  (params.H * pow(1 - params.phi, 2.0) * cos_beta);
     double Hy_v = y0;
     double Hz_v = 2 * params.a * y0 * y0 * v + b * y0;
-    glm::vec3 dr_du(cos(sTheta), sin(sTheta) * sin(vRho),
-                    -sin(sTheta) * cos(vRho));
+    glm::vec3 dr_du(cos(sTheta), sin(sTheta) * sin(beta),
+                    -sin(sTheta) * cos(beta));
     dr_du = glm::normalize(dr_du);
 
     glm::vec3 dr_dv(Hx_v * cos(sTheta) - Hx * sTheta_v * sin(sTheta),
-                    Hy_v + Hx_v * sin(sTheta) * sin(vRho) +
-                        Hx * sTheta_v * cos(sTheta) * sin(vRho) +
+                    Hy_v + Hx_v * sin(sTheta) * sin(beta) +
+                        Hx * sTheta_v * cos(sTheta) * sin(beta) +
                         Hx * sin(sTheta) * dSinRhov_dv,
-                    Hz_v - Hx_v * sin(sTheta) * cos(vRho) -
-                        Hx * sTheta_v * cos(sTheta) * cos(vRho) -
+                    Hz_v - Hx_v * sin(sTheta) * cos(beta) -
+                        Hx * sTheta_v * cos(sTheta) * cos(beta) -
                         Hx * sin(sTheta) * dCosRhov_dv);
     dr_dv = glm::normalize(dr_dv);
 
-    // dr_dv = (u - 0.5 >= 0) ? dr_dv : -dr_dv;
-    //rNorm = dr_dv;
      rNorm = glm::cross(dr_du, dr_dv);
   }
 
