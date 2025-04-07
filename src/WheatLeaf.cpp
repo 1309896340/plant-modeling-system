@@ -97,13 +97,13 @@ shared_ptr<Mesh> Mesh::Leaf(LeafParameters params, uint32_t uNum,
     return LeafMesh(u, v, LeafParameters{W, H, phi, a, rho, theta, theta0});
   };
   mesh->setUpdater(updater);
-  auto W_val = make_shared<ReflectValue>("W", params.W);
-  auto H_val = make_shared<ReflectValue>("H", params.H);
-  auto phi_val = make_shared<ReflectValue>("phi", params.phi);
-  auto a_val = make_shared<ReflectValue>("a", params.a);
-  auto rho_val = make_shared<ReflectValue>("rho", params.rho);
-  auto theta_val = make_shared<ReflectValue>("theta", params.theta);
-  auto theta0_val = make_shared<ReflectValue>("theta0", params.theta0);
+  auto W_val = make_shared<ReflectValue>("W", params.W, EPS, 10);
+  auto H_val = make_shared<ReflectValue>("H", params.H, EPS, FLT_MAX);
+  auto phi_val = make_shared<ReflectValue>("phi", params.phi, EPS, 0.5);
+  auto a_val = make_shared<ReflectValue>("a", params.a, -2,-0.001);
+  auto rho_val = make_shared<ReflectValue>("rho", params.rho, 0.1, PI-0.1);
+  auto theta_val = make_shared<ReflectValue>("theta", params.theta, -2*PI ,2*PI);
+  auto theta0_val = make_shared<ReflectValue>("theta0", params.theta0, -PI/2, PI/2);
 
   W_val->addObserver(mesh);
   H_val->addObserver(mesh);

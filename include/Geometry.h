@@ -63,16 +63,19 @@ class ReflectValue : public Observer {
   private:
   std::string                          name;
   prop                                 value;
+  std::pair<float, float>              region;
   std::vector<std::weak_ptr<Observer>> observers;
   std::function<float(prop)>           func{nullptr};   // 可能存在函数关系的映射
 
   bool topoFlag{false};
 
   public:
-  ReflectValue(const std::string& name, prop init_value);
-  ReflectValue(const std::string& name, prop init_value, std::weak_ptr<Observer> observer);
-  ReflectValue(const std::string& name, prop init_value, bool isTopo);
-  ReflectValue(const std::string& name, prop init_value, bool isTopo, std::weak_ptr<Observer> observer);
+  ReflectValue(const std::string& name, prop init_value, float min_val, float max_val);
+  ReflectValue(const std::string& name, prop init_value, float min_val, float max_val, std::weak_ptr<Observer> observer);
+  ReflectValue(const std::string& name, prop init_value, float min_val, float max_val, bool isTopo);
+  ReflectValue(const std::string &name, prop init_value, float min_val,
+               float max_val, bool isTopo, std::weak_ptr<Observer> observer);
+  std::pair<float, float> getRegion() const;
   prop& getProp();
   bool  isTopo() const;
 
@@ -120,7 +123,7 @@ struct FixedGeometry {
 
 FixedGeometry operator+(const FixedGeometry& a, const FixedGeometry& b);
 
-struct LeafParameters{
+struct LeafParameters {
   float W;
   float H;
   float phi;
