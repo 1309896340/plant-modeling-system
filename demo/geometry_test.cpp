@@ -16,7 +16,7 @@ int main(int argc, char **argv) {
     // scene.camera.lookAt({0.0f, 4.0f, 0.0f});
     scene.camera.lookAt(142.1f, 106.9f);
     scene.light.color = {0.6f, 0.6f, 0.6f};
-    scene.light.position = {1.0f, 7.0f, 2.0f};
+    scene.light.position = {1.0f, 12.0f, 2.0f};
 
     scene.add("Sphere", Mesh::Sphere(2.0f, 72, 36),
               Transform({-4.0f, 2.05f, 6.0f}));

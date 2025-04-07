@@ -102,8 +102,8 @@ shared_ptr<Mesh> Mesh::Leaf(LeafParameters params, uint32_t uNum,
   auto phi_val = make_shared<ReflectValue>("phi", params.phi, EPS, 0.5);
   auto a_val = make_shared<ReflectValue>("a", params.a, -2,-0.001);
   auto rho_val = make_shared<ReflectValue>("rho", params.rho, 0.1, PI-0.1);
-  auto theta_val = make_shared<ReflectValue>("theta", params.theta, -2*PI ,2*PI);
-  auto theta0_val = make_shared<ReflectValue>("theta0", params.theta0, -PI/2, PI/2);
+  auto theta_val = make_shared<ReflectValue>("theta", params.theta, -4*PI ,4*PI);
+  auto theta0_val = make_shared<ReflectValue>("theta0", params.theta0, -PI, PI);
 
   W_val->addObserver(mesh);
   H_val->addObserver(mesh);

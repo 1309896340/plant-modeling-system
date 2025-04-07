@@ -224,15 +224,18 @@ private:
   bool isShowWireFrame{false};
   bool isShowCursor{false};
   bool isShowBvhFrame{false};
+  bool isShowLsystem{false};
 
 public:
   std::map<std::string, Shader *> shaders;
   std::map<std::string, GLuint> textures;
-  std::map<std::shared_ptr<Component::GeometryObject>, std::unique_ptr<GeometryContext>>
+  std::map<std::shared_ptr<Component::GeometryObject>,
+           std::unique_ptr<GeometryContext>>
       objs;
+  std::map<std::string, SkeletonObject> skeletons;
+  // std::map<std::string, std::shared_ptr<Skeleton>> skeletons;
 
   std::map<std::string, std::shared_ptr<LineDrawer>> lines;
-  // std::map<std::string, SkeletonObject> skeletons;
 
   // 开发阶段暂时忽略渲染逻辑，实现lights中光源模拟辐照度计算
   std::vector<std::shared_ptr<Light>>
@@ -330,12 +333,12 @@ public:
 
   void remove(const std::string &name);
 
-  // void removeSkeleton(const std::string &name);
+  void removeSkeleton(const std::string &name);
 
-  // void add(const std::string &name, std::shared_ptr<Skeleton> skeleton,
-  //          Transform transform);
+  void add(const std::string &name, std::shared_ptr<Skeleton> skeleton,
+           Transform transform);
 
-  // void add(const std::string &name, std::shared_ptr<Skeleton> skeleton);
+  void add(const std::string &name, std::shared_ptr<Skeleton> skeleton);
 
   void add(const std::string &name, const std::shared_ptr<Geometry> &geometry,
            Transform transform, bool visible, bool listed, bool collided,
