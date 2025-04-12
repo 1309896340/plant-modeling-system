@@ -1391,6 +1391,10 @@ void Scene::Scene::load_all_shader() {
 
 void Scene::Scene::load_all_texture() {
   fs::path texture_dir = "assets/textures";
+  if(!fs::exists(texture_dir)){
+    printf("\"%s\" not exists!\n", texture_dir.string().c_str());
+    exit(1);
+  }
   for (auto& file : fs::directory_iterator(texture_dir)) {
     if (file.is_regular_file()) {
       // 加载纹理
