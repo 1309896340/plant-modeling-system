@@ -40,7 +40,6 @@ target("lsystem")
   add_includedirs("lsystem/antlr4/LSystemInput/include")
 
   add_packages("antlr4-runtime","glm","eigen","imgui","stb","glfw","glad")
---   add_packages("antlr4-runtime",{public=true})
 
 target("scene")
     set_kind("static")
@@ -49,6 +48,7 @@ target("scene")
     add_deps("lsystem")
     add_packages("glm","glfw","glad","imgui","stb","eigen")
     
+-- ================================模块演示================================
 
 target("lsystem_demonstration")
     set_kind("binary")
@@ -61,8 +61,46 @@ target("lsystem_demonstration")
             os.cp("assets", path.join(target:targetdir(), "./"))
         end
     )
+    set_enabled(true)
+
+target("geometry_test")
+    set_kind("binary")
+    add_includedirs("include")
+    add_files("demo/geometry_test.cpp")
+    add_packages("glm","glfw","glad","glm","imgui","stb","eigen")
+    add_deps("lsystem","scene")
+    after_build(
+        function (target)
+            os.cp("assets", path.join(target:targetdir(), "./"))
+        end
+    )
     set_enabled(false)
 
+target("geometry_test2")
+    set_kind("binary")
+    add_includedirs("include")
+    add_files("demo/geometry_test2.cpp")
+    add_packages("glm","glfw","glad","glm","imgui","stb","eigen")
+    add_deps("lsystem","scene")
+    after_build(
+        function (target)
+            os.cp("assets", path.join(target:targetdir(), "./"))
+        end
+    )
+    set_enabled(false)
+
+target("geometry_test3")
+    set_kind("binary")
+    add_includedirs("include")
+    add_files("demo/geometry_test3.cpp")
+    add_packages("glm","glfw","glad","glm","imgui","stb","eigen")
+    add_deps("lsystem","scene")
+    after_build(
+        function (target)
+            os.cp("assets", path.join(target:targetdir(), "./"))
+        end
+    )
+    set_enabled(false)
 
 -- 测试imgui使用
 target("imgui_test")
@@ -78,19 +116,6 @@ target("imgui_test")
     )
     set_enabled(false)
     
--- 测试新Geometry放置到场景中渲染是否正确
-target("geometry_test")
-    set_kind("binary")
-    add_includedirs("include")
-    add_files("demo/geometry_test.cpp")
-    add_packages("glm","glfw","glad","glm","imgui","stb","eigen")
-    add_deps("lsystem","scene")
-    after_build(
-        function (target)
-            os.cp("assets", path.join(target:targetdir(), "./"))
-        end
-    )
-    set_enabled(true)
 
 -- 测试骨架
 target("skeleton_test")

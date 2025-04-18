@@ -113,7 +113,7 @@ public:
   void update();
   size_t size() const;
 
-  void draw(Shader *sd);
+  void draw(Shader *sd, float linewidth=1.0f);
   ~LineDrawer();
 };
 

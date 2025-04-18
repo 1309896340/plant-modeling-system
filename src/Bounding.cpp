@@ -1,6 +1,8 @@
 ﻿#pragma once
 #include "Bounding.h"
 
+#include <algorithm>
+#include <cstdint>
 #include <deque>
 
 HitInfo hit_triangle(Ray ray, const glm::vec3& p1, const glm::vec3& p2, const glm::vec3& p3) {
@@ -183,8 +185,12 @@ void BvhTree::construct() {
     }
     else {
       // 面元大于3个的情况
-      uint32_t mid_position_idx =
-        findKPosVal(comp_positions, 0, comp_positions.size() - 1, comp_positions.size() / 2);
+      // uint32_t mid_position_idx = findKPosVal(comp_positions, 0, comp_positions.size() - 1, comp_positions.size() / 2);
+      std::vector<float> comp_cpy = comp_positions;
+      auto mid_idx = comp_cpy.size()/2;
+      std::nth_element(comp_cpy.begin(),comp_cpy.begin()+mid_idx,comp_cpy.end());
+      uint32_t mid_position_idx = std::distance(comp_positions.begin(), std::find(comp_positions.begin(),comp_positions.end(),comp_cpy[mid_idx]));
+      
       float mid_position = comp_positions[mid_position_idx];
       for (int k = 0; k < comp_positions.size(); k++)
         if (comp_positions[k] < mid_position) {

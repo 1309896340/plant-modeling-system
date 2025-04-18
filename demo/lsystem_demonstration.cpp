@@ -14,6 +14,7 @@ int main(int argc, char** argv) {
     Scene::Scene scene;
 
     //   scene.showAxis();
+    scene.init_lsystem();
     scene.camera.lookAt({0.0f, 4.0f, 0.0f});
     scene.light.color = {0.6f, 0.6f, 0.6f};
 

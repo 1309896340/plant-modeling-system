@@ -70,7 +70,11 @@ size_t Scene::LineDrawer::size() const {
   return this->v_nums.size();
 }
 
-void Scene::LineDrawer::draw(Shader* sd) {
+void Scene::LineDrawer::draw(Shader* sd, float linewidth) {
+  GLfloat currentLineWidth;
+  glGetFloatv(GL_LINE_WIDTH, &currentLineWidth);
+
+  glLineWidth(linewidth);
   glBindVertexArray(this->vao);
   uint32_t offset = 0u;
   for (int i = 0; i < this->v_nums.size(); i++) {
@@ -78,6 +82,7 @@ void Scene::LineDrawer::draw(Shader* sd) {
     glDrawArrays(GL_LINE_STRIP, offset, v_nums[i]);
     offset += v_nums[i];   // 累加上第i段的顶点数
   }
+  glLineWidth(currentLineWidth);
 }
 Scene::LineDrawer::~LineDrawer() {
   glDeleteVertexArrays(1, &this->vao);
@@ -1073,7 +1078,7 @@ bool Scene::Scene::imgui_menu() {
 
   // imgui_docking_render();
   // ImGui::ShowExampleAppDockSpace();
-  ImGui::ShowDemoWindow();
+  //ImGui::ShowDemoWindow();
 
   if (ImGui::BeginMainMenuBar()) {
     if (ImGui::BeginMenu(TEXT("File"))) {
@@ -2162,7 +2167,7 @@ void Scene::Scene::render() {
 
   // 4. 可视化光线追踪
   if (this->isShowRay)
-    lines["Ray"]->draw(cur_shader);
+    lines["Ray"]->draw(cur_shader, 0.4);
 
   // 5. 可视化三角局部坐标系
   if (this->isShowCoord)
