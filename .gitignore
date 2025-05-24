@@ -39,3 +39,6 @@ assets/textures
 # antlr4
 **/.antlr4
 **/.antlr
+
+
+out
