@@ -1,13 +1,23 @@
-cmake_minimum_required(VERSION 3.10.0)
+cmake_minimum_required(VERSION 3.25.0)
 project(plant-modeling-system VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 20)
 
-set(GLM_DIR
-    "C:/Users/13098/Documents/libraries/libs/glm"
+set(CMAKE_PREFIX_PATH ${ANTLR4_DIR})
+
+file(GLOB ALL_SOURCES CONFIGURE_DEPENDS
+    "include/*.h" 
+    "src/*.cpp" 
+    "lsystem/include/*.h"
+    "lsystem/src/*.cpp"
+    "lsystem/antlr4/LSystemInput/include/*.h"
+    "lsystem/antlr4/LSystemInput/src/*.cpp"
+    "lsystem/antlr4/LSystemParser/include/*.h"
+    "lsystem/antlr4/LSystemParser/src/*.cpp"
 )
-file(GLOB_RECURSE ALL_SOURCES CONFIGURE_DEPENDS "include/*.h" "src/*.cpp")
+
+find_package(antlr4-runtime CONFIG REQUIRED)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets)
 
@@ -25,11 +35,15 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Widgets
     Qt6::OpenGL
     Qt6::OpenGLWidgets
+    antlr4_shared
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     "${GLM_DIR}/include"
     "include"
+    "lsystem/include"
+    "lsystem/antlr4/LSystemInput/include"
+    "lsystem/antlr4/LSystemParser/include"
 )
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

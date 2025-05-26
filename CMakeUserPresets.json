@@ -1,0 +1,14 @@
+{
+  "version": 8,
+  "configurePresets": [
+    {
+      "name": "default",
+      "inherits": "msvc2022x64",
+      "environment": {
+        "QT6_DIR": "C:/Users/13098/Documents/libraries/libs/QT",
+        "GLM_DIR": "C:/Users/13098/Documents/libraries/libs/glm",
+        "VCPKG_ROOT": "C:/Users/13098/Documents/softwares/vcpkg"
+      }
+    }
+  ]
+}

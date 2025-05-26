@@ -12,7 +12,9 @@
             "cacheVariables": {
                 "CMAKE_INSTALL_PREFIX": "${sourceDir}/out/install/${presetName}",
                 "CMAKE_C_COMPILER": "cl.exe",
-                "CMAKE_CXX_COMPILER": "cl.exe"
+                "CMAKE_CXX_COMPILER": "cl.exe",
+                "CMAKE_PREFIX_PATH": "$env{QT6_DIR}; $env{GLM_DIR}",
+                "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
             }
         }
     ],
@@ -22,6 +24,13 @@
             "displayName": "Visual Studio Community 2022 Release - amd64 - Debug",
             "configurePreset": "msvc2022x64",
             "configuration": "Debug"
+        }
+    ],
+    "packagePresets": [
+        {
+            "name": "CmakePresets.json",
+            "description": "",
+            "displayName": ""
         }
     ]
 }

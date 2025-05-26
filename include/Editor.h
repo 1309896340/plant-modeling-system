@@ -1,5 +1,12 @@
 #pragma once
 
+
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/string_cast.hpp>
+
 #include <QKeyEvent>
 #include <QMainWindow>
 #include <QSplitter>
@@ -9,6 +16,18 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+
+
+#include "Auxiliary.hpp"
+#include "Bounding.h"
+#include "Camera.h"
+#include "Geometry.h"
+#include "LSystem.h"
+#include "Renderer.h"
+#include "Shader.h"
+#include "Skeleton.h"
+#include "Transform.h"
+#include "Component.h"
 
 #include "Canvas.h"
 
