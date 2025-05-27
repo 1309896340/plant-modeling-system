@@ -15,7 +15,7 @@ void Canvas::initializeGL() {
 }
 void Canvas::paintGL() {
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-  // »æÍ¼
-  // ¡£¡£¡£
+  // ç´™å¤•
+  // ã€‚ã€‚ã€‚
 }
 void Canvas::resizeGL(int w, int h) { glViewport(0, 0, w, h); }

@@ -1,7 +1,8 @@
 .vscode
 .xmake
 build
-assets/textures
+out
+CMakeUserPresets.json
 
 # Prerequisites
 *.d
@@ -40,5 +41,3 @@ assets/textures
 **/.antlr4
 **/.antlr
 
-
-out

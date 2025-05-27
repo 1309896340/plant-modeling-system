@@ -4,8 +4,6 @@ project(plant-modeling-system VERSION 0.1.0 LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_STANDARD 20)
 
-set(CMAKE_PREFIX_PATH ${ANTLR4_DIR})
-
 file(GLOB ALL_SOURCES CONFIGURE_DEPENDS
     "include/*.h" 
     "src/*.cpp" 
@@ -18,6 +16,7 @@ file(GLOB ALL_SOURCES CONFIGURE_DEPENDS
 )
 
 find_package(antlr4-runtime CONFIG REQUIRED)
+find_package(glm CONFIG REQUIRED)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets OpenGL OpenGLWidgets)
 
@@ -36,10 +35,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::OpenGL
     Qt6::OpenGLWidgets
     antlr4_shared
+    glm::glm-header-only
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
-    "${GLM_DIR}/include"
     "include"
     "lsystem/include"
     "lsystem/antlr4/LSystemInput/include"

@@ -6,10 +6,10 @@ Toolbar::Toolbar(QWidget *parent) : QWidget(parent) {}
 
 Editor::Editor(std::string title) {
   this->setWindowTitle(QString::fromStdString(title));
-  // Ä¬ÈÏ´óĞ¡ÅäÖÃ
+  // é»˜è®¤å¤§å°é…ç½®
   this->setMinimumWidth(1000);
   this->setMinimumHeight(800);
-  // ´°¿Ú²¼¾Ö
+  // çª—å£å¸ƒå±€
   QWidget *centralWidget = new QWidget(this);
   this->layout = new QVBoxLayout(centralWidget);
   this->splitter = new QSplitter(this);
