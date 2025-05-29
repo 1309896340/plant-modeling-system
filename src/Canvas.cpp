@@ -91,8 +91,9 @@ void Canvas::load_all_texture() {
 
       img = img.convertToFormat(QImage::Format_RGB32);
 
+
       glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, img.width(), img.height(), 0,
-                   GL_RGBA, GL_UNSIGNED_BYTE, img.data_ptr());
+                   GL_RGBA, GL_UNSIGNED_BYTE, img.constBits());
       glGenerateTextureMipmap(GL_TEXTURE_2D);
       glBindTexture(GL_TEXTURE_2D, 0);
     }
