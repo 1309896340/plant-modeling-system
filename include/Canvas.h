@@ -19,6 +19,10 @@ enum CanvasFlag {
   CanvasFlag_SHOW_LIGHT = 0x1,
   CanvasFlag_SHOW_AXIS = 0x2,
   CanvasFlag_SHOW_CURSOR = 0x4,
+  CanvasFlag_SHOW_RAY = 0x8,
+  CanvasFlag_SHOW_WIREFRAME = 0x10,
+  CanvasFlag_SHOW_BVHFRAME = 0x20,
+  CanvasFlag_SHOW_NORMAL = 0x40,
 };
 
 struct SkyboxInfo {
@@ -74,6 +78,13 @@ private:
            std::unique_ptr<GeometryContext>>
       objs;
   std::unique_ptr<Camera> camera{nullptr};
+
+  //std::vector<std::shared_ptr<Light>>
+  //    lights; // 只用于计算的光源，为了能在场景中看到光源实际位置，需要将其加入到aux中使用sphere进行渲染可视化
+
+  PointLight light{{1.0f, 1.0f, 1.0f},
+                   {-2.0f, 10.0f, 3.0f},
+                   1.0f}; // 用于OpenGL可视化渲染的光源
 
   std::map<std::string, std::shared_ptr<LineDrawer>> lines;
   SkyboxInfo skybox;

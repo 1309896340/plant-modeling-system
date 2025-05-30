@@ -16,7 +16,8 @@ enum ObjectFlag {
   ObjectFlag_VISIBLE = 0x1,
   ObjectFlag_LISTED = 0x2,
   ObjectFlag_COLLIDED = 0x4,
-  ObjectFlag_LIGHTED = 0x8
+  ObjectFlag_LIGHTED = 0x8,
+  ObjectFlag_SELECTED = 0x10
 };
 struct RadiosityResult {
   // float radiant_flux{0.0f};

@@ -2,6 +2,7 @@
 #include "Renderer.h"
 
 OpenGLContext::OpenGLContext() {
+  initializeOpenGLFunctions();
   glGenVertexArrays(1, &this->vao);
   glBindVertexArray(this->vao);
   glGenBuffers(1, &this->vbo);
@@ -20,7 +21,8 @@ OpenGLContext::~OpenGLContext() {
 
 BoundingBoxContext::BoundingBoxContext(BoundingBox *box, Transform *transform)
     : OpenGLContext(), transform(transform), box(box) {}
-std::tuple<std::vector<glm::vec3>, std::vector<uint32_t>> BoundingBoxContext::genOpenGLRawData() {
+std::tuple<std::vector<glm::vec3>, std::vector<uint32_t>>
+BoundingBoxContext::genOpenGLRawData() {
   glm::vec3 max_xyz = this->box->max_bound;
   glm::vec3 min_xyz = this->box->min_bound;
   std::vector<glm::vec3> vertices = {min_xyz,

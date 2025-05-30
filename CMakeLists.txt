@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD 20)
 
 file(GLOB ALL_SOURCES CONFIGURE_DEPENDS
     "include/*.h" 
-    "src/*.cpp" 
+    "src/*.cpp"
     "lsystem/include/*.h"
     "lsystem/src/*.cpp"
     "lsystem/antlr4/LSystemInput/include/*.h"
