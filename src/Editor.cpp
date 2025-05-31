@@ -4,6 +4,8 @@ constexpr int TOOLBAR_WIDTH = 140;
 
 Toolbar::Toolbar(QWidget *parent) : QWidget(parent) {}
 
+Canvas *Editor::getCanvas() const { return this->canvas; }
+
 Editor::Editor(std::string title) {
   this->setWindowTitle(QString::fromStdString(title));
   // 默认大小配置

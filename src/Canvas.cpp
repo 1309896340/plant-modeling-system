@@ -14,12 +14,13 @@ Canvas::Canvas(QWidget *parent) : QOpenGLWidget(parent) {
 }
 
 void Canvas::setBackground(const glm::vec4 &color) {
+  // makeCurrent();
   glClearColor(color[0], color[1], color[2], color[3]);
+  // doneCurrent();
 }
 
 void Canvas::initializeGL() {
   initializeOpenGLFunctions();
-  makeCurrent();
   // =====================
   // 开启MSAA抗锯齿
   glEnable(GL_MULTISAMPLE);
@@ -30,6 +31,7 @@ void Canvas::initializeGL() {
   // 顺时针索引顺序为正面
   glFrontFace(GL_CW);
   glLineWidth(1.5f);
+
   glClearColor(0.4f, 0.4f, 0.4f, 1.0f);
 
   // ==========显卡信息============
@@ -81,8 +83,6 @@ void Canvas::paintGL() {
   Shader *cur_shader{nullptr};
 
   glViewport(0, 0, this->width(), this->height());
-  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
   // 场景辅助元素（天空盒）
   glDepthMask(GL_FALSE);
@@ -204,7 +204,6 @@ void Canvas::paintGL() {
   // 7. 解绑自定义帧缓冲，返回默认帧缓冲进行绘制
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glViewport(0, 0, this->width(), this->height());
-  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT);
   this->shaders["screen"]->use();
   glBindVertexArray(this->framebuffer.vao);
@@ -449,17 +448,22 @@ void Canvas::init_skybox() {
   std::vector<std::string> skybox_texture_names = {"px", "nx", "py",
                                                    "ny", "pz", "nz"};
   for (int i = 0; i < skybox_texture_names.size(); i++) {
-    std::string fname =
-        "assets/textures/skybox/" + skybox_texture_names[i] + ".png";
-    int width, height, channel;
+    std::string fname = QApplication::applicationDirPath().toStdString() +
+                        "/assets/textures/skybox/" + skybox_texture_names[i] +
+                        ".png";
     QImage img(QString::fromStdString(fname));
-    uchar *image_data = img.convertToFormat(QImage::Format_RGBA8888).bits();
+    if (img.isNull()){
+      printf("读取图片为null\n");
+      continue; 
+   }
+    img = img.convertToFormat(QImage::Format_RGBA8888);
+    const uchar *image_data = img.bits();
 
     if (image_data == 0) {
       printf("load skybox texture failed: \"%s\"\n", fname.c_str());
       continue;
     }
-    glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA, img.width(),
+    glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGBA8, img.width(),
                  img.height(), 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
   }
   glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);

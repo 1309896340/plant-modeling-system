@@ -1,6 +1,5 @@
 #pragma once
 
-
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
@@ -17,17 +16,16 @@
 #include <memory>
 #include <string>
 
-
 #include "Auxiliary.hpp"
 #include "Bounding.h"
 #include "Camera.h"
+#include "Component.h"
 #include "Geometry.h"
 #include "LSystem.h"
 #include "Renderer.h"
 #include "Shader.h"
 #include "Skeleton.h"
 #include "Transform.h"
-#include "Component.h"
 
 #include "Canvas.h"
 
@@ -53,4 +51,5 @@ public:
   Editor(std::string title);
 
   void keyPressEvent(QKeyEvent *event) override;
+  Canvas *getCanvas() const;
 };
